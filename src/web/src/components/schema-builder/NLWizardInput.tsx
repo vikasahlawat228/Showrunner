@@ -24,7 +24,7 @@ export function NLWizardInput({
     setError(null);
     try {
       const result = await api.generateFields({
-        description: prompt.trim(),
+        prompt: prompt.trim(),
         existing_schemas: schemaNames,
       });
       onFieldsGenerated(result.fields);

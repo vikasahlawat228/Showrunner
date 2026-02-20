@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 import { PanelLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { useStudioStore } from "@/lib/store";
@@ -36,11 +36,16 @@ export function Canvas() {
 
   const { state, payload, stepName, error: streamError } = usePipelineStream(pipelineRunId || undefined);
 
+  const [isStarting, setIsStarting] = useState(false);
+
   const handleStartPipeline = async () => {
     try {
+      setIsStarting(true);
       await startPipeline();
     } catch {
       // Error stored in state
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -103,6 +108,7 @@ export function Canvas() {
         </div>
         <DirectorControls
           pipelineState={state}
+          isStarting={isStarting}
           onStartPipeline={handleStartPipeline}
         />
       </header>

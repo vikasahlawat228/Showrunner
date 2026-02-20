@@ -68,16 +68,16 @@ def get_director_service(ctx: ServiceContext = Depends(get_service_context)) -> 
 
 
 def get_schema_repo(project: Project = Depends(get_project)) -> SchemaRepository:
-    return SchemaRepository(project.root / "schemas")
+    return SchemaRepository(project.path / "schemas")
 
 
 def get_container_repo(project: Project = Depends(get_project)) -> ContainerRepository:
-    return ContainerRepository(project.root)
+    return ContainerRepository(project.path)
 
 
 def get_event_service(project: Project = Depends(get_project)):
     from antigravity_tool.repositories.event_sourcing_repo import EventService
-    db_path = project.root / "event_log.db"
+    db_path = project.path / "event_log.db"
     return EventService(db_path)
 
 
@@ -88,10 +88,10 @@ def get_knowledge_graph_service(
 ) -> KnowledgeGraphService:
     # In a real app the indexer would be a singleton or app-level dependency
     # For now we'll let the service create its own indexer pointing to the project root
-    db_path = project.root / "knowledge_graph.db"
+    db_path = project.path / "knowledge_graph.db"
     from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
     indexer = SQLiteIndexer(db_path)
     # Automatically sync on start
     svc = KnowledgeGraphService(container_repo, schema_repo, indexer)
-    svc.sync_all(project.root)
+    svc.sync_all(project.path)
     return svc

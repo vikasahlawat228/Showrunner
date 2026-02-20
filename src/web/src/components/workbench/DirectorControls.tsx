@@ -5,11 +5,12 @@ import type { PipelineState } from "@/components/pipeline/usePipelineStream";
 
 interface DirectorControlsProps {
   pipelineState: PipelineState;
+  isStarting?: boolean;
   onStartPipeline: () => void;
 }
 
-export function DirectorControls({ pipelineState, onStartPipeline }: DirectorControlsProps) {
-  const isActing = ['CONTEXT_GATHERING', 'PROMPT_ASSEMBLY', 'EXECUTING', 'PAUSED_FOR_USER'].includes(pipelineState);
+export function DirectorControls({ pipelineState, isStarting, onStartPipeline }: DirectorControlsProps) {
+  const isActing = isStarting || ['CONTEXT_GATHERING', 'PROMPT_ASSEMBLY', 'EXECUTING', 'PAUSED_FOR_USER'].includes(pipelineState);
 
   return (
     <div className="flex items-center gap-3">
@@ -23,7 +24,7 @@ export function DirectorControls({ pipelineState, onStartPipeline }: DirectorCon
             : "bg-purple-600 hover:bg-purple-500 text-white"
         )}
       >
-        {isActing ? "Pipeline Running..." : "Start Director Pipeline"}
+        {isStarting ? "Starting..." : isActing ? "Pipeline Running..." : "Start Director Pipeline"}
       </button>
 
       {pipelineState !== 'IDLE' && (

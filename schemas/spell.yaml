@@ -1,0 +1,21 @@
+id: 01KHXQRR8AK0WJ26J2FE5WVW1V
+schema_version: 1.0.0
+created_at: '2026-02-20T14:37:54.955301Z'
+updated_at: '2026-02-20T14:37:54.955323Z'
+notes: null
+name: spell
+display_name: Spell
+description: ''
+fields:
+- id: f_1771598204584_25e4u
+  schema_version: 1.0.0
+  created_at: '2026-02-20T14:37:54.962663Z'
+  updated_at: '2026-02-20T14:37:54.962679Z'
+  notes: null
+  name: mana_cost
+  field_type: integer
+  description: null
+  default: null
+  required: false
+  options: null
+  target_type: null

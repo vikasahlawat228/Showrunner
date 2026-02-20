@@ -251,7 +251,7 @@ export interface ContainerSchema {
 }
 
 export interface GenerateFieldsRequest {
-  description: string;
+  prompt: string;
   existing_schemas?: string[];
 }
 
@@ -273,7 +273,7 @@ export interface DirectorActRequest {
 // ── API Client ───────────────────────────────────────────────
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_URL || "";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, init);
