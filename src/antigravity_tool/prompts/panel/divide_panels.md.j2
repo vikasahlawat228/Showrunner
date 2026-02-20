@@ -1,0 +1,119 @@
+{# Template: Divide Screenplay into Panels #}
+{# Step: panel_division #}
+{# access_level: story #}
+
+# Task: Divide into Panels - Chapter {{ chapter_num }}, Scene {{ scene_num }}
+
+Divide the screenplay beats into manga/manhwa panels with specific composition.
+
+{% if screenplay %}
+## Screenplay
+
+**Setting**: {{ screenplay.setting_line }}
+**Pacing**: {{ screenplay.pacing_note }}
+
+### Beats
+{% for beat in screenplay.beats %}
+**{{ beat.beat_number }}. [{{ beat.type | upper }}]** {% if beat.character_name %}{{ beat.character_name }}: {% endif %}{{ beat.content }}
+{% if beat.emotion %}  Emotion: {{ beat.emotion }}{% endif %}
+{% if beat.action_description %}  Action: {{ beat.action_description }}{% endif %}
+{% if beat.panel_hint %}  Panel hint: {{ beat.panel_hint }}{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if visual_style %}
+## Visual Style Guide
+
+- **Art Style**: {{ visual_style.art_style }}
+- **Panel Format**: {{ visual_style.panel_format | default('vertical_scroll') }}
+- **Color Mode**: {{ visual_style.color_mode }}
+- **Aspect Ratio**: {{ visual_style.default_aspect_ratio | default('9:16') }}
+- **Style Tokens**: {{ visual_style.prompt_style_tokens }}
+
+{% if visual_style.mood_lighting_presets %}
+### Mood Presets
+{% for mood, preset in visual_style.mood_lighting_presets.items() %}
+- **{{ mood }}**: {{ preset }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{% if character_dna_blocks %}
+## Character DNA Blocks
+
+{% for name, dna in character_dna_blocks.items() %}
+### {{ name }}
+```
+{{ dna }}
+```
+{% endfor %}
+{% endif %}
+
+## Panel Composition Reference
+
+### Shot Types (vary these!)
+- **Extreme Wide**: Establishing scenes, showing scale (use at scene start)
+- **Wide**: Full characters + environment (action sequences)
+- **Medium**: Waist-up, the workhorse shot (dialogue)
+- **Close-Up**: Face fills frame (emotion, reactions, reveals)
+- **Extreme Close-Up**: Single detail (maximum emphasis, tension)
+
+### Camera Angles
+- **Eye Level**: Neutral, conversational
+- **High Angle**: Makes subject small, vulnerable, weak
+- **Low Angle**: Makes subject powerful, dominant, intimidating
+- **Dutch Angle**: Instability, unease, horror
+- **Bird's Eye**: Overview, establishing geography
+
+### Webtoon/Manhwa Rules
+- Max 2 panels per screen section
+- Max 3 dialogue bubbles per panel
+- Full-width panels for reveals and impact moments
+- Narrow panels for rapid exchanges
+- Large scroll gaps for dramatic pauses
+
+## Instructions
+
+Divide the screenplay into panels. For each panel:
+1. Group 1-3 screenplay beats per panel (don't overcrowd)
+2. Choose a shot type that serves the emotional beat
+3. Vary shot types across the sequence (use the "3 of 5" rule)
+4. Stage characters with specific positions and expressions
+5. Note dialogue bubbles with positions
+6. Describe what the background shows
+
+## Output Format
+
+```yaml
+panels:
+  - scene_id: "scene-{{ '%02d' | format(scene_num) }}"
+    chapter_id: "chapter-{{ '%02d' | format(chapter_num) }}"
+    page_number: 1
+    panel_number: 1
+    screenplay_beats: [1, 2]
+    shot_type: "wide"
+    camera_angle: "eye_level"
+    panel_size: "large"
+    panel_width: "full"
+    scroll_gap_before: 100
+    composition_notes: "Rule of thirds, character left, empty space right"
+    characters:
+      - character_id: ""
+        character_name: ""
+        expression: "specific facial expression"
+        pose: "specific body pose and gesture"
+        position_in_frame: "center/left foreground/right background/etc"
+        action: "what they're doing"
+    background_description: "What's visible behind the characters"
+    foreground_elements: []
+    effects: []
+    lighting: "specific lighting for this panel"
+    mood: "emotional mood of this panel"
+    dialogue_bubbles:
+      - character_name: ""
+        text: "Dialogue text"
+        bubble_type: "speech/thought/shout/whisper/narration"
+        position_hint: "top-left/bottom-right/etc"
+    sound_effects: []
+    narration_box: ""
+```

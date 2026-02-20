@@ -1,0 +1,36 @@
+{# Template: Describe Scene Setting #}
+{# Step: scene_writing #}
+{# access_level: story #}
+
+# Task: Describe Scene Setting
+
+Create a detailed visual description of the setting for panel art.
+
+{% if world_summary %}
+## World: {{ world_summary.name }} ({{ world_summary.genre }})
+{% endif %}
+
+## Instructions
+
+Describe this setting with enough detail for image generation. Focus on:
+- Architecture and spatial layout
+- Dominant colors and materials
+- Lighting conditions and atmosphere
+- Scale (intimate vs vast)
+- Key visual anchors (distinctive objects/features)
+- Mood and sensory details
+
+## Output Format
+
+```yaml
+location_name: ""
+location_description: |
+  Detailed prose description.
+visual_description: |
+  Image-generation focused description.
+  Colors, lighting, materials, composition.
+atmosphere: "mood description"
+notable_features:
+  - "visual feature 1"
+  - "visual feature 2"
+```

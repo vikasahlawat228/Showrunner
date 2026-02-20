@@ -1,0 +1,51 @@
+{# Template: Continuity Check Report #}
+{# Step: evaluation #}
+{# access_level: author #}
+
+# Continuity Report — {{ project_name }}{% if chapter_num %} (Chapter {{ chapter_num }}){% endif %}
+
+## Automated Check Results
+
+- **Scenes checked:** {{ checked_scenes }}
+- **Characters checked:** {{ checked_characters }}
+- **Errors:** {{ error_count }}
+- **Warnings:** {{ warning_count }}
+
+{% if issues %}
+## Detected Issues
+
+{% for issue in issues %}
+### {{ loop.index }}. [{{ issue.severity | upper }}] {{ issue.category | replace("_", " ") | title }}
+- **Location:** {{ issue.location }}
+- **Description:** {{ issue.description }}
+{% if issue.character_name %}- **Character:** {{ issue.character_name }}{% endif %}
+{% if issue.expected_value %}- **Expected:** {{ issue.expected_value }}{% endif %}
+{% if issue.actual_value %}- **Actual:** {{ issue.actual_value }}{% endif %}
+- **Suggestion:** {{ issue.suggestion }}
+
+{% endfor %}
+{% else %}
+## No Issues Detected
+
+The automated checks found no continuity issues.
+{% endif %}
+
+## Instructions
+
+Review the automated continuity check results above. For each issue:
+
+1. Determine if the issue is a genuine continuity error or intentional
+2. If genuine, suggest a specific fix (which file to edit and what to change)
+3. If intentional, explain why it's acceptable and whether it needs a note
+
+Output your analysis as YAML:
+
+```yaml
+review:
+  - issue_number: 1
+    verdict: "genuine_error" | "intentional" | "false_positive"
+    fix: "description of the fix"
+    file_to_edit: "path/to/file.yaml"
+  # ... for each issue
+summary: "overall continuity assessment"
+```

@@ -1,0 +1,83 @@
+{# Template: Generate Character DNA Block #}
+{# Step: character_creation #}
+{# access_level: story #}
+
+# Task: Generate Character DNA Block
+
+Generate an extremely detailed, stable Character DNA block for image generation consistency.
+
+## Character Information
+
+{% if character.name %}
+- **Name**: {{ character.name }}
+- **Role**: {{ character.role | default('') }}
+- **One-line**: {{ character.one_line | default('') }}
+- **Backstory**: {{ character.backstory | default('') }}
+{% endif %}
+
+{% if character.dna and character.dna.face and character.dna.face.face_shape %}
+## Existing DNA (update/refine this)
+
+```
+Face: {{ character.dna.face.face_shape }}, {{ character.dna.face.jaw }}, {{ character.dna.face.eyes }}
+Hair: {{ character.dna.hair.color }} {{ character.dna.hair.style }}
+Body: {{ character.dna.body.height }}, {{ character.dna.body.build }}
+```
+{% endif %}
+
+## Instructions
+
+Create an immutable Character DNA block. This block will be pasted at the top of EVERY image prompt featuring this character. It must be:
+
+1. **Precise**: No ambiguous terms. "Large almond-shaped deep brown eyes" not "pretty eyes"
+2. **Stable**: Use consistent token ordering (face > hair > body > outfit) every time
+3. **Distinctive**: At least 3 features that make them instantly recognizable
+4. **Image-gen friendly**: Use descriptors that image models respond to well
+
+## Output Format
+
+```yaml
+dna:
+  face:
+    face_shape: ""
+    jaw: ""
+    eyes: ""
+    eye_color: ""
+    nose: ""
+    mouth: ""
+    skin_tone: ""
+    distinguishing_marks: []
+    eyebrows: ""
+  hair:
+    style: ""
+    length: ""
+    color: ""
+    texture: ""
+    notable_details: ""
+  body:
+    height: ""
+    build: ""
+    posture: ""
+    notable_features: []
+  default_outfit:
+    name: "default"
+    description: ""
+    colors: []
+    key_items: []
+    prompt_tokens: "condensed single-line outfit description for image prompts"
+  additional_outfits: []
+  age_appearance: ""
+  gender_presentation: ""
+  species: "human"
+```
+
+Also provide the compiled prompt block that would be used in image generation:
+
+```
+[CHARACTER DNA: age gender species]
+Face: face_shape face, jaw, eyes, nose, mouth, skin_tone
+Marks: any distinguishing marks
+Hair: color texture style, length
+Body: height, build, posture
+Outfit: prompt_tokens
+```

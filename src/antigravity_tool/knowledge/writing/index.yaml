@@ -1,0 +1,33 @@
+category: "writing"
+description: "Fiction writing craft techniques and best practices"
+articles:
+  - file: "dialogue.md"
+    title: "Dialogue Writing Techniques"
+    tags: ["dialogue", "subtext", "voice", "speech", "conversation"]
+    summary: "Techniques for natural, purposeful dialogue with distinct character voices"
+    use_in_steps: ["scene_writing", "screenplay_writing", "evaluation"]
+  - file: "pacing.md"
+    title: "Story and Scene Pacing"
+    tags: ["pacing", "rhythm", "tension", "beats", "tempo"]
+    summary: "Pacing techniques at scene, chapter, and story level"
+    use_in_steps: ["scene_writing", "panel_division", "evaluation"]
+  - file: "show_dont_tell.md"
+    title: "Show Don't Tell for Visual Media"
+    tags: ["show don't tell", "visual storytelling", "action", "description"]
+    summary: "Principles of visual storytelling especially for manga/manhwa adaptation"
+    use_in_steps: ["scene_writing", "screenplay_writing", "evaluation"]
+  - file: "character_arcs.md"
+    title: "Character Arc Types"
+    tags: ["character arc", "transformation", "positive change", "fall", "flat"]
+    summary: "Four main character arc types with implementation guidance"
+    use_in_steps: ["story_structure", "scene_writing", "evaluation"]
+  - file: "tension_conflict.md"
+    title: "Tension and Conflict"
+    tags: ["tension", "conflict", "stakes", "escalation", "suspense"]
+    summary: "Building and sustaining tension through different types of conflict"
+    use_in_steps: ["scene_writing", "evaluation"]
+  - file: "scene_types.md"
+    title: "Scene Type Classification"
+    tags: ["scene type", "action", "dialogue", "flashback", "montage", "training", "reveal", "confrontation", "chase", "transition", "emotional", "worldbuilding"]
+    summary: "12 scene types with panel tips, dialogue density, tension levels, and distribution guidelines"
+    use_in_steps: ["scene_writing", "panel_division", "evaluation"]

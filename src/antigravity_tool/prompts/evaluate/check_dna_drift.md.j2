@@ -1,0 +1,45 @@
+{# Template: DNA Drift Fix #}
+{# Step: evaluation #}
+{# access_level: author #}
+
+# DNA Drift Fix — {{ character_name }}
+
+## Canonical Character DNA
+
+```yaml
+{{ character_dna | tojson(indent=2) }}
+```
+
+## Detected Drift Issues
+
+{% if drift_issues %}
+{% for issue in drift_issues %}
+### {{ loop.index }}. {{ issue.dna_field }} — {{ issue.panel_location }}
+- **Canonical:** `{{ issue.canonical_value }}`
+- **In prompt:** `{{ issue.prompt_value }}`
+- **Severity:** {{ issue.severity }}
+
+{% endfor %}
+{% else %}
+No drift issues detected.
+{% endif %}
+
+## Panels Checked: {{ panels_checked }}
+
+## Instructions
+
+For each drifted panel, regenerate the image prompt ensuring it matches the canonical DNA block above.
+
+Key rules:
+1. Hair color must ALWAYS be `{{ character_dna.get('hair', {}).get('color', 'as defined') }}`
+2. Eye color must ALWAYS be `{{ character_dna.get('face', {}).get('eye_color', 'as defined') }}`
+3. Skin tone must ALWAYS be `{{ character_dna.get('face', {}).get('skin_tone', 'as defined') }}`
+4. All distinguishing marks must be present in every panel where the relevant body part is visible
+
+Output corrected image prompts as YAML:
+
+```yaml
+corrections:
+  - panel_location: "Chapter X, Page Y, Panel Z"
+    corrected_prompt: "full corrected image prompt here"
+```

@@ -1,0 +1,4 @@
+name: Manual Demo Project
+version: 0.1.0
+variables:
+  target_audience: General

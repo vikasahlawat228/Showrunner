@@ -1,0 +1,66 @@
+{# Template: Evaluate Consistency #}
+{# Step: evaluation #}
+{# access_level: author #}
+
+# Task: Cross-Reference Consistency Check
+
+Check for consistency across characters, world rules, timeline, and relationships.
+
+{% if characters %}
+## Character Definitions
+{% for char in characters %}
+### {{ char.name }} ({{ char.role }})
+- **Traits**: {{ char.personality.traits | join(', ') if char.personality and char.personality.traits else 'N/A' }}
+- **Speech Pattern**: {{ char.personality.speech_pattern if char.personality else 'N/A' }}
+{% endfor %}
+{% endif %}
+
+{% if world_summary %}
+## World Rules
+{% for rule in world_summary.rules %}
+- **{{ rule.name }}**: {{ rule.description }}
+{% endfor %}
+{% endif %}
+
+{% if scenes %}
+## Scenes to Check
+{% for scene in scenes %}
+### {{ scene.title }}
+- Characters: {{ scene.characters_present | join(', ') if scene.characters_present else 'N/A' }}
+- Location: {{ scene.location_name }}
+- Events: {{ scene.key_events | join('; ') if scene.key_events else 'N/A' }}
+{% endfor %}
+{% endif %}
+
+## Check For
+
+1. **Character consistency**: Do characters act within their established personality?
+2. **Voice consistency**: Do speech patterns match character definitions?
+3. **World rule adherence**: Are established rules followed or violated?
+4. **Timeline coherence**: Do events follow a logical sequence?
+5. **Relationship consistency**: Do character dynamics match their defined relationships?
+6. **Physical consistency**: Do character appearances match their DNA blocks?
+
+## Output Format
+
+```yaml
+target_type: "consistency_check"
+scores:
+  - criterion: "character_behavior"
+    score: 0.0
+    reasoning: ""
+    suggestions: []
+  - criterion: "world_rules"
+    score: 0.0
+    reasoning: ""
+    suggestions: []
+  - criterion: "timeline"
+    score: 0.0
+    reasoning: ""
+    suggestions: []
+overall_score: 0.0
+summary: ""
+strengths: []
+weaknesses: []
+recommendations: []
+```

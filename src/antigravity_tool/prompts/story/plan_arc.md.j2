@@ -1,0 +1,42 @@
+{# Template: Plan Character Arcs #}
+{# Step: story_structure #}
+{# access_level: story #}
+
+# Task: Plan Character Arc Beats
+
+Align character transformation with the story structure.
+
+## Story Structure
+
+{% if existing_structure %}
+- **Type**: {{ existing_structure.structure_type }}
+- **Logline**: {{ existing_structure.logline }}
+{% if existing_structure.beats %}
+### Story Beats
+{% for beat in existing_structure.beats %}
+- **{{ beat.beat_number }}. {{ beat.beat_name }}** ({{ beat.act }}, {{ "%.0f%%" | format(beat.target_percentage * 100) }}): {{ beat.content[:80] }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{% if characters %}
+## Characters
+{% for char in characters %}
+- **{{ char.name }}** ({{ char.role }}): {{ char.one_line }}
+{% endfor %}
+{% endif %}
+
+## Instructions
+
+For each major character, create arc beats that align with the story structure. Each character should have their own internal journey running parallel to the plot.
+
+## Output Format
+
+```yaml
+character_arcs:
+  - character_id: ""
+    character_name: ""
+    beat_name: "want established"
+    description: "What happens in this character's internal journey"
+    story_beat_ref: "Corresponding story beat name"
+```

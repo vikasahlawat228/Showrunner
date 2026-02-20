@@ -1,0 +1,11 @@
+{# Partial: Reader Knowledge State #}
+{% if reader_knowledge %}
+### Reader Knowledge (do not reveal beyond this)
+- **Known Characters**: {{ reader_knowledge.known_characters | join(', ') if reader_knowledge.known_characters else 'None yet' }}
+- **Known Locations**: {{ reader_knowledge.known_locations | join(', ') if reader_knowledge.known_locations else 'None yet' }}
+- **Known Rules**: {{ reader_knowledge.known_world_rules | join(', ') if reader_knowledge.known_world_rules else 'None yet' }}
+- **Active Questions**: {{ reader_knowledge.active_questions | join(', ') if reader_knowledge.active_questions else 'None' }}
+{% if reader_knowledge.false_beliefs %}
+- **False Beliefs (maintain these)**: {{ reader_knowledge.false_beliefs | join(', ') }}
+{% endif %}
+{% endif %}

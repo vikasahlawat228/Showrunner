@@ -1,0 +1,46 @@
+{# Template: Add Location #}
+{# Step: world_building #}
+{# access_level: story #}
+
+# Task: Add Location - {{ new_location_name }}
+
+You are a world-builder for a manga/manhwa project called **{{ project_name }}**.
+
+{% if existing_world %}
+## World Context
+
+- **Genre**: {{ existing_world.genre }}
+- **Time Period**: {{ existing_world.time_period }}
+- **Tone**: {{ existing_world.tone }}
+- **Description**: {{ existing_world.description }}
+
+{% if existing_world.locations %}
+### Existing Locations
+{% for loc in existing_world.locations %}
+- **{{ loc.name }}** ({{ loc.type }}): {{ loc.description[:100] }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+## Instructions
+
+Create a detailed location entry for **{{ new_location_name }}**. Think about how every element would look in a manga/manhwa panel. Describe visual details that an artist or image generation model would need.
+
+## Output Format
+
+```yaml
+name: "{{ new_location_name }}"
+type: "city/forest/station/school/etc"
+description: "Detailed description of this location"
+atmosphere: "The mood and feeling when characters are here"
+visual_description: |
+  Detailed visual description for panel art:
+  Architecture style, dominant colors, lighting conditions,
+  scale and proportions, distinctive visual elements.
+notable_features:
+  - "Visual feature 1"
+  - "Visual feature 2"
+connected_to: []  # IDs of connected locations
+tags:
+  - "relevant tag"
+```

@@ -1,0 +1,88 @@
+{# Template: Evaluate Dramatic Irony #}
+{# Step: evaluation #}
+{# access_level: author #}
+
+# Task: Analyze Dramatic Irony Opportunities
+
+Compare what the READER knows vs what CHARACTERS know vs what the AUTHOR has planned.
+
+{% if scene %}
+## Scene: {{ scene.title }}
+- **Summary**: {{ scene.summary }}
+- **Characters**: {{ scene.characters_present | join(', ') if scene.characters_present else 'N/A' }}
+{% endif %}
+
+{% if reader_knowledge %}
+## What the Reader Knows
+
+- **Characters Met**: {{ reader_knowledge.known_characters | join(', ') }}
+- **Active Questions**: {{ reader_knowledge.active_questions | join(', ') if reader_knowledge.active_questions else 'None' }}
+- **False Beliefs**: {{ reader_knowledge.false_beliefs | join(', ') if reader_knowledge.false_beliefs else 'None' }}
+{% endif %}
+
+{% if creative_room %}
+## Author's Hidden Information
+
+{% if creative_room.character_secrets %}
+### Character Secrets
+{% for secret in creative_room.character_secrets %}
+- **{{ secret.character_name }}**: {{ secret.secret }}
+  - Revealed to reader: {{ secret.revealed_to_reader_at | default('Not yet') }}
+  - Irony note: {{ secret.dramatic_irony_note | default('None') }}
+{% endfor %}
+{% endif %}
+
+{% if creative_room.plot_twists %}
+### Upcoming Plot Twists
+{% for twist in creative_room.plot_twists %}
+- **{{ twist.name }}**: {{ twist.description }}
+{% endfor %}
+{% endif %}
+
+{% if creative_room.true_mechanics %}
+### Hidden World Mechanics
+{% for mech in creative_room.true_mechanics %}
+- **{{ mech.name }}**: Reader thinks "{{ mech.apparent_description }}" but truth is "{{ mech.true_description }}"
+{% endfor %}
+{% endif %}
+
+{% if creative_room.foreshadowing_map %}
+### Foreshadowing Status
+{% for entry in creative_room.foreshadowing_map %}
+- [{{ entry.status }}] Plant: {{ entry.plant_description }} -> Payoff: {{ entry.payoff_description }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+## Analysis Questions
+
+1. **Active dramatic irony**: Where does the reader know something a character doesn't (or vice versa)? Is this tension being exploited in the current scene?
+
+2. **Missed opportunities**: Given the secrets and hidden mechanics, are there moments in this scene where dramatic irony COULD be created but isn't?
+
+3. **Foreshadowing check**: Are there planted seeds that could be subtly referenced in this scene without revealing too much?
+
+4. **False belief reinforcement**: Should the reader's false beliefs be reinforced here (to make the eventual reveal more impactful)?
+
+5. **Reader engagement**: What questions should the reader be asking after this scene?
+
+## Output Format
+
+```yaml
+dramatic_irony_analysis:
+  active_irony:
+    - description: "What the reader knows that the character doesn't"
+      tension_level: "high/medium/low"
+      recommendation: "How to exploit this in the scene"
+  missed_opportunities:
+    - description: "Where irony could be added"
+      suggestion: "How to add it"
+  foreshadowing_opportunities:
+    - plant_id: ""
+      suggestion: "How to subtly reference this"
+  false_belief_notes:
+    - belief: "What the reader wrongly believes"
+      action: "reinforce/begin_to_question/leave_alone"
+  reader_questions_after_scene:
+    - "Question the reader should be asking"
+```

@@ -1,0 +1,87 @@
+{# Template: Convert Scene to Screenplay #}
+{# Step: screenplay_writing #}
+{# access_level: story #}
+
+# Task: Convert Scene to Screenplay - Chapter {{ chapter_num }}, Scene {{ scene_num }}
+
+Convert the scene into sequential screenplay beats with dialogue, action, and internal monologue.
+
+{% if scene %}
+## Scene Data
+
+- **Title**: {{ scene.title }}
+- **Location**: {{ scene.location_name }}
+- **Time**: {{ scene.time_of_day }}
+- **Mood**: {{ scene.mood }}
+- **Lighting**: {{ scene.lighting }}
+- **Summary**: {{ scene.summary }}
+- **Emotional Arc**: {{ scene.emotional_arc }}
+- **Opening Hook**: {{ scene.opening_hook }}
+- **Closing State**: {{ scene.closing_state }}
+
+### Key Events
+{% for event in scene.key_events %}
+{{ loop.index }}. {{ event }}
+{% endfor %}
+{% endif %}
+
+{% if characters %}
+## Character Voice Reference
+
+{% for char in characters %}
+### {{ char.name }}
+- **Speech Pattern**: {{ char.speech_pattern }}
+{% if char.verbal_tics %}
+- **Verbal Tics**: {{ char.verbal_tics | join(', ') }}
+{% endif %}
+- **Personality**: {{ char.traits | join(', ') if char.traits else '' }}
+{% endfor %}
+{% endif %}
+
+{% if narrative_style and narrative_style.dialogue_style %}
+## Style Guide
+- **Dialogue Style**: {{ narrative_style.dialogue_style }}
+- **Tone**: {{ narrative_style.tone }}
+{% endif %}
+
+## Instructions
+
+Convert this scene into a screenplay format with numbered beats. Each beat should be a single moment that could become one or more panels. Think cinematically:
+
+- **DIALOGUE** beats: Character speaks (include parentheticals for tone)
+- **ACTION** beats: Physical action happens (describe what would be DRAWN)
+- **INTERNAL** beats: Character's thoughts (narration boxes in manga)
+- **NARRATION** beats: Narrator voice-over
+- **SFX** beats: Important sound effects
+- **TRANSITION** beats: Scene transitions, time skips
+
+Keep dialogue manga-sharp: short, impactful, no wasted words.
+
+## Output Format
+
+```yaml
+scene_id: "scene-{{ '%02d' | format(scene_num) }}"
+chapter_id: "chapter-{{ '%02d' | format(chapter_num) }}"
+scene_title: "Scene Title"
+setting_line: "INT/EXT. LOCATION - TIME"
+pacing_note: "fast-paced action / slow emotional build / etc."
+estimated_panels: 0
+beats:
+  - beat_number: 1
+    type: "action"
+    character_id: ""
+    character_name: ""
+    content: "Description of what happens/what is said"
+    emotion: "character's emotional state"
+    action_description: "physical action during this beat"
+    parenthetical: "(whispered) / (through gritted teeth) / etc."
+    panel_hint: "suggested panel composition - e.g., close-up on face, wide establishing shot"
+  - beat_number: 2
+    type: "dialogue"
+    character_name: "Character Name"
+    content: "What they say"
+    emotion: "how they feel"
+    action_description: "what they're doing while speaking"
+    parenthetical: ""
+    panel_hint: ""
+```

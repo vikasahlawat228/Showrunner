@@ -1,0 +1,8 @@
+{# Partial: Relationship Context for scene prompts #}
+{% if relationships %}
+## Character Relationships
+
+{% for rel in relationships %}
+- **{{ rel.source_name }}** → **{{ rel.target_name }}**: {{ rel.relationship_type }}{% if rel.label %} — {{ rel.label }}{% endif %}{% if rel.dynamic %} [{{ rel.dynamic }}]{% endif %}
+{% endfor %}
+{% endif %}

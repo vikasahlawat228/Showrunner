@@ -1,0 +1,11 @@
+{# Partial: Character Summary #}
+{% if characters %}
+### Characters
+{% for char in characters %}
+- **{{ char.name }}** ({{ char.role }}): {{ char.one_line | default('') }}
+{% if char.personality %}
+  - Traits: {{ char.personality.traits | join(', ') if char.personality.traits else 'N/A' }}
+  - Speech: {{ char.personality.speech_pattern | default('N/A') }}
+{% endif %}
+{% endfor %}
+{% endif %}

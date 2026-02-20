@@ -1,0 +1,56 @@
+{# Template: Plan Scenes for Chapter #}
+{# Step: scene_writing #}
+{# access_level: story #}
+
+# Task: Plan Scenes for Chapter {{ chapter_num }}
+
+Break this chapter into a sequence of scenes with clear purposes and flow.
+
+## Project: {{ project_name }}
+
+{% if story_structure and story_structure.beats %}
+## Story Beats to Cover
+{% for beat in story_structure.beats %}
+{% if beat.status == 'planned' %}
+- **{{ beat.beat_name }}** ({{ beat.act }}, {{ "%.0f%%" | format(beat.target_percentage * 100) }}): {{ beat.content }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if characters %}
+## Available Characters
+{% for char in characters %}
+- **{{ char.name }}** ({{ char.role }})
+{% endfor %}
+{% endif %}
+
+{% if world_summary %}
+## World: {{ world_summary.name }}
+{% endif %}
+
+## Instructions
+
+Plan 3-6 scenes for Chapter {{ chapter_num }}. Each scene should:
+1. Have a clear PURPOSE (advance plot, develop character, build world)
+2. Include a CHANGE (something is different at the end)
+3. Consider VISUAL VARIETY (different locations, moods, shot types)
+4. End with forward momentum or a hook
+
+## Output Format
+
+```yaml
+chapter_number: {{ chapter_num }}
+scenes:
+  - scene_number: 1
+    title: "Scene Title"
+    summary: "What happens"
+    purpose: "Why this scene exists"
+    beat_reference: "Which story beat this serves"
+    location_name: "Where"
+    time_of_day: "when"
+    mood: "emotional atmosphere"
+    characters_present: ["character names"]
+    key_events: ["event 1", "event 2"]
+    emotional_arc: "emotional progression"
+    estimated_panels: 8
+```

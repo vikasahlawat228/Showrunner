@@ -1,0 +1,28 @@
+category: "structures"
+description: "Story structure frameworks and beat sheets"
+articles:
+  - file: "save_the_cat.md"
+    title: "Save the Cat Beat Sheet"
+    tags: ["save the cat", "beat sheet", "15 beats", "blake snyder", "structure"]
+    summary: "15-beat story structure framework with percentage markers and examples"
+    use_in_steps: ["story_structure", "scene_writing", "evaluation"]
+  - file: "heros_journey.md"
+    title: "The Hero's Journey"
+    tags: ["hero's journey", "monomyth", "campbell", "vogler", "12 stages"]
+    summary: "12-stage mythic story structure based on Joseph Campbell's monomyth"
+    use_in_steps: ["story_structure", "scene_writing", "evaluation"]
+  - file: "kishotenketsu.md"
+    title: "Kishotenketsu (4-Act Structure)"
+    tags: ["kishotenketsu", "japanese", "manga", "4 act", "twist without conflict"]
+    summary: "Japanese 4-act narrative structure essential for manga storytelling"
+    use_in_steps: ["story_structure", "scene_writing", "evaluation"]
+  - file: "story_circle.md"
+    title: "Dan Harmon's Story Circle"
+    tags: ["story circle", "dan harmon", "8 steps", "character driven"]
+    summary: "8-step character-driven story structure focused on wants vs needs"
+    use_in_steps: ["story_structure", "evaluation"]
+  - file: "sub_arcs.md"
+    title: "Sub-Arc Patterns"
+    tags: ["sub-arc", "training arc", "tournament", "flashback arc", "romance arc", "investigation", "quest", "nested story"]
+    summary: "7 sub-arc patterns for nested story arcs with beat structures and nesting rules"
+    use_in_steps: ["story_structure", "scene_writing"]

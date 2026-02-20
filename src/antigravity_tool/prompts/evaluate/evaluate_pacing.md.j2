@@ -1,0 +1,75 @@
+{# Template: Evaluate Pacing #}
+{# Step: evaluation #}
+{# access_level: author #}
+
+# Pacing Analysis — {{ project_name }}{% if chapter_num %} (Chapter {{ chapter_num }}){% endif %}
+
+## Automated Metrics
+
+- **Total scenes:** {{ metrics.get('total_scenes', 0) }}
+- **Total panels:** {{ metrics.get('total_panels', 0) }}
+- **Dialogue density:** {{ "%.0f" | format(metrics.get('dialogue_density', 0) * 100) }}%
+- **Action density:** {{ "%.0f" | format(metrics.get('action_density', 0) * 100) }}%
+- **Emotional density:** {{ "%.0f" | format(metrics.get('emotional_density', 0) * 100) }}%
+- **Average tension:** {{ "%.1f" | format(metrics.get('avg_tension', 0)) }}/10
+- **Tension range:** {{ metrics.get('min_tension', 0) }}–{{ metrics.get('max_tension', 0) }}
+
+{% if metrics.get('scene_type_distribution') %}
+## Scene Type Distribution
+
+{% for stype, count in metrics.get('scene_type_distribution', {}).items() %}
+- **{{ stype }}**: {{ count }}
+{% endfor %}
+{% endif %}
+
+{% if metrics.get('tension_progression') %}
+## Tension Progression
+
+{{ metrics.get('tension_progression', []) }}
+{% endif %}
+
+{% if issues %}
+## Detected Issues
+
+{% for issue in issues %}
+- **{{ issue.issue_type }}** ({{ issue.location }}): {{ issue.description }}
+  - Suggestion: {{ issue.suggestion }}
+{% endfor %}
+{% endif %}
+
+{% if recommendations %}
+## Recommendations
+
+{% for rec in recommendations %}
+- {{ rec }}
+{% endfor %}
+{% endif %}
+
+## Instructions
+
+Review the pacing analysis above and provide:
+
+1. An overall pacing assessment (1-10)
+2. Specific scene-by-scene recommendations for improvement
+3. Suggested scene type changes or additions
+4. Ideal tension curve target for this chapter
+
+Output as YAML:
+
+```yaml
+assessment:
+  overall_score: 7
+  rhythm: "good" | "needs_work" | "excellent"
+  energy_level: "high" | "medium" | "low"
+scene_recommendations:
+  - scene_num: 1
+    current_type: "dialogue"
+    suggested_type: "dialogue"  # or change
+    tension_adjustment: 0  # +/- from current
+    notes: "Reduce length, add subtext"
+additions:
+  - after_scene: 2
+    suggested_type: "emotional"
+    purpose: "Give readers a breathing moment"
+target_tension_curve: [3, 5, 4, 7, 6, 9, 8, 10, 3]
+```

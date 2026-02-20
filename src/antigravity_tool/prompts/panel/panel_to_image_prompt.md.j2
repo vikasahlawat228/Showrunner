@@ -1,0 +1,80 @@
+{# Template: Generate Image Prompts from Panels #}
+{# Step: image_prompt_generation #}
+{# access_level: story #}
+
+# Task: Generate Image Prompts - Chapter {{ chapter_num }}
+
+Convert panel compositions into image generation prompts.
+
+{% if visual_style %}
+## Style Guide
+
+- **Art Style**: {{ visual_style.art_style }}
+- **Color Mode**: {{ visual_style.color_mode }}
+- **Shading**: {{ visual_style.shading_style }}
+- **Line Weight**: {{ visual_style.line_weight }}
+- **Proportions**: {{ visual_style.character_proportions }}
+- **Background Detail**: {{ visual_style.background_detail }}
+- **Style Tokens**: {{ visual_style.prompt_style_tokens }}
+{% endif %}
+
+{% if character_dna_blocks %}
+## Character DNA Blocks (paste into every prompt featuring that character)
+
+{% for name, dna in character_dna_blocks.items() %}
+### {{ name }}
+```
+{{ dna }}
+```
+{% endfor %}
+{% endif %}
+
+{% if panels %}
+## Panels to Generate
+
+{% for panel in panels %}
+### Page {{ panel.page_number }} Panel {{ panel.panel_number }}
+- **Shot**: {{ panel.shot_type }} | **Angle**: {{ panel.camera_angle }}
+- **Size**: {{ panel.panel_size }} | **Width**: {{ panel.panel_width | default('full') }}
+- **Background**: {{ panel.background_description }}
+- **Lighting**: {{ panel.lighting }}
+- **Mood**: {{ panel.mood }}
+{% if panel.characters %}
+- **Characters**:
+{% for char in panel.characters %}
+  - {{ char.character_name }}: {{ char.expression }}, {{ char.pose }}, {{ char.position_in_frame }}{% if char.action %} ({{ char.action }}){% endif %}
+{% endfor %}
+{% endif %}
+{% if panel.effects %}
+- **Effects**: {{ panel.effects | join(', ') }}
+{% endif %}
+{% if panel.foreground_elements %}
+- **Foreground**: {{ panel.foreground_elements | join(', ') }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+## Instructions
+
+For each panel, generate a complete image prompt by assembling:
+1. **Style tokens** first (art style, color mode, quality)
+2. **Character DNA blocks** for each character present
+3. **Character state** (expression, pose, action, position)
+4. **Composition** (shot type, camera angle)
+5. **Environment** (background, lighting, mood, effects)
+6. **Negative prompt** (what to avoid)
+
+## Output Format
+
+For each panel, output:
+
+```yaml
+panels:
+  - page_number: 1
+    panel_number: 1
+    image_prompt: |
+      [Full assembled prompt here]
+      Style tokens + Character DNA + Composition + Environment
+    negative_prompt: "bad anatomy, deformed, blurry, low quality, text, watermark"
+    style_tokens: "manhwa style, full color, detailed background, cel shading"
+```

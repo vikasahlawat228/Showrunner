@@ -1,0 +1,145 @@
+{# Template: Write Scene #}
+{# Step: scene_writing #}
+{# access_level: story #}
+{# CRITICAL: Creative room data is NEVER injected here #}
+
+# Task: Write Scene - Chapter {{ chapter_num }}, Scene {{ scene_num }}
+
+You are a skilled manga/manhwa writer. Write a detailed scene with strong visual descriptions.
+
+## Project: {{ project_name }}
+
+{% if world_summary and world_summary.name %}
+## World Context
+- **{{ world_summary.name }}** ({{ world_summary.genre }}, {{ world_summary.tone }})
+- {{ world_summary.description }}
+{% if world_summary.rules %}
+### Known World Rules
+{% for rule in world_summary.rules %}
+- **{{ rule.name }}**: {{ rule.description }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{% if characters %}
+## Characters Available
+
+{% for char in characters %}
+### {{ char.name }} ({{ char.role }})
+- **Personality**: {{ char.personality.traits | join(', ') if char.personality and char.personality.traits else 'Not defined' }}
+- **Speech Pattern**: {{ char.personality.speech_pattern if char.personality else 'Not defined' }}
+{% if char.personality and char.personality.verbal_tics %}
+- **Verbal Tics**: {{ char.personality.verbal_tics | join(', ') }}
+{% endif %}
+{% if char.relationships %}
+- **Relationships**:
+{% for rel in char.relationships %}
+  - {{ rel.target_character_name }}: {{ rel.dynamic }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if reader_knowledge %}
+## What the Reader Knows So Far
+
+**IMPORTANT**: The scene must not reference or reveal anything beyond what the reader currently knows. Write from the reader's perspective.
+
+- **Known Characters**: {{ reader_knowledge.known_characters | join(', ') if reader_knowledge.known_characters else 'None yet' }}
+- **Known Locations**: {{ reader_knowledge.known_locations | join(', ') if reader_knowledge.known_locations else 'None yet' }}
+- **Known Rules**: {{ reader_knowledge.known_world_rules | join(', ') if reader_knowledge.known_world_rules else 'None yet' }}
+- **Active Questions**: {{ reader_knowledge.active_questions | join(', ') if reader_knowledge.active_questions else 'None yet' }}
+{% if reader_knowledge.false_beliefs %}
+- **Reader's False Beliefs** (maintain these): {{ reader_knowledge.false_beliefs | join(', ') }}
+{% endif %}
+{% endif %}
+
+{% if story_structure and story_structure.beats %}
+## Story Beat Reference
+{% for beat in story_structure.beats %}
+{% if beat.status == 'planned' %}
+- **{{ beat.beat_name }}** ({{ beat.act }}): {{ beat.content[:80] }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if beat_reference %}
+## Target Beat: {{ beat_reference }}
+This scene should serve the **{{ beat_reference }}** story beat.
+{% endif %}
+
+{% if previous_scenes %}
+## Previous Scene Context
+{% for ps in previous_scenes %}
+- Scene ended with: {{ ps.closing_state }}
+{% if ps.reveals %}
+- Revealed: {{ ps.reveals | join(', ') }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if narrative_style and narrative_style.tone %}
+## Style Guide
+- **Tone**: {{ narrative_style.tone }}
+- **POV**: {{ narrative_style.pov_default }}
+- **Prose Style**: {{ narrative_style.prose_style }}
+- **Dialogue Style**: {{ narrative_style.dialogue_style }}
+{% endif %}
+
+## Instructions
+
+Write this scene with:
+1. **Strong visual descriptions** suitable for manga/manhwa panel adaptation
+2. **Clear character voices** matching their defined speech patterns
+3. **Sensory details** - sights, sounds, atmosphere, lighting
+4. **Natural dialogue** with subtext where appropriate
+5. **Clear scene beats** that can later be divided into panels
+6. **Emotional progression** from opening to closing state
+
+Think about which moments would make powerful PANELS. Include visual cues like:
+- Character expressions and body language
+- Environment changes (lighting shifts, weather)
+- Dramatic compositions (who is positioned where)
+
+## Output Format
+
+```yaml
+chapter_id: "chapter-{{ '%02d' | format(chapter_num) }}"
+scene_number: {{ scene_num }}
+title: "Scene Title"
+summary: "Brief summary of what happens"
+purpose: "Why this scene exists in the story"
+beat_reference: "{{ beat_reference | default('') }}"
+location_name: "Where this takes place"
+location_description: "Specific visual description of the location in this moment"
+time_of_day: "dawn/morning/midday/afternoon/dusk/evening/night/late_night"
+weather: "clear/cloudy/rain/storm/snow/fog/wind"
+mood: "The emotional atmosphere"
+lighting: "Specific lighting description for panels"
+ambient_sounds:
+  - "ambient sound 1"
+characters_present:
+  - "character_id_1"
+pov_character_id: ""
+character_goals_in_scene:
+  character_id: "their goal in this scene"
+opening_hook: "The opening line or moment that hooks the reader"
+key_events:
+  - "Major event 1"
+  - "Major event 2"
+emotional_arc: "e.g., starts tense, builds to explosive confrontation, ends in stunned silence"
+closing_state: "Where things stand at scene end"
+cliffhanger: "Optional cliffhanger element"
+reveals:
+  - "What the reader learns in this scene"
+plants:
+  - "Seeds planted for future payoff"
+```
+
+Also write the **full scene prose** below the YAML, with clear beat divisions marked like:
+
+```
+[BEAT 1 - ACTION] Description of the visual moment...
+[BEAT 2 - DIALOGUE] Character dialogue with action beats...
+[BEAT 3 - INTERNAL] Character's internal reaction...
+```

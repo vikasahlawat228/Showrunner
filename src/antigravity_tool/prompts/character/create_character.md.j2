@@ -1,0 +1,125 @@
+{# Template: Create Character #}
+{# Step: character_creation #}
+{# access_level: story #}
+
+# Task: Create Character - {{ new_character_name }}
+
+Role: **{{ new_character_role }}**
+
+You are creating a character for a manga/manhwa project called **{{ project_name }}**.
+
+{% if world_summary and world_summary.name %}
+## World Context
+
+- **World**: {{ world_summary.name }} ({{ world_summary.genre }})
+- **Tone**: {{ world_summary.tone }}
+- **Time Period**: {{ world_summary.time_period }}
+- **Description**: {{ world_summary.description }}
+{% endif %}
+
+{% if existing_characters %}
+## Existing Characters
+
+The following characters already exist. Consider relationships and dynamics:
+{% for char in existing_characters %}
+- **{{ char.name }}** ({{ char.role }}): {{ char.one_line }}
+{% endfor %}
+{% endif %}
+
+{% if narrative_style and narrative_style.tone %}
+## Narrative Style
+- **Tone**: {{ narrative_style.tone }}
+- **Dialogue Style**: {{ narrative_style.dialogue_style }}
+{% endif %}
+
+## Instructions
+
+Create a complete character profile for **{{ new_character_name }}** as a **{{ new_character_role }}**. This character will be visually rendered in manga/manhwa panels, so physical descriptions must be extremely specific and consistent.
+
+Focus on:
+1. **Distinct visual identity** - they must be instantly recognizable in any panel
+2. **Unique voice** - their dialogue should sound different from every other character
+3. **Clear motivation** - what drives them in every scene
+4. **Visual character DNA** - precise, repeatable physical description for image generation
+
+## Output Format
+
+```yaml
+name: "{{ new_character_name }}"
+aliases: []
+role: "{{ new_character_role }}"
+one_line: "One-sentence character summary"
+backstory: |
+  Character's backstory (2-3 paragraphs).
+  Focus on formative events that explain their personality.
+personality:
+  traits:
+    - "trait 1 (e.g., stubborn)"
+    - "trait 2 (e.g., secretly compassionate)"
+    - "trait 3"
+  fears:
+    - "deep fear 1"
+    - "deep fear 2"
+  desires:
+    - "core desire 1"
+    - "core desire 2"
+  speech_pattern: "How they talk (e.g., short clipped sentences, formal and precise, casual with slang)"
+  verbal_tics:
+    - "recurring phrase or speech habit"
+  internal_conflict: "The central tension within this character"
+dna:
+  face:
+    face_shape: "oval/angular/round/heart-shaped/square"
+    jaw: "soft jawline/sharp squared jaw/pointed chin"
+    eyes: "detailed eye description (shape, size, expression)"
+    eye_color: "specific color"
+    nose: "nose description"
+    mouth: "lip and mouth description"
+    skin_tone: "specific skin tone description"
+    distinguishing_marks:
+      - "any scars, moles, tattoos, etc."
+    eyebrows: "eyebrow description"
+  hair:
+    style: "specific hairstyle"
+    length: "exact length"
+    color: "specific color with any highlights/details"
+    texture: "straight/wavy/curly/coiled"
+    notable_details: "any distinctive hair features"
+  body:
+    height: "height with descriptor (e.g., tall at 185cm)"
+    build: "body type description"
+    posture: "how they carry themselves"
+    notable_features:
+      - "any distinctive body features"
+  default_outfit:
+    name: "default"
+    description: "Full outfit description"
+    colors:
+      - "dominant color 1"
+      - "accent color"
+    key_items:
+      - "signature item 1 (e.g., red scarf)"
+      - "signature item 2"
+    prompt_tokens: "condensed image-gen description of outfit"
+  age_appearance: "appears mid-20s / looks like a teenager / etc."
+  gender_presentation: "masculine/feminine/androgynous"
+  species: "human"
+arc:
+  starting_state: "Who they are at the beginning"
+  catalyst: "What triggers their change"
+  progression:
+    - "Key transformation beat 1"
+    - "Key transformation beat 2"
+  ending_state: "Who they become (or fail to become)"
+  arc_type: "positive_change/fall/flat/corruption"
+relationships:
+{% for char in existing_characters %}
+  - target_character_id: "{{ char.id }}"
+    target_character_name: "{{ char.name }}"
+    relationship_type: ""
+    description: ""
+    dynamic: ""
+    known_to_reader: true
+{% endfor %}
+tags: []
+```

@@ -1,0 +1,67 @@
+{# Template: Evaluate Panel Composition #}
+{# Step: evaluation #}
+{# access_level: author #}
+
+# Task: Evaluate Panel Sequence Visual Quality
+
+Analyze the visual variety, flow, and composition of panels.
+
+{% if statistics %}
+## Statistical Analysis
+
+- **Total Panels**: {{ statistics.total_panels }}
+- **Shot Type Distribution**: {{ statistics.shot_type_distribution }}
+- **Angle Distribution**: {{ statistics.angle_distribution }}
+- **Size Distribution**: {{ statistics.size_distribution }}
+- **Max Consecutive Same Shot**: {{ statistics.consecutive_same_shot }}
+- **Max Consecutive Same Angle**: {{ statistics.consecutive_same_angle }}
+{% endif %}
+
+{% if panels %}
+## Panel Sequence
+
+{% for panel in panels %}
+**P{{ panel.page_number }}.{{ panel.panel_number }}** | {{ panel.shot_type }} | {{ panel.camera_angle }} | {{ panel.panel_size }} | {{ panel.mood }}
+{% endfor %}
+{% endif %}
+
+## Evaluation Criteria
+
+### Visual Variety
+- Are shot types varied? (The "3 of 5" rule: at least 3 different shots per 5 panels)
+- Are camera angles varied?
+- Is there a mix of panel sizes?
+
+### Visual Flow
+- Does the eye move naturally through the sequence?
+- Are establishing shots used before close-ups in new locations?
+- Do dramatic moments get appropriately sized panels?
+
+### Emotional Mapping
+- Do shot types match emotional beats? (close-ups for emotion, wide for action)
+- Do camera angles reinforce power dynamics?
+- Does pacing through panel size match the scene's rhythm?
+
+## Output Format
+
+```yaml
+target_type: "panel_sequence"
+scores:
+  - criterion: "visual_variety"
+    score: 0.0
+    reasoning: ""
+    suggestions: []
+  - criterion: "visual_flow"
+    score: 0.0
+    reasoning: ""
+    suggestions: []
+  - criterion: "emotional_mapping"
+    score: 0.0
+    reasoning: ""
+    suggestions: []
+overall_score: 0.0
+summary: ""
+strengths: []
+weaknesses: []
+recommendations: []
+```

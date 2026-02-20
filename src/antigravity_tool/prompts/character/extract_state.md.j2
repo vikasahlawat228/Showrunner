@@ -1,0 +1,47 @@
+{# Template: Extract Character State #}
+{# Step: character_state_extraction #}
+{# access_level: story #}
+
+# Extract Character States — Chapter {{ chapter_num }}, Scene {{ scene_num }}
+
+Analyze the scene below and extract the end-of-scene state for each character present.
+
+## Scene Data
+
+**Title:** {{ scene.get('title', 'Untitled') }}
+**Characters present:** {{ scene.get('characters_present', []) | join(', ') }}
+**Key events:** {{ scene.get('key_events', []) | join('; ') }}
+
+{% if previous_states %}
+## Previous Scene End States
+
+{% for name, state in previous_states.items() %}
+### {{ name }}
+- Emotional: {{ state.get('emotional_state', 'unknown') }}
+- Physical: {{ state.get('physical_state', 'unknown') }}
+- Outfit: {{ state.get('current_outfit', 'default') }}
+- Injuries: {{ state.get('injuries', []) | join(', ') or 'none' }}
+- Location: {{ state.get('location', 'unknown') }}
+{% endfor %}
+{% endif %}
+
+## Instructions
+
+For EACH character present in this scene, output a YAML `CharacterState` with these fields:
+
+```yaml
+character_name: "Name"
+emotional_state: "how they feel at scene END"
+physical_state: "healthy, exhausted, injured_left_arm, etc."
+current_outfit: "default or outfit name"
+injuries: ["list of current injuries"]
+items_held: ["items they currently have"]
+knowledge_gained: ["new things they learned in this scene"]
+relationship_changes: ["Grew closer to X", "Now suspects Y"]
+power_level_note: "any power changes"
+location: "where they are at scene end"
+```
+
+Focus on what CHANGED during this scene. If nothing changed for a field, carry forward from the previous state.
+
+Output one YAML block per character, separated by `---`.

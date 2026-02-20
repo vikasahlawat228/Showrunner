@@ -1,0 +1,8 @@
+{# Partial: Style Guide #}
+{% if narrative_style %}
+### Style Guide
+- **Tone**: {{ narrative_style.tone | default('Not set') }}
+- **POV**: {{ narrative_style.pov_default | default('third person limited') }}
+- **Prose Style**: {{ narrative_style.prose_style | default('Not set') }}
+- **Dialogue Style**: {{ narrative_style.dialogue_style | default('Not set') }}
+{% endif %}

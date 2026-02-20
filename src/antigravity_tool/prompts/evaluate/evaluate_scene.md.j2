@@ -1,0 +1,126 @@
+{# Template: Evaluate Scene #}
+{# Step: evaluation #}
+{# access_level: author #}
+{# NOTE: This template has FULL creative room access for meta-analysis #}
+
+# Task: Evaluate Scene
+
+You are a professional manga/manhwa editor and story consultant. Evaluate the following scene with constructive, specific feedback.
+
+{% if scene %}
+## Scene Under Review
+
+- **Title**: {{ scene.title }}
+- **Chapter**: {{ scene.chapter_id }}
+- **Location**: {{ scene.location_name }}
+- **Mood**: {{ scene.mood }}
+- **Purpose**: {{ scene.purpose }}
+- **Beat Reference**: {{ scene.beat_reference | default('N/A') }}
+- **Summary**: {{ scene.summary }}
+- **Emotional Arc**: {{ scene.emotional_arc }}
+- **Opening Hook**: {{ scene.opening_hook }}
+- **Closing State**: {{ scene.closing_state }}
+{% endif %}
+
+{% if reader_knowledge %}
+## Reader Knowledge State (at this point)
+
+- **Known Characters**: {{ reader_knowledge.known_characters | join(', ') if reader_knowledge.known_characters else 'None' }}
+- **Active Questions**: {{ reader_knowledge.active_questions | join(', ') if reader_knowledge.active_questions else 'None' }}
+- **False Beliefs**: {{ reader_knowledge.false_beliefs | join(', ') if reader_knowledge.false_beliefs else 'None' }}
+{% endif %}
+
+{% if creative_room %}
+## Author Secrets (for evaluation context only)
+
+{% if creative_room.character_secrets %}
+### Active Character Secrets
+{% for secret in creative_room.character_secrets %}
+- **{{ secret.character_name }}**: {{ secret.secret }}
+{% if secret.dramatic_irony_note %}  Irony: {{ secret.dramatic_irony_note }}{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if creative_room.foreshadowing_map %}
+### Foreshadowing Status
+{% for entry in creative_room.foreshadowing_map %}
+- [{{ entry.status }}] {{ entry.plant_description }} -> {{ entry.payoff_description }}
+{% endfor %}
+{% endif %}
+
+{% if creative_room.plot_twists %}
+### Plot Twists
+{% for twist in creative_room.plot_twists %}
+- **{{ twist.name }}**: {{ twist.description }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+## Evaluation Criteria
+
+{% for criterion in criteria %}
+### {{ criterion | replace('_', ' ') | title }}
+
+{% if criterion == "pacing" %}
+Evaluate the scene's rhythm and tempo:
+- Does the scene open with momentum?
+- Are quiet and intense moments balanced?
+- Does it avoid dragging or rushing?
+- Is the emotional build earned, not forced?
+- Would the pacing translate well to manga panels?
+
+{% elif criterion == "dialogue" %}
+Evaluate the dialogue quality:
+- Does each character have a distinct voice?
+- Is there subtext (gap between what's said and meant)?
+- Are dialogue lines concise enough for speech bubbles?
+- Do action beats accompany dialogue naturally?
+- Are speech patterns consistent with character definitions?
+
+{% elif criterion == "consistency" %}
+Evaluate for internal consistency:
+- Do characters behave in line with their established personalities?
+- Are world rules followed or broken (intentionally/accidentally)?
+- Is continuity maintained with previous scenes?
+- Are relationship dynamics consistent?
+
+{% elif criterion == "emotional_arc" %}
+Evaluate the emotional journey:
+- Does the scene follow its stated emotional arc?
+- Are emotional transitions earned, not jarring?
+- Is the emotional impact appropriate for the story beat?
+- Does the ending create forward momentum?
+{% endif %}
+{% endfor %}
+
+## Output Format
+
+```yaml
+target_type: "scene"
+target_id: "{{ scene.id if scene else '' }}"
+target_name: "{{ scene.title if scene else '' }}"
+evaluator_type: "scene_evaluation"
+scores:
+{% for criterion in criteria %}
+  - criterion: "{{ criterion }}"
+    score: 0.0
+    reasoning: "Specific reasoning for this score"
+    suggestions:
+      - "Actionable suggestion 1"
+{% endfor %}
+overall_score: 0.0
+summary: "2-3 sentence evaluation summary"
+strengths:
+  - "Specific strength 1"
+weaknesses:
+  - "Specific weakness 1"
+recommendations:
+  - "Actionable recommendation 1"
+```
+
+## Scoring Guide
+- **9-10**: Professional quality, ready for publication
+- **7-8**: Strong work, minor improvements possible
+- **5-6**: Solid foundation, notable issues to address
+- **3-4**: Significant problems, needs revision
+- **1-2**: Fundamental issues, consider rewriting

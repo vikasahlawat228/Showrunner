@@ -1,0 +1,121 @@
+{# Template: Story Outline with Beat Sheet #}
+{# Step: story_structure #}
+{# access_level: story #}
+
+# Task: Create Story Outline ({{ structure_type }})
+
+You are outlining a manga/manhwa story using the **{{ structure_type }}** framework.
+
+## Project: {{ project_name }}
+
+{% if world_summary and world_summary.name %}
+## World
+- **{{ world_summary.name }}** ({{ world_summary.genre }})
+- {{ world_summary.description }}
+{% endif %}
+
+{% if characters %}
+## Characters
+{% for char in characters %}
+- **{{ char.name }}** ({{ char.role }}): {{ char.one_line }}
+{% endfor %}
+{% endif %}
+
+{% if narrative_style and narrative_style.tone %}
+## Narrative Style
+- **Tone**: {{ narrative_style.tone }}
+- **Themes**: {{ narrative_style.themes | join(', ') if narrative_style.themes else 'Not set' }}
+{% endif %}
+
+{% if existing_structure and existing_structure.logline %}
+## Existing Structure
+- **Logline**: {{ existing_structure.logline }}
+- **Premise**: {{ existing_structure.premise }}
+{% endif %}
+
+## Instructions
+
+Create a complete beat-by-beat story outline. Each beat should be specific enough to guide scene writing later. Think about:
+1. Visual moments that would make powerful manga/manhwa panels
+2. Cliffhanger potential at chapter boundaries
+3. Character transformation beats aligned with story beats
+4. Pacing: action sequences interspersed with quiet character moments
+
+{% if structure_type == "save_the_cat" %}
+### Save the Cat Beats (15 beats)
+1. Opening Image (0-1%) - "Before" snapshot
+2. Theme Stated (5%) - Someone states the theme
+3. Set-Up (1-10%) - Establish the ordinary world
+4. Catalyst (10%) - Life-changing event
+5. Debate (10-20%) - Should they take action?
+6. Break into Two (20%) - Decision to enter new world
+7. B Story (22%) - Secondary story/love interest begins
+8. Fun and Games (20-50%) - Promise of the premise
+9. Midpoint (50%) - False victory or false defeat
+10. Bad Guys Close In (50-75%) - Opposition escalates
+11. All Is Lost (75%) - Lowest point
+12. Dark Night of the Soul (75-80%) - Rock bottom reflection
+13. Break into Three (80%) - Solution found
+14. Finale (80-99%) - Final confrontation
+15. Final Image (99-100%) - "After" snapshot
+{% elif structure_type == "heros_journey" %}
+### Hero's Journey (12 stages)
+1. Ordinary World - Hero's normal life
+2. Call to Adventure - Challenge appears
+3. Refusal of the Call - Hesitation
+4. Meeting the Mentor - Guidance received
+5. Crossing the Threshold - Enter special world
+6. Tests, Allies, Enemies - New world challenges
+7. Approach to the Inmost Cave - Prepare for ordeal
+8. The Ordeal - Major crisis
+9. Reward - Prize seized
+10. The Road Back - Begin return
+11. Resurrection - Final test/transformation
+12. Return with the Elixir - Changed hero returns
+{% elif structure_type == "kishotenketsu" %}
+### Kishotenketsu (4 acts)
+1. Ki (Introduction) - Establish characters and world
+2. Sho (Development) - Develop story without conflict
+3. Ten (Twist) - Unexpected turn that recontextualizes everything
+4. Ketsu (Conclusion) - Reconcile the twist with what came before
+{% elif structure_type == "story_circle" %}
+### Story Circle (8 steps)
+1. You - Character in comfort zone
+2. Need - They want something
+3. Go - Enter unfamiliar situation
+4. Search - Adapt to new situation
+5. Find - Get what they wanted
+6. Take - Pay a heavy price
+7. Return - Go back to familiar
+8. Change - They have changed
+{% endif %}
+
+## Output Format
+
+```yaml
+structure_type: "{{ structure_type }}"
+title: "Story Title"
+logline: "One-sentence story summary (character + conflict + stakes)"
+premise: "The thematic argument (what does this story prove?)"
+total_chapters_planned: 0
+act_summaries:
+  "Act 1": "Summary of act 1"
+  "Act 2": "Summary of act 2"
+  "Act 3": "Summary of act 3"
+beats:
+  - beat_name: "Beat Name"
+    beat_number: 1
+    act: "Act 1"
+    description: "What this beat IS (from the framework)"
+    content: |
+      What happens in YOUR story at this beat.
+      Be specific about characters, actions, and visual moments.
+    target_percentage: 0.0
+    status: "planned"
+character_arcs:
+  - character_id: ""
+    character_name: "Name"
+    beat_name: "want established"
+    description: "What happens in this character's arc"
+    story_beat_ref: "Beat Name"
+```

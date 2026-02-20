@@ -1,0 +1,18 @@
+category: "image_prompts"
+description: "Best practices for AI image generation prompts"
+articles:
+  - file: "character_dna.md"
+    title: "Writing Character DNA Blocks"
+    tags: ["character", "DNA", "consistency", "identity", "reference"]
+    summary: "How to write stable character identity blocks for consistent image generation"
+    use_in_steps: ["character_creation", "image_prompt_generation"]
+  - file: "style_tokens.md"
+    title: "Style Tokens and Modifiers"
+    tags: ["style", "tokens", "modifiers", "aesthetic", "art style"]
+    summary: "Common style modifiers and tokens for different manga/manhwa art styles"
+    use_in_steps: ["image_prompt_generation"]
+  - file: "composition_prompts.md"
+    title: "Translating Composition to Prompts"
+    tags: ["composition", "prompt", "camera", "shot", "framing"]
+    summary: "How to translate panel composition decisions into effective image prompts"
+    use_in_steps: ["image_prompt_generation"]

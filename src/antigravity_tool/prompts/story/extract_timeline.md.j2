@@ -1,0 +1,54 @@
+{# Template: Extract Timeline Events #}
+{# Step: story_structure #}
+{# access_level: story #}
+
+# Extract Timeline Events — Chapter {{ chapter_num }}{% if scene_num %}, Scene {{ scene_num }}{% endif %}
+
+## Project: {{ project_name }}
+
+{% if existing_events %}
+## Existing Timeline
+
+{% for event in existing_events %}
+- **{{ event.story_time }}** (order: {{ event.sort_order }}): {{ event.description }}{% if event.is_flashback %} [FLASHBACK]{% endif %}{% if event.location %} @ {{ event.location }}{% endif %}
+{% endfor %}
+{% endif %}
+
+## Scenes to Analyze
+
+{% for scene in scenes %}
+### Scene {{ scene.get('scene_number', '?') }}: {{ scene.get('title', 'Untitled') }}
+
+- **Summary:** {{ scene.get('summary', 'No summary') }}
+- **Time of day:** {{ scene.get('time_of_day', 'unknown') }}
+- **Location:** {{ scene.get('location_name', 'unknown') }}
+- **Characters present:** {{ scene.get('characters_present', []) | join(', ') }}
+- **Key events:** {{ scene.get('key_events', []) | join('; ') }}
+{% if scene.get('scene_type') %}- **Scene type:** {{ scene.get('scene_type') }}{% endif %}
+{% endfor %}
+
+## Instructions
+
+Extract timeline events from the scenes above. For each significant event:
+
+1. Determine its story time (use {{ time_unit }} as the base unit)
+2. Assign a sort_order that places it correctly relative to existing events
+3. Note if it's a flashback (chronologically earlier but shown later)
+4. Identify parallel events (happening simultaneously in different locations)
+
+Output as YAML list:
+
+```yaml
+events:
+  - event_id: ""  # leave empty, will be auto-generated
+    description: "what happened"
+    story_time: "Day X, Time"
+    sort_order: 1.0
+    chapter_num: {{ chapter_num }}
+    scene_num: 1
+    characters_involved: ["Name1", "Name2"]
+    location: "location name"
+    is_flashback: false
+    parallel_group: null  # or group ID for simultaneous events
+    duration: "2 hours"  # optional
+```

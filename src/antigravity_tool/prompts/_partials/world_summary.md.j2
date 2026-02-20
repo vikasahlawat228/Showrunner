@@ -1,0 +1,14 @@
+{# Partial: World Summary #}
+{% if world_summary and world_summary.name %}
+### World: {{ world_summary.name }}
+- **Genre**: {{ world_summary.genre }}
+- **Tone**: {{ world_summary.tone }}
+- **Time Period**: {{ world_summary.time_period }}
+- {{ world_summary.description }}
+{% if world_summary.rules %}
+**Known Rules**:
+{% for rule in world_summary.rules %}
+- {{ rule.name }}: {{ rule.description }}
+{% endfor %}
+{% endif %}
+{% endif %}

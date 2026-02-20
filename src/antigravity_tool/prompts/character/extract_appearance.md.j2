@@ -1,0 +1,52 @@
+{# Template: Extract Character Appearance from Prose #}
+{# Step: character_creation #}
+{# access_level: story #}
+
+# Task: Extract Character Appearances from Scene Text
+
+Extract detailed visual character descriptions from the following scene text and compare with existing DNA blocks.
+
+## Scene Text
+
+{{ scene_text }}
+
+## Characters to Extract
+
+{% for name in character_names %}
+### {{ name }}
+{% if name in existing_dna %}
+**Existing DNA Block:**
+```
+{{ existing_dna[name] }}
+```
+{% else %}
+No existing DNA block.
+{% endif %}
+{% endfor %}
+
+## Instructions
+
+1. Find every physical description mention for each character in the scene text
+2. Extract specific visual details (face, hair, body, clothing, expressions)
+3. Compare with existing DNA blocks for consistency
+4. Flag any contradictions between scene text and existing DNA
+
+## Output Format
+
+```yaml
+extractions:
+{% for name in character_names %}
+  - character_name: "{{ name }}"
+    found_descriptions:
+      - text: "exact quote from scene"
+        attribute: "face/hair/body/outfit/expression"
+        value: "extracted value"
+    conflicts_with_existing:
+      - attribute: "attribute name"
+        existing_value: "what DNA says"
+        scene_value: "what scene says"
+        recommendation: "keep existing / update DNA / scene error"
+    suggested_dna_updates:
+      attribute_path: "new value"
+{% endfor %}
+```

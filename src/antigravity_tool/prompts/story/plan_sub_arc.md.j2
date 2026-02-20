@@ -1,0 +1,65 @@
+{# Template: Plan Sub-Arc #}
+{# Step: story_structure #}
+{# access_level: story #}
+
+# Plan Sub-Arc: {{ sub_arc_name }}
+
+## Arc Type: {{ sub_arc_type }}
+
+{% if world_summary %}
+## World Context
+{{ world_summary }}
+{% endif %}
+
+{% if characters %}
+## Focus Characters
+{% for char in characters %}
+- **{{ char.name }}** ({{ char.role }}) — {{ char.one_line }}
+{% endfor %}
+{% endif %}
+
+{% if existing_structure %}
+## Main Story Structure
+- **Type:** {{ existing_structure.structure_type }}
+- **Logline:** {{ existing_structure.logline }}
+{% if parent_beat %}
+- **Parent beat:** {{ parent_beat }}
+{% endif %}
+{% endif %}
+
+## Chapter Span
+- Start: Chapter {{ chapter_start or 'TBD' }}
+- End: Chapter {{ chapter_end or 'TBD' }}
+
+## Instructions
+
+Design the internal beat structure for this {{ sub_arc_type }} sub-arc. The sub-arc should:
+
+1. Serve the main story's current beat ({{ parent_beat or 'general progression' }})
+2. Have its own mini-arc with escalation and resolution
+3. Develop the focus character(s) meaningfully
+4. Plant seeds for future story developments
+
+Output as YAML:
+
+```yaml
+name: "{{ sub_arc_name }}"
+arc_type: "{{ sub_arc_type }}"
+description: "one-paragraph description of this sub-arc"
+chapter_start: {{ chapter_start or 'null' }}
+chapter_end: {{ chapter_end or 'null' }}
+beats:
+  - beat_name: "Setup"
+    beat_number: 1
+    content: "what happens"
+  - beat_name: "Escalation"
+    beat_number: 2
+    content: "what happens"
+  - beat_name: "Climax"
+    beat_number: 3
+    content: "what happens"
+  - beat_name: "Resolution"
+    beat_number: 4
+    content: "what happens and how it connects to the main arc"
+status: "planned"
+```

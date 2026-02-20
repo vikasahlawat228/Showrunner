@@ -1,0 +1,23 @@
+category: "panels"
+description: "Manga/manhwa panel composition techniques and rules"
+articles:
+  - file: "shot_types.md"
+    title: "Shot Types Taxonomy"
+    tags: ["shot", "framing", "distance", "close-up", "wide", "medium"]
+    summary: "Complete taxonomy of shot types with emotional impact and usage guidelines"
+    use_in_steps: ["panel_division", "image_prompt_generation", "evaluation"]
+  - file: "camera_angles.md"
+    title: "Camera Angles and Their Effects"
+    tags: ["angle", "high", "low", "dutch", "bird's eye", "perspective"]
+    summary: "Camera angle taxonomy with psychological and dramatic effects"
+    use_in_steps: ["panel_division", "image_prompt_generation", "evaluation"]
+  - file: "panel_layouts.md"
+    title: "Page Layout Patterns"
+    tags: ["layout", "grid", "splash", "bleed", "gutter", "webtoon", "vertical"]
+    summary: "Common page/scroll layout patterns for manga and manhwa/webtoon"
+    use_in_steps: ["panel_division"]
+  - file: "composition_rules.md"
+    title: "Composition Rules and Techniques"
+    tags: ["composition", "rule of thirds", "framing", "visual flow", "reading direction"]
+    summary: "Fundamental composition rules for panel construction"
+    use_in_steps: ["panel_division", "image_prompt_generation", "evaluation"]
