@@ -12,6 +12,10 @@ from antigravity_tool.server.routers import (
     chapters,
     workflow,
     director,
+    pipeline,
+    schemas_router,
+    graph,
+    timeline,
 )
 
 app = FastAPI(title="Antigravity Studio API", version="0.2.0")
@@ -35,6 +39,10 @@ app.include_router(world.router)
 app.include_router(chapters.router)
 app.include_router(workflow.router)
 app.include_router(director.router)
+app.include_router(pipeline.router, prefix="/api")
+app.include_router(schemas_router.router)
+app.include_router(graph.router)
+app.include_router(timeline.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -91,6 +91,12 @@ from antigravity_tool.schemas.session import (
     ChapterSummary,
     ProjectBrief,
 )
+from antigravity_tool.schemas.pipeline import (
+    PipelineState,
+    PipelineRun,
+    PipelineRunCreate,
+    PipelineResume,
+)
 
 __all__ = [
     "AntigravityBase",
@@ -119,4 +125,5 @@ __all__ = [
     "Decision", "DecisionCategory", "DecisionScope",
     "SessionAction", "SessionEntry",
     "ChapterSummary", "ProjectBrief",
+    "PipelineState", "PipelineRun", "PipelineRunCreate", "PipelineResume",
 ]

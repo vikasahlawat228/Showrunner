@@ -24,18 +24,22 @@ YAML files remain the git-friendly source of truth.
 *   **Query (Reads):** On application boot, the backend parses all YAMLs and populates a local SQLite database leveraging the `JSON1` extension. The frontend hits fast SQL queries against the indexed table for relationships.
 *   **Sync:** File watchers (`watchdog` in Python) ensure that external manual edits to YAML files immediately re-sync the SQLite database.
 
-### 3.3 Event Sourcing & The "Undo" Tree
-AI generations are unpredictable. Standard state overwriting is dangerous.
-*   Instead of `UPDATE container_x SET content = "new"`, the backend records an **Event**: `{"action": "UPDATE_CONTAINER", "diff": "{...}"}`.
-*   This creates an append-only log of User and AI actions.
-*   **Benefits:** Enables "Time Travel" (undo/redo to any exact state), makes debugging the "Transparent Workflow" trivial (we know exactly what the AI changed), and supports alternate timeline branching.
+### 3.3 Event Sourcing & The "Undo" Tree (CQRS)
+AI generations are unpredictable. Standard state overwriting is dangerous. To support parallel branching (like Git) in an unpredictable AI writing environment:
+*   Instead of mutating YAML files directly, every AI action is an immutable atomic event in an append-only log: `{"action": "UPDATE_CONTAINER", "diff": "{...}"}`.
+*   **The Data Model (SQLite DAG):**
+    *   `events` table: `id`, `parent_event_id`, `branch_id`, `timestamp`, `event_type`, `payload`.
+    *   `branches` table: `id` (e.g., "main"), `head_event_id`.
+*   **State Projection:** The active story state (the YAML files or in-memory Knowledge Graph) is a Materialized View built by walking the event log backwards from a branch's head and applying payloads sequentially.
+*   **Benefits:** Enables cheap "Time Travel" (checkout an old event to spawn a parallel `timeline_diverged` branch), makes debugging trivial, and allows the specific Continuity Analyst Agent to vet proposed diffs against the Projected State before merging.
 
 ## 4. The Transparent "Glass Box" Director
 
-The `DirectorService` no longer executes a monolithic black-box function. It is a pipeline execution engine.
-1.  **Pipeline Definition:** Workflows (e.g., "Generate Scene") are defined as a graph of Nodes (Context Node, System Prompt Node, LLM Node).
-2.  **Execution Hooks:** The execution pauses at defined user-intervention points.
-3.  **API Streaming:** The backend streams the *pipeline state* (not just the LLM tokens) to the frontend via SSE/WebSockets. The UI knows if the Director is currently "Fetching Context", "Assembling Prompt", or "waiting for user approval."
+The `DirectorService` no longer executes a monolithic black-box function. It is a state-machine execution engine.
+1.  **Pipeline Definition:** Workflows (e.g., "Generate Scene") are defined dynamically by the Pipeline Director Agent into discrete steps (Context Gathering -> Prompt Assembly -> User Intercept -> Execution -> Critique).
+2.  **Streaming & Pause (SSE):** The backend uses Server-Sent Events (SSE) to stream state transitions to the Next.js client. Unidirectional SSE is inherently more stable than WebSockets for long-running human-in-the-loop workflows.
+3.  **Human Interception:** When the state machine reaches a `USER_INTERCEPT` node, the backend persists the current payload (e.g., the assembled LLM prompt) with a `PAUSED` state to the DB and safely awaits.
+4.  **Resumption:** The frontend displays the paused payload. The user edits it and hits a standard REST `POST /api/pipeline/{run_id}/resume`. The backend restores the context, switches state to `IN_PROGRESS`, and spins up a resumption background task.
 
 ## 5. Frontend Architecture (React Flow)
 The `@dnd-kit` grid is being deprecated in favor of `React Flow`.
@@ -56,3 +60,11 @@ Creative Room secrets (plot twists, true mechanics) must never leak into the LLM
 2.  **Phase 2: The Graph.** Swap `@dnd-kit` for `React Flow` on the frontend. Connect edges between Containers.
 3.  **Phase 3: The Glass Box.** Refactor `DirectorService` to expose pipeline steps over the API. Build the n8n-style prompt review UI.
 4.  **Phase 4: Schema Builder.** Add the UI allowing users to dynamically define their own custom Container types.
+
+## 8. Schema Builder (Dynamic Container Types)
+Users must be able to create custom entity types ("Spell", "Spaceship") without writing code.
+*   **Three Interaction Modes:** Natural Language Wizard (Schema Wizard Agent → LLM), Visual Property Builder (Notion-style rows), and Raw YAML editor.
+*   **Extended `FieldType` enum:** adds `enum` (→ `Literal[...]` with `options`) and `reference` (→ UUID with `target_type` constraint) beyond the original 6 types.
+*   **API Surface:** 7 REST endpoints (`/api/v1/schemas/` CRUD + `/generate` NL→AI + `/validate`).
+*   **Frontend:** A dedicated `/schemas` page with `SchemaBuilderPanel`, `FieldRow`, `FieldTypeSelector`, `NLWizardInput`, and `SchemaPreview` components, using local React state (not Zustand).
+*   **Glass Box Principle:** AI-generated schemas are always drafts — the user must review, edit, and explicitly save.

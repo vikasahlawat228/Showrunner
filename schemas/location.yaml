@@ -1,0 +1,16 @@
+name: location
+display_name: Location
+description: A physical place within the world.
+fields:
+  - name: name
+    field_type: string
+    required: true
+  - name: description
+    field_type: string
+    description: Visual and atmospheric description of the location.
+  - name: region
+    field_type: string
+    description: The broader region or country this location is in.
+  - name: points_of_interest
+    field_type: list[string]
+    description: Notable landmarks or features.

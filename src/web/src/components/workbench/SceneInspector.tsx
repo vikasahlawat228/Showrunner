@@ -1,6 +1,7 @@
 "use client";
 
 import { X, User } from "lucide-react";
+import { useDroppable } from "@dnd-kit/core";
 import type { SceneSummary } from "@/lib/api";
 import { useStudioStore } from "@/lib/store";
 
@@ -21,6 +22,7 @@ function Field({ label, value }: { label: string; value?: string | number | null
 export function SceneInspector({ scene }: SceneInspectorProps) {
   const characters = useStudioStore((s) => s.characters);
   const unlinkCharacterFromScene = useStudioStore((s) => s.unlinkCharacterFromScene);
+  const { isOver, setNodeRef } = useDroppable({ id: "scene-inspector-drop" });
 
   const tensionPercent = (scene.tension_level / 10) * 100;
 
@@ -63,14 +65,17 @@ export function SceneInspector({ scene }: SceneInspectorProps) {
         </div>
       </div>
 
-      {/* Linked Characters */}
-      <div>
+      {/* Linked Characters — drop zone for sidebar characters */}
+      <div
+        ref={setNodeRef}
+        className={`rounded-lg p-2 -m-2 transition-colors ${isOver ? "bg-blue-900/30 ring-1 ring-blue-500/50" : ""}`}
+      >
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
           Characters ({linkedCharacters.length})
         </h3>
         {linkedCharacters.length === 0 ? (
-          <p className="text-gray-600 text-xs">
-            Drag a character onto this scene to link them.
+          <p className={`text-xs ${isOver ? "text-blue-400" : "text-gray-600"}`}>
+            {isOver ? "Drop to link character" : "Drag a character onto this scene to link them."}
           </p>
         ) : (
           <div className="space-y-1">

@@ -1,0 +1,21 @@
+name: scene
+display_name: Scene
+description: A narrative unit of action taking place at a specific time and place.
+fields:
+  - name: title
+    field_type: string
+    required: true
+  - name: summary
+    field_type: string
+    description: High-level summary of what happens in the scene.
+  - name: setting
+    field_type: string
+    description: The physical location or environment.
+  - name: time_of_day
+    field_type: string
+  - name: mood
+    field_type: string
+    description: The emotional tone of the scene.
+  - name: characters_involved
+    field_type: list[string]
+    description: List of character IDs or names present in the scene.

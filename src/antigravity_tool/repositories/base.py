@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Generic, TypeVar, Type
+from typing import Generic, TypeVar, Type, Callable, List, Dict, Any, Optional
 
 from pydantic import BaseModel
 
@@ -23,6 +23,16 @@ class YAMLRepository(Generic[T]):
     def __init__(self, base_dir: Path, model_class: Type[T]):
         self.base_dir = base_dir
         self.model_class = model_class
+        self._save_callbacks: List[Callable[[Path, T], None]] = []
+        self._delete_callbacks: List[Callable[[Path, str], None]] = []
+
+    def subscribe_save(self, callback: Callable[[Path, T], None]) -> None:
+        """Subscribe to save events."""
+        self._save_callbacks.append(callback)
+
+    def subscribe_delete(self, callback: Callable[[Path, str], None]) -> None:
+        """Subscribe to delete events."""
+        self._delete_callbacks.append(callback)
 
     def _ensure_dir(self) -> None:
         """Create the base directory if it doesn't exist."""
@@ -63,10 +73,37 @@ class YAMLRepository(Generic[T]):
         self._ensure_dir()
         try:
             write_yaml(path, entity.model_dump(mode="json"))
+            # Trigger callbacks
+            for cb in self._save_callbacks:
+                try:
+                    cb(path, entity)
+                except Exception:
+                    # Don't let callback failure break the write
+                    pass
             return path
         except Exception as e:
             raise PersistenceError(
                 f"Failed to save {path}: {e}",
+                context={"path": str(path), "model": self.model_class.__name__},
+            )
+            
+    def delete(self, identifier: str) -> None:
+        """Delete a YAML file by its identifier (filename stem)."""
+        path = self.base_dir / f"{identifier}.yaml"
+        if not path.exists():
+            return
+            
+        try:
+            path.unlink()
+            # Trigger callbacks
+            for cb in self._delete_callbacks:
+                try:
+                    cb(path, identifier)
+                except Exception:
+                    pass
+        except Exception as e:
+            raise PersistenceError(
+                f"Failed to delete {path}: {e}",
                 context={"path": str(path), "model": self.model_class.__name__},
             )
 

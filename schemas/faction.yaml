@@ -1,0 +1,19 @@
+name: faction
+display_name: Faction
+description: A group, organization, or house within the world.
+fields:
+  - name: name
+    field_type: string
+    required: true
+  - name: description
+    field_type: string
+  - name: leader
+    field_type: string
+    description: Who leads the faction.
+  - name: goals
+    field_type: list[string]
+    description: What the faction is trying to achieve.
+  - name: allies
+    field_type: list[string]
+  - name: enemies
+    field_type: list[string]

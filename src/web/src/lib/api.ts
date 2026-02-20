@@ -217,6 +217,48 @@ export interface WorldSettings {
   cultural_notes: string[];
 }
 
+// ── Schema Builder Types ────────────────────────────────────
+
+export type FieldType =
+  | "string"
+  | "integer"
+  | "float"
+  | "boolean"
+  | "list[string]"
+  | "json"
+  | "enum"
+  | "reference";
+
+export interface FieldDefinition {
+  id: string;
+  name: string;
+  field_type: FieldType;
+  description?: string;
+  default?: unknown;
+  required: boolean;
+  options?: string[];    // For enum fields
+  target_type?: string;  // For reference fields
+}
+
+export interface ContainerSchema {
+  id: string;
+  name: string;
+  display_name: string;
+  description?: string;
+  fields: FieldDefinition[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface GenerateFieldsRequest {
+  description: string;
+  existing_schemas?: string[];
+}
+
+export interface GenerateFieldsResponse {
+  fields: FieldDefinition[];
+}
+
 // ── Request Types ────────────────────────────────────────────
 
 export interface CreateCharacterRequest {
@@ -250,12 +292,40 @@ function post<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+function put<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 function patch<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+function del(path: string): Promise<void> {
+  return request<void>(path, { method: "DELETE" });
+}
+
+
+export interface GraphResponse {
+  nodes: any[];
+  edges: any[];
+}
+
+export interface TimelineEvent {
+  id: string;
+  parent_event_id: string | null;
+  branch_id: string;
+  timestamp: string;
+  event_type: string;
+  container_id: string;
+  payload: any;
 }
 
 export const api = {
@@ -289,4 +359,31 @@ export const api = {
     post<DirectorResult>("/api/v1/director/act", req ?? {}),
   getDirectorStatus: () =>
     request<{ current_step: string }>("/api/v1/director/status"),
+
+  // Schemas
+  getSchemas: () => request<ContainerSchema[]>("/api/v1/schemas/"),
+  getSchema: (id: string) =>
+    request<ContainerSchema>(`/api/v1/schemas/${encodeURIComponent(id)}`),
+  createSchema: (schema: Omit<ContainerSchema, "id" | "created_at" | "updated_at">) =>
+    post<ContainerSchema>("/api/v1/schemas/", schema),
+  updateSchema: (id: string, schema: Partial<ContainerSchema>) =>
+    put<ContainerSchema>(`/api/v1/schemas/${encodeURIComponent(id)}`, schema),
+  deleteSchema: (id: string) =>
+    del(`/api/v1/schemas/${encodeURIComponent(id)}`),
+  generateFields: (req: GenerateFieldsRequest) =>
+    post<GenerateFieldsResponse>("/api/v1/schemas/generate", req),
+
+  // Knowledge Graph
+  getGraph: () => request<GraphResponse>("/api/v1/graph/"),
+
+  // Pipeline execution
+  startPipeline: (initialPayload?: any) =>
+    post<{ run_id: string }>("/api/pipeline/run", { initial_payload: initialPayload || {} }),
+  resumePipeline: (runId: string, payload: any) =>
+    post<{ status: string; run_id: string }>(`/api/pipeline/${runId}/resume`, { payload }),
+
+  // Timeline & Event Sourcing
+  getTimelineEvents: () => request<TimelineEvent[]>("/api/v1/timeline/events"),
+  checkoutEvent: (eventId: string, branchName?: string) =>
+    post<{ status: string; event_id: string; branch?: string }>("/api/v1/timeline/checkout", { event_id: eventId, branch_name: branchName }),
 };

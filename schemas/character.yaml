@@ -1,0 +1,18 @@
+name: character
+display_name: Character
+description: A person or entity within the story universe.
+fields:
+  - name: name
+    field_type: string
+    required: true
+  - name: role
+    field_type: string
+    description: Protagonist, Antagonist, etc.
+  - name: traits
+    field_type: list[string]
+    description: List of personality traits.
+  - name: bio
+    field_type: string
+  - name: dna
+    field_type: json
+    description: Visual appearance data.
