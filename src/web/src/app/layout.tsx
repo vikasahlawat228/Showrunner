@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { Navbar } from "@/components/ui/Navbar";
+import { CommandPalette } from "@/components/ui/CommandPalette";
+import { QuickAddModal } from "@/components/ui/QuickAddModal";
+import { GlobalActivityBar } from "@/components/ui/GlobalActivityBar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +34,26 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
-        {children}
+        <Navbar />
+        <div className="pt-12">
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
+        </div>
+        <CommandPalette />
+        <QuickAddModal />
+        <GlobalActivityBar />
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "#1a1a2e",
+              border: "1px solid #374151",
+              color: "#e5e7eb",
+            },
+          }}
+        />
       </body>
     </html>
   );

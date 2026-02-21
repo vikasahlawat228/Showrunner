@@ -174,27 +174,81 @@ The API acts as a gateway proxy to FastAPI on port 8000:
 
 ## 13. Implementation Phases
 
-- **Phase F: Foundation Rework**
-  - Wire `EventService.append_event()` across ALL mutation paths natively.
-  - Implement full YAML persistence for Phases A/B/C elements (ditch in-memory dictionaries).
-  - Draft multi-project isolation & structural bucketing (Season→Scene).
-  - Initialize the Context Engine for intelligent token budgeting.
+### Completed Phases
 
-- **Phase G: Workflow & Agents Enhancement**
-  - Implement logic control nodes (if/else, merge, loop) to the pipeline builder.
-  - Roll out 1-Click Workflow Templates.
-  - Introduce Research Agent and persistent Research Knowledge Buckets.
-  - Expand `PromptReviewModal` features (regenerate, model-flip).
+- **Phase A–E: Foundation + UI Build** ✅
+  - Full 3-pane workbench layout with drag-drop, inspectors, chapter navigation
+  - Zen Mode writing engine with TipTap, @mentions, /slash commands, auto-save
+  - Pipeline Builder with visual DAG editor, SSE streaming, PromptReviewModal
+  - Storyboard Canvas with strip + semantic canvas views, panel CRUD + generation
+  - Timeline with real-time SSE, event type styling, branch creation
+  - Schema Builder with NL wizard, field editor, preview
+  - Knowledge Graph (SQLite + ReactFlow canvas), ChromaDB RAG, Event Sourcing
+  - Agent Dispatcher with ReAct loops, 6 skill files, keyword + LLM routing
+  - Context Engine with token budgeting, relevance scoring
+  - Model cascade resolution (Step > Bucket > Agent > Project)
+  - File watcher (watchdog + SSE broadcast)
+  - 3-format export (Markdown, JSON, Fountain)
+  - Toast notifications (sonner), loading skeletons, confirmation dialogs
+  - Context Inspector / Glass Box UI (shows AI context, model, agent per operation)
 
-- **Phase H: Intelligence Layer**
-  - Introduce Vector Store for RAG-based, deep semantic bucket searches.
-  - Introduce continuity validations triggered asynchronously on fragment saves.
-  - Map Story Architect and Brainstorm agents securely into frontend trigger menus.
+- **Phase F: Foundation Rework** 🔧 (Partially Complete)
+  - ✅ Context Engine with token budgeting
+  - ✅ Model cascade resolution via ModelConfigRegistry
+  - ✅ Multi-project listing + structure tree endpoints
+  - 🔧 Wire `EventService.append_event()` across ALL remaining mutation paths
+  - 🔧 Full YAML persistence for pipeline runs (ditch in-memory dictionaries)
+  - 🔧 Complete multi-project isolation & structural bucketing (Season→Scene)
 
-- **Phase I: Polish & Scale**
-  - Deploy finalized Command Center and Story Timeline interface overhauls.
-  - Inject auth primitives and deploy collaborative syncing APIs.
-  - Implement polished export conduits (PDF/EPUB formatting integrations).
+- **Phase G: Workflow & Agents Enhancement** 🔧 (Partially Complete)
+  - ✅ Agent Dispatcher with keyword routing + LLM classification fallback
+  - ✅ ReAct loop execution in AgentDispatcher
+  - ✅ PromptReviewModal with Edit/Refine/Paste/Skip + model selector
+  - 🔧 Logic control nodes (if/else, merge, loop) in pipeline builder
+  - 🔧 1-Click Workflow Templates (wired end-to-end)
+  - 🔧 Research Agent UI surface
+
+### Upcoming Phases
+
+- **Phase Next-A: Writer's Daily Experience** ✅ (Complete)
+  - Toast notification system (sonner)
+  - Zen Mode slash commands wired to agents
+  - Confirmation dialogs for destructive actions
+  - Loading skeletons across all views
+  - Context Inspector / Glass Box transparency panel
+
+- **Phase Next-B: Emotional Intelligence** ✅ (Complete)
+  - **Emotional Arc Dashboard / Pacing Heatmap**: Analyze each scene/chapter for emotional valence (hope/conflict/tension). Visualize as a line chart overlaid on the timeline. Flag flat zones with no tension peaks. Backend: new `analysis_service.py` using LLM to score scenes. Frontend: new `EmotionalArcChart.tsx` on Timeline page.
+  - **Character Voice Scorecard**: Analyze dialogue per character across scenes. Score vocabulary diversity, avg sentence length, formality level, unique phrases. Alert when two characters sound identical. Backend: new endpoint in `writing.py` router. Frontend: new panel in CharacterInspector.
+  - **Story Ribbons Visualization**: Character presence + significance per scene as colored ribbons. Thickness = how prominent a character is in that scene. Backend: derive from Knowledge Graph relationships. Frontend: SVG visualization in Timeline page.
+
+- **Phase Next-C: Panel Intelligence** ✅ (Complete)
+  - **Panel Layout Intelligence**: AI analyzes narrative beat type (action/dialogue/reveal/transition/montage/emotional) and suggests panel count, sizes, camera angles. `suggest_layout()` in StoryboardService + `LayoutSuggestionPanel.tsx` with visual preview and "Apply & Generate" button.
+  - **Character Progressions (Visual DNA Timeline)**: Character DNA evolves over chapters via `attributes.progressions` array with deep-merge resolution. CRUD endpoints + `dna-at-chapter/{chapter}` resolution. `CharacterProgressionTimeline.tsx` horizontal timeline in CharacterInspector.
+  - **Reader Scroll Simulation**: `/preview` page simulating webtoon reading experience. `ReaderSimService` computes per-panel reading times, text density, pacing dead zones, engagement score. Auto-scroll player with speed control + pacing sidebar.
+
+- **Phase Next-D: Workflow Power** ✅ (Complete)
+  - **Workflow Templates Library**: 5 ready-to-use templates wired end-to-end in `templates/workflow_templates.py` (Scene→Panels, Concept→Outline, Outline→Draft, Topic→Research, Draft→Polish). `GET /api/pipeline/templates` + `POST /templates/{id}/create`. TemplateGallery fetches from API.
+  - **Enhanced Approval Gate**: Temperature slider (0–2), pin/unpin context buckets per Glass Box entry, "Regenerate" button. Pipeline resume supports `temperature_override` + `pinned_context_ids` in `_handle_llm_generate`.
+  - **Research Agent UI Surface**: `/research` page with topic list + search, structured detail panel (summary, key_facts, constraints, story_implications), new query input, link-to-scene support. `ResearchDetailPanel.tsx` + `ResearchTopicCard.tsx`.
+
+- **Phase Next-E: Spatial & Structural** ✅ (Complete)
+  - **Story Structure Visual Editor**: New `containers.py` router with full CRUD + bulk reorder for structural containers (season/arc/act/chapter/scene). `ContainerRepository` extended with `get_by_id()` and `delete_by_id()`. `StoryStructureTree.tsx` enhanced with "Add Child" per node, delete with confirmation, "Open in Zen" for scenes, drag-reorder wired to `POST /containers/reorder`, completion status color-coding (green/amber/blue left border). Fixed `getProjectStructure()` API URL mismatch.
+  - **Alternate Timeline Browser**: `EventService` extended with `get_branches()`, `get_events_for_branch()`, `compare_branches()` (state projection diff). Timeline router expanded with `GET /branches`, `POST /branch`, `GET /branch/{id}/events`, `GET /compare?branch_a=X&branch_b=Y`, `GET /stream` (SSE). `BranchList.tsx` sidebar with event counts + active indicator. `BranchComparison.tsx` two-column diff view with color-coded additions/removals/changes. Integrated into `timeline/page.tsx`.
+  - **Spatial Brainstorming Canvas**: New `/brainstorm` page with ReactFlow infinite canvas. `IdeaCardNode.tsx` custom node with editable text, color coding, auto-save on drag-end/blur. `SuggestionPanel.tsx` shows AI-suggested connections/new ideas with accept/dismiss. Backend: 4 brainstorm endpoints on `director.py` (suggest-connections via `brainstorm_agent`, save-card, get-cards, delete-card). Cards persisted as `GenericContainer` with `container_type: "idea_card"`.
+  - **Voice-to-Scene**: `POST /api/v1/storyboard/voice-to-scene` endpoint orchestrating `suggest_layout()` → `generate_panels_for_scene()` pipeline. `VoiceToSceneButton.tsx` using browser-native Web Speech API with three states (idle/recording/processing), editable transcript review, scene selector, panel count config. Textarea fallback for unsupported browsers. Integrated into Storyboard page header.
+
+- **Phase H: Intelligence Layer** ✅ (Complete)
+  - **Continuity Auto-Check**: `ContinuityService` wiring `continuity_analyst` agent skill. Validates story changes against KG + future dependencies. 3 endpoints on `analysis.py` (`POST /continuity-check`, `POST /continuity-check/scene/{id}`, `GET /continuity-issues`). `ContinuityPanel.tsx` in Zen ContextSidebar "Continuity" tab with severity-coded issue cards.
+  - **Style Enforcer**: `StyleService` wiring `style_enforcer` agent skill. Evaluates prose against `NarrativeStyleGuide`. `POST /style-check` on `analysis.py`. `StyleScorecard.tsx` in ContextSidebar "Style" tab + Style tab in PromptReviewModal. `/check-style` slash command in Zen Mode.
+  - **Translation Agent UI**: `TranslationService` wiring `translator_agent` skill with glossary support. New `translation.py` router (`POST /translate`, `GET /glossary`, `POST /glossary`). `TranslationPanel.tsx` + `/translation` page (Translation Studio). `InlineTranslation.tsx` widget in Zen ContextSidebar "Translation" tab. `/translate` slash command.
+  - **NL → Workflow Generation**: Backend already existed (`PipelineService.generate_pipeline_from_nl()`). `NLPipelineWizard.tsx` modal on Pipelines page with textarea, example prompts, and "Open in Builder" action.
+  - **Semantic @Mentions in Zen Mode**: `GET /api/v1/writing/semantic-search` endpoint using ChromaDB vector search. ZenEditor @mentions upgraded from keyword to semantic search. Relevance indicator in MentionList dropdown.
+
+- **Phase I: Polish** 🆕 (In Progress — 3 Sessions Designed)
+  - **Persistent Navbar + Command Palette**: Sticky top navigation across all 10 pages. `cmdk`-powered Cmd+K command palette for page navigation, actions, search. React error boundary with crash recovery fallback.
+  - **Export UI + HTML/PDF**: Export modal with 4 format cards (Markdown/JSON/Fountain/HTML), preview area, download + browser Print-to-PDF. New `export_html()` backend with print-friendly CSS. Export trigger on Dashboard ProgressOverview.
+  - **Zen Mode Polish**: Real-time word/character/reading-time counter. Focus mode (Cmd+Shift+F) that dims non-active paragraphs. Session writing stats (+N words this session). Keyboard shortcuts overlay (Cmd+/). Backend word_count tracking on fragment saves.
 
 ---
 

@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 
-import { PanelLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { PanelLeft } from "lucide-react";
+import { toast } from "sonner";
 import { useStudioStore } from "@/lib/store";
 import InfiniteCanvas from "@/components/canvas/InfiniteCanvas";
 import { WorkflowBar } from "./WorkflowBar";
@@ -10,6 +11,7 @@ import { DirectorControls } from "./DirectorControls";
 import { usePipelineStream } from "@/components/pipeline/usePipelineStream";
 import { PromptReviewModal } from "@/components/pipeline/PromptReviewModal";
 import { TimelineView } from "@/components/timeline/TimelineView";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import { api } from "@/lib/api";
 
 export function Canvas() {
@@ -34,7 +36,7 @@ export function Canvas() {
     fetchAll,
   } = useStudioStore();
 
-  const { state, payload, stepName, error: streamError } = usePipelineStream(pipelineRunId || undefined);
+  const { state, payload, stepName, agentId, error: streamError } = usePipelineStream(pipelineRunId || undefined);
 
   const [isStarting, setIsStarting] = useState(false);
 
@@ -49,16 +51,19 @@ export function Canvas() {
     }
   };
 
-  const handleResume = async (editedText: string) => {
+  const handleResume = async (payload: { prompt_text: string; model?: string; refine_instructions?: string }) => {
     if (pipelineRunId) {
-      await api.resumePipeline(pipelineRunId, { prompt_text: editedText });
+      await api.resumePipeline(pipelineRunId, payload);
     }
   };
 
   // refresh data when pipeline completes
   useEffect(() => {
     if (state === 'COMPLETED') {
+      toast.success("Pipeline completed");
       fetchAll();
+    } else if (state === 'FAILED') {
+      toast.error("Pipeline failed");
     }
   }, [state, fetchAll]);
 
@@ -68,6 +73,10 @@ export function Canvas() {
         isOpen={state === 'PAUSED_FOR_USER'}
         initialPrompt={payload?.prompt_text}
         stepName={stepName}
+        agentId={agentId}
+        contextBuckets={payload?.gathered_context_meta?.buckets}
+        modelUsed={payload?.resolved_model}
+        tokenCount={payload?.gathered_context_meta?.token_estimate}
         onResume={handleResume}
       />
       {/* Header */}
@@ -109,6 +118,7 @@ export function Canvas() {
         <DirectorControls
           pipelineState={state}
           isStarting={isStarting}
+          agentId={agentId}
           onStartPipeline={handleStartPipeline}
         />
       </header>
@@ -137,8 +147,10 @@ export function Canvas() {
       <main className="flex-1 w-full relative overflow-hidden">
         {mainView === 'canvas' ? (
           loading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-gray-500 text-lg">Loading Knowledge Graph...</div>
+            <div className="p-8 grid grid-cols-3 gap-4 animate-in fade-in">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
             </div>
           ) : (
             <InfiniteCanvas />

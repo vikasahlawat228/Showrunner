@@ -15,6 +15,12 @@ import yaml
 from antigravity_tool.core.workflow import WorkflowState
 from antigravity_tool.services.base import ServiceContext
 
+# Optional import — ContextEngine is injected, not required
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from antigravity_tool.services.context_engine import ContextEngine
+
 
 @dataclass
 class DirectorResult:
@@ -36,10 +42,11 @@ class DirectorService:
     (which returns them as JSON).
     """
 
-    def __init__(self, ctx: ServiceContext, writer=None):
+    def __init__(self, ctx: ServiceContext, writer=None, context_engine: Optional["ContextEngine"] = None):
         self.ctx = ctx
         self.workflow = WorkflowState(ctx.project.path)
         self.writer = writer
+        self.context_engine = context_engine
 
     def get_current_step(self) -> str:
         """Get the current workflow step."""
@@ -80,6 +87,31 @@ class DirectorService:
         clean = content.replace("```yaml", "").replace("```", "").strip()
         return yaml.safe_load(clean)
 
+    def _enrich_context(self, context: dict, step_name: str) -> dict:
+        """Enrich a context dict with knowledge graph data via the ContextEngine.
+
+        If no context_engine is configured, returns the context unchanged.
+        The enriched context is added under the 'kg_context' key so it can be
+        used by templates without disrupting existing keys.
+        """
+        if self.context_engine is None:
+            return context
+
+        try:
+            result = self.context_engine.assemble_context(
+                query=step_name,
+                max_tokens=3000,
+                include_relationships=True,
+            )
+            if result.text:
+                context["kg_context"] = result.text
+                context["kg_context_tokens"] = result.token_estimate
+        except Exception:
+            # Context enrichment is best-effort; don't block the workflow
+            pass
+
+        return context
+
     def _handle_world_building(self) -> DirectorResult:
         """Handle world building step."""
         if self.ctx.project.load_world_settings():
@@ -100,6 +132,7 @@ class DirectorService:
             )
 
         context = self.ctx.compiler.compile_for_step("world_building")
+        context = self._enrich_context(context, "world_building")
         prompt = self.ctx.engine.render("world/build_setting.md.j2", **context)
         content = self.writer.write(prompt, task_type="World Building")
 
@@ -148,6 +181,7 @@ class DirectorService:
             )
 
         context = self.ctx.compiler.compile_for_step("character_creation")
+        context = self._enrich_context(context, "character_creation")
         context["new_character_name"] = "Hero"
         context["new_character_role"] = "protagonist"
         prompt = self.ctx.engine.render("character/create_character.md.j2", **context)
@@ -199,6 +233,7 @@ class DirectorService:
             )
 
         context = self.ctx.compiler.compile_for_step("story_structure")
+        context = self._enrich_context(context, "story_structure")
         context["structure_type"] = "save_the_cat"
         prompt = self.ctx.engine.render("story/outline_beats.md.j2", **context)
         content = self.writer.write(prompt, task_type="Story Outline")
@@ -248,6 +283,7 @@ class DirectorService:
             )
 
         context = self.ctx.compiler.compile_for_step("scene_writing", chapter_num=1, scene_num=1)
+        context = self._enrich_context(context, "scene_writing")
         context["chapter_num"] = 1
         context["scene_num"] = 1
         prompt = self.ctx.engine.render("scene/write_scene.md.j2", **context)
@@ -298,6 +334,7 @@ class DirectorService:
             )
 
         context = self.ctx.compiler.compile_for_step("screenplay_writing", chapter_num=1, scene_num=1)
+        context = self._enrich_context(context, "screenplay_writing")
         context["chapter_num"] = 1
         context["scene_num"] = 1
         prompt = self.ctx.engine.render("screenplay/scene_to_screenplay.md.j2", **context)
@@ -346,6 +383,7 @@ class DirectorService:
             )
 
         context = self.ctx.compiler.compile_for_step("panel_division", chapter_num=1, scene_num=1)
+        context = self._enrich_context(context, "panel_division")
         context["chapter_num"] = 1
         context["scene_num"] = 1
         prompt = self.ctx.engine.render("panel/divide_panels.md.j2", **context)

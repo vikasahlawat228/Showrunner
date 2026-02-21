@@ -1,16 +1,20 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { getAgentConfig } from "@/lib/agentConfig";
 import type { PipelineState } from "@/components/pipeline/usePipelineStream";
 
 interface DirectorControlsProps {
   pipelineState: PipelineState;
   isStarting?: boolean;
+  agentId?: string;
   onStartPipeline: () => void;
 }
 
-export function DirectorControls({ pipelineState, isStarting, onStartPipeline }: DirectorControlsProps) {
+export function DirectorControls({ pipelineState, isStarting, agentId, onStartPipeline }: DirectorControlsProps) {
   const isActing = isStarting || ['CONTEXT_GATHERING', 'PROMPT_ASSEMBLY', 'EXECUTING', 'PAUSED_FOR_USER'].includes(pipelineState);
+  const agent = getAgentConfig(agentId);
+  const AgentIcon = agent.icon;
 
   return (
     <div className="flex items-center gap-3">
@@ -28,17 +32,35 @@ export function DirectorControls({ pipelineState, isStarting, onStartPipeline }:
       </button>
 
       {pipelineState !== 'IDLE' && (
-        <div
-          className={cn(
-            "rounded-lg px-3 py-1.5 text-xs max-w-xs truncate",
-            pipelineState === "COMPLETED"
-              ? "bg-green-900/30 border border-green-800 text-green-300"
-              : pipelineState === "FAILED"
-                ? "bg-red-900/30 border border-red-800 text-red-300"
-                : "bg-blue-900/30 border border-blue-800 text-blue-300"
+        <div className="flex items-center gap-2">
+          {/* Agent Badge — visible when pipeline is active */}
+          {isActing && (
+            <div
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all",
+                agent.bgClass,
+                agent.textClass,
+                agent.borderClass,
+              )}
+            >
+              <AgentIcon className="w-3.5 h-3.5" />
+              <span>{agent.displayName}</span>
+            </div>
           )}
-        >
-          Status: {pipelineState}
+
+          {/* State Badge */}
+          <div
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs max-w-xs truncate",
+              pipelineState === "COMPLETED"
+                ? "bg-green-900/30 border border-green-800 text-green-300"
+                : pipelineState === "FAILED"
+                  ? "bg-red-900/30 border border-red-800 text-red-300"
+                  : "bg-blue-900/30 border border-blue-800 text-blue-300"
+            )}
+          >
+            Status: {pipelineState}
+          </div>
         </div>
       )}
     </div>

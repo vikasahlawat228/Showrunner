@@ -1,10 +1,11 @@
 "use client";
 
-import { X, Loader2 } from "lucide-react";
+import { X } from "lucide-react";
 import { useStudioStore } from "@/lib/store";
 import type { CharacterDetail, SceneSummary, WorldSettings } from "@/lib/api";
 import { CharacterInspector } from "./CharacterInspector";
 import { SceneInspector } from "./SceneInspector";
+import { SkeletonInspector } from "@/components/ui/Skeleton";
 
 function WorldInspector({ world }: { world: WorldSettings }) {
   return (
@@ -127,9 +128,7 @@ export function Inspector() {
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-4">
         {inspectorLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
-          </div>
+          <SkeletonInspector />
         ) : inspectorData ? (
           <>
             {selectedItem.type === "character" && (

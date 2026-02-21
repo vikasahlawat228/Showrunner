@@ -19,6 +19,7 @@ export function usePipelineStream(runId: string | undefined) {
     const [state, setState] = useState<PipelineState>('IDLE');
     const [payload, setPayload] = useState<PipelinePayload | undefined>(undefined);
     const [stepName, setStepName] = useState<string | undefined>(undefined);
+    const [agentId, setAgentId] = useState<string | undefined>(undefined);
     const [error, setError] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(false);
 
@@ -31,12 +32,15 @@ export function usePipelineStream(runId: string | undefined) {
         eventSource.onmessage = (event) => {
             try {
                 // Backend sends PipelineRun.model_dump_json() with fields:
-                // { id, current_state, payload, created_at, error }
+                // { id, current_state, current_agent_id, payload, created_at, error }
                 const data = JSON.parse(event.data);
 
                 if (data.current_state) {
                     setState(data.current_state as PipelineState);
                     setStepName(data.current_state);
+                }
+                if (data.current_agent_id !== undefined) {
+                    setAgentId(data.current_agent_id || undefined);
                 }
                 if (data.payload) {
                     setPayload(data.payload);
@@ -69,5 +73,5 @@ export function usePipelineStream(runId: string | undefined) {
         };
     }, [runId]);
 
-    return { state, payload, stepName, error, isConnecting };
+    return { state, payload, stepName, agentId, error, isConnecting };
 }

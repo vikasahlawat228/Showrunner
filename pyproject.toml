@@ -23,6 +23,8 @@ dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.20.0",
     "sse-starlette>=0.11.0",
+    "chromadb>=0.4.0",
+    "watchdog>=4.0.0",
 ]
 
 [project.scripts]
@@ -34,3 +36,4 @@ packages = ["src/antigravity_tool"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+asyncio_mode = "auto"

@@ -97,7 +97,9 @@ src/web/src/app/
 ├── pipelines/page.tsx                  # Workflow Studio + Template Gallery
 ├── storyboard/page.tsx                 # Storyboard Canvas (Strip + Semantic)
 ├── timeline/page.tsx                   # Story Timeline (branch visualization + structure tree)
-├── research/page.tsx                   # Research Library (Phase G)
+├── preview/page.tsx                    # Reader Scroll Simulation (Phase Next-C)
+├── research/page.tsx                   # Research Library (Phase Next-D)
+├── brainstorm/page.tsx                 # Spatial Brainstorming Canvas (Phase Next-E)
 └── settings/page.tsx                   # Project settings + model config (Phase F)
 ```
 
@@ -327,6 +329,10 @@ class ModelConfigRegistry:
 | `evaluation_service.py` | `EvaluationService` | ServiceContext | YAML via project | Core |
 | `session_service.py` | `SessionService` | ServiceContext | YAML (.antigravity/sessions/) | Core |
 | `creative_room_service.py` | `CreativeRoomService` | ServiceContext | YAML via project | Core |
+| `analysis_service.py` | `AnalysisService` | KnowledgeGraphService, ContainerRepository, ContextEngine | Stateless (LLM calls) | Next-B |
+| `export_service.py` | `ExportService` | ContainerRepository, KnowledgeGraphService | Stateless | Core |
+| `reader_sim_service.py` | `ReaderSimService` | ContainerRepository, StoryboardService | Stateless (heuristic computation) | Next-C |
+| `research_service.py` | `ResearchService` | AgentDispatcher, ContainerRepository, KnowledgeGraphService | YAML + KG | G |
 
 *Starred (`*`) dependencies are **Phase F additions** to existing services.
 
@@ -400,18 +406,23 @@ The ReAct loop is implemented as a multi-turn LLM conversation within `execute()
 | `world.py` | `/api/v1/world` | `GET /`, `POST /build/prompt` | Legacy |
 | `chapters.py` | `/api/v1/chapters` | `GET /{ch}/scenes`, `GET /{ch}/scenes/{id}`, `PUT /{ch}/scenes/{id}`, scene write/screenplay/panel prompts | Legacy |
 | `workflow.py` | `/api/v1/workflow` | `GET /` (workflow progress) | Core |
-| `director.py` | `/api/v1/director` | `POST /act`, `GET /status`, `POST /dispatch` (agent dispatch), `GET /skills` | Core |
+| `director.py` | `/api/v1/director` | `POST /act`, `GET /status`, `POST /dispatch` (agent dispatch), `GET /skills`, `POST /brainstorm/suggest-connections`, `POST /brainstorm/save-card`, `GET /brainstorm/cards`, `DELETE /brainstorm/cards/{id}` | Core+Next-E |
 | `schemas_router.py` | `/api/v1/schemas` | `GET /`, `GET /{name}`, `POST /`, `PUT /{name}`, `DELETE /{name}`, `POST /validate`, `POST /generate`, `POST /nl-schema` | Core |
 | `graph.py` | `/api/v1/graph` | `GET /` (full KG as React Flow JSON), `GET /search?q=&limit=` (semantic search) | Core |
-| `timeline.py` | `/api/v1/timeline` | `GET /events`, `POST /checkout`, `POST /branch`*, `GET /stream`* (SSE) | Core+F |
+| `timeline.py` | `/api/v1/timeline` | `GET /events`, `POST /checkout`, `POST /branch`, `GET /branches`, `GET /branch/{id}/events`, `GET /compare`, `GET /stream` (SSE) | Core+Next-E |
 | `pipeline.py` | `/api/pipeline` | `GET /steps/registry`, `GET /definitions`, `POST /definitions`, `GET /definitions/{id}`, `PUT /definitions/{id}`, `DELETE /definitions/{id}`, `POST /runs`, `GET /runs/{id}`, `POST /runs/{id}/resume`, `GET /runs/{id}/stream` (SSE) | Core+B |
-| `writing.py` | `/api/v1/writing` | `POST /fragments`, `POST /detect-entities`, `GET /fragments/{id}/context` | A |
-| `storyboard.py` | `/api/v1/storyboard` | `GET /scenes/{id}/panels`, `POST /scenes/{id}/panels`, `GET /scenes/{id}/panels/{pid}`, `PUT /scenes/{id}/panels/{pid}`, `POST /scenes/{id}/panels/reorder`, `POST /scenes/{id}/panels/generate` | C |
+| `writing.py` | `/api/v1/writing` | `POST /fragments`, `POST /detect-entities`, `GET /fragments/{id}/context`, `GET /semantic-search` | A+H |
+| `storyboard.py` | `/api/v1/storyboard` | `GET /scenes/{id}/panels`, `POST /scenes/{id}/panels`, `GET /scenes/{id}/panels/{pid}`, `PUT /scenes/{id}/panels/{pid}`, `POST /scenes/{id}/panels/reorder`, `POST /scenes/{id}/panels/generate`, `POST /voice-to-scene` | C+Next-E |
 | `models.py`* | `/api/v1/models` | `GET /available` (list LiteLLM models), `GET /config` (current project config), `PUT /config` (update) | F |
 | `agents.py`* | `/api/v1/agents` | `GET /` (list all agent skills + status), `PUT /{name}/model-config` (override model for agent) | F |
 | `research.py`* | `/api/v1/research` | `POST /query` (trigger Research Agent), `GET /library` (list research topics), `GET /topic/{id}` (get topic detail) | G |
+| `analysis.py` | `/api/v1/analysis` | `GET /emotional-arc`, `GET /voice-scorecard`, `GET /ribbons`, `POST /continuity-check`, `POST /continuity-check/scene/{id}`, `GET /continuity-issues`, `POST /style-check` | Next-B+H |
+| `preview.py` | `/api/v1/preview` | `GET /scene/{scene_id}` (reading sim), `GET /chapter/{chapter}` (chapter sim) | Next-C |
+| `export.py` | `/api/v1/export` | `GET /markdown`, `GET /json`, `GET /fountain` | Core |
+| `containers.py` | `/api/v1/containers` | `POST /` (create), `GET /{id}`, `PUT /{id}`, `DELETE /{id}`, `POST /reorder` | Next-E |
+| `translation.py` | `/api/v1/translation` | `POST /translate`, `GET /glossary`, `POST /glossary` | H |
 
-*Starred routers are **new files** to be created.
+*Starred routers are **new files** created in Phase F/G. All routers above are implemented.
 
 ### 5.2 Router Registration (`server/app.py`)
 
@@ -438,6 +449,18 @@ app.include_router(agents.router)                 # /api/v1/agents
 
 # Phase G additions:
 app.include_router(research.router)               # /api/v1/research
+
+# Phase Next-B additions:
+app.include_router(analysis.router)               # /api/v1/analysis
+
+# Phase Next-C additions:
+app.include_router(preview.router)                # /api/v1/preview
+
+# Phase Next-E additions:
+app.include_router(containers.router)             # /api/v1/containers
+
+# Phase H additions:
+app.include_router(translation.router)            # /api/v1/translation
 ```
 
 ### 5.3 Dependency Injection (`server/deps.py`)
@@ -473,6 +496,11 @@ get_storyboard_service(container_repo, event_service) → StoryboardService
 get_pipeline_service(container_repo, event_service) → PipelineService
 get_context_engine(kg_service, container_repo) → ContextEngine
 get_agent_dispatcher() → AgentDispatcher (LRU cached)
+get_analysis_service(kg_service, container_repo, context_engine) → AnalysisService
+get_reader_sim_service(container_repo, storyboard_service) → ReaderSimService
+get_continuity_service(kg_service, context_engine, event_service, agent_dispatcher) → ContinuityService
+get_style_service(container_repo, context_engine, agent_dispatcher) → StyleService
+get_translation_service(kg_service, container_repo, agent_dispatcher) → TranslationService
 ```
 
 **Phase F additions to `deps.py`:**
@@ -607,12 +635,13 @@ get_project()
 | `canvas/` | `components/canvas/` | `InfiniteCanvas.tsx`, `nodes/GenericNode.tsx` | Core |
 | `pipeline/` | `components/pipeline/` | `usePipelineStream.ts` (SSE hook), `PromptReviewModal.tsx` (Edit/Chat/Paste/Skip/ChangeModel) | Core |
 | `pipeline-builder/` | `components/pipeline-builder/` | `PipelineBuilder.tsx`, `StepNode.tsx`, `StepLibrary.tsx`, `StepConfigPanel.tsx`, `TemplateGallery.tsx`* | B+G |
-| `zen/` | `components/zen/` | `ZenEditor.tsx`, `MentionList.tsx`, `SlashCommandList.tsx`, `ContextSidebar.tsx`, `StoryboardStrip.tsx` | A |
-| `storyboard/` | `components/storyboard/` | `PanelCard.tsx`, `SceneStrip.tsx`, `PanelEditor.tsx`, `SemanticCanvas.tsx` | C |
+| `zen/` | `components/zen/` | `ZenEditor.tsx`, `MentionList.tsx`, `SlashCommandList.tsx`, `ContextSidebar.tsx` (4-tab: Context/Continuity/Style/Translation), `StoryboardStrip.tsx`, `ContinuityPanel.tsx`, `StyleScorecard.tsx`, `InlineTranslation.tsx` | A+H |
+| `storyboard/` | `components/storyboard/` | `PanelCard.tsx`, `SceneStrip.tsx`, `PanelEditor.tsx`, `SemanticCanvas.tsx`, `LayoutSuggestionPanel.tsx`, `VoiceToSceneButton.tsx` | C+Next-C+Next-E |
 | `schema-builder/` | `components/schema-builder/` | `SchemaBuilderPanel.tsx`, `SchemaEditor.tsx`, `NLWizardInput.tsx`, `FieldRow.tsx`, `FieldTypeSelector.tsx`, `SchemaPreview.tsx` | Core |
-| `timeline/` | `components/timeline/` | `TimelineView.tsx`, `TimelinePanel.tsx`, `TimelineEventNode.tsx`, `StoryStructureTree.tsx`*, `useInterval.ts` | Core+F |
-| `research/`* | `components/research/` | `ResearchPanel.tsx`, `ResearchCard.tsx` | G |
-| `workbench/` | `components/workbench/` | `WorkbenchLayout.tsx`, `Canvas.tsx`, `Sidebar.tsx`, `SidebarItem.tsx`, `Inspector.tsx`, `CharacterInspector.tsx`, `SceneInspector.tsx`, `WorldStatus.tsx`, `WorkflowBar.tsx`, `DirectorControls.tsx` | Core |
+| `timeline/` | `components/timeline/` | `TimelineView.tsx`, `TimelinePanel.tsx`, `TimelineEventNode.tsx`, `StoryStructureTree.tsx`, `BranchList.tsx`, `BranchComparison.tsx`, `useInterval.ts` | Core+Next-E |
+| `research/` | `components/research/` | `ResearchDetailPanel.tsx`, `ResearchTopicCard.tsx` | Next-D |
+| `brainstorm/` | `components/brainstorm/` | `IdeaCardNode.tsx`, `SuggestionPanel.tsx` | Next-E |
+| `workbench/` | `components/workbench/` | `WorkbenchLayout.tsx`, `Canvas.tsx`, `Sidebar.tsx`, `SidebarItem.tsx`, `Inspector.tsx`, `CharacterInspector.tsx`, `CharacterProgressionTimeline.tsx`, `CharacterVoiceScorecard.tsx`, `SceneInspector.tsx`, `WorldStatus.tsx`, `WorkflowBar.tsx`, `DirectorControls.tsx` | Core+Next-B+Next-C |
 
 *Starred components are **new** for Phase F+.
 
@@ -652,6 +681,20 @@ get_project()
 | **Agents** | `listAgents()`, `updateAgentModelConfig(name, body)` | F |
 | **Timeline (additions)** | `createBranch(body)`, `subscribeTimeline()` (SSE) | F |
 | **Research** | `queryResearch(body)`, `getResearchLibrary()`, `getResearchTopic(id)` | G |
+| **Analysis** | `getEmotionalArc(chapter?)`, `getVoiceScorecard(characterIds?)`, `getCharacterRibbons(chapter?)` | Next-B |
+| **Storyboard (additions)** | `suggestLayout(sceneId)` | Next-C |
+| **Characters (additions)** | `getCharacterProgressions(id)`, `addCharacterProgression(id, body)`, `updateCharacterProgression(id, progId, body)`, `deleteCharacterProgression(id, progId)`, `getDNAAtChapter(id, chapter)` | Next-C |
+| **Preview** | `getReadingSimScene(sceneId)`, `getReadingSimChapter(chapter)` | Next-C |
+| **Workflow Templates** | `getWorkflowTemplates()`, `createFromTemplate(templateId)` | Next-D |
+| **Containers** | `createContainer(body)`, `getContainer(id)`, `updateContainer(id, body)`, `deleteContainer(id)`, `reorderContainers(body)` | Next-E |
+| **Timeline (Next-E)** | `getBranches()`, `getBranchEvents(branchId)`, `compareBranches(a, b)`, `streamTimeline()` (SSE) | Next-E |
+| **Brainstorm** | `getBrainstormCards()`, `saveBrainstormCard(body)`, `deleteBrainstormCard(id)`, `suggestBrainstormConnections(body)` | Next-E |
+| **Voice-to-Scene** | `voiceToScene(body)` | Next-E |
+| **Continuity** | `checkContinuity(body)`, `checkSceneContinuity(sceneId)`, `getContinuityIssues(scope?, scopeId?)` | H |
+| **Style** | `checkStyle(body)` | H |
+| **Translation** | `translate(body)`, `getGlossary()`, `addGlossaryTerm(body)` | H |
+| **Writing (additions)** | `semanticSearchContainers(query, limit?)` | H |
+| **Pipeline (additions)** | `generatePipelineFromNL(description)` | H |
 
 ---
 
@@ -1032,3 +1075,523 @@ get_project()
 | **Continuity Auto-check** | Manual only | Auto-run `Continuity Analyst` on every scene save | 🟡 | H |
 | **Command Center** | Dashboard shows only KG canvas | Multi-project launcher, progress overview, pending approvals, model config | 🟡 | I |
 | **Auth** | None (local-only) | User auth for cloud deploy | 🟡 | I |
+
+---
+
+## 10. Phase Next-B: Emotional Intelligence — Detailed Design
+
+Phase Next-B adds three analytical features that give writers superpowers no competitor offers. These are parallelizable into two independent work streams.
+
+### 10.1 New Backend Service: `AnalysisService`
+
+**File:** `src/antigravity_tool/services/analysis_service.py`
+
+```python
+from dataclasses import dataclass, field
+
+@dataclass
+class EmotionalScore:
+    """Per-scene emotional analysis result."""
+    scene_id: str
+    scene_name: str
+    chapter: int
+    scene_number: int
+    hope: float          # 0.0–1.0
+    conflict: float      # 0.0–1.0
+    tension: float       # 0.0–1.0
+    sadness: float       # 0.0–1.0
+    joy: float           # 0.0–1.0
+    dominant_emotion: str # "tension", "hope", etc.
+    summary: str         # 1-line explanation
+
+@dataclass
+class EmotionalArcResult:
+    """Full emotional arc analysis across scenes."""
+    scores: list[EmotionalScore]
+    flat_zones: list[dict]    # { start_scene, end_scene, reason }
+    peak_moments: list[dict]  # { scene_id, emotion, intensity }
+    pacing_grade: str         # "A", "B", "C", "D", "F"
+    recommendations: list[str]
+
+@dataclass
+class VoiceProfile:
+    """Per-character voice analysis."""
+    character_id: str
+    character_name: str
+    avg_sentence_length: float
+    vocabulary_diversity: float  # unique words / total words
+    formality_score: float       # 0.0 (casual) – 1.0 (formal)
+    top_phrases: list[str]       # Most distinctive phrases
+    dialogue_sample_count: int
+
+@dataclass
+class VoiceScorecardResult:
+    """Comparison of character voices across the story."""
+    profiles: list[VoiceProfile]
+    similarity_matrix: list[dict]  # pairs with similarity > 0.7
+    warnings: list[str]            # "Zara and Kael sound 82% similar"
+
+@dataclass
+class CharacterRibbon:
+    """Per-scene character presence data for ribbon visualization."""
+    scene_id: str
+    scene_name: str
+    chapter: int
+    scene_number: int
+    characters: list[dict]  # { character_id, character_name, prominence: 0.0–1.0 }
+
+
+class AnalysisService:
+    """Analyzes story content for emotional arcs, character voices, and ribbons."""
+
+    def __init__(self, kg_service, container_repo, context_engine):
+        self.kg_service = kg_service
+        self.container_repo = container_repo
+        self.context_engine = context_engine
+
+    async def analyze_emotional_arc(self, chapter: int | None = None) -> EmotionalArcResult:
+        """
+        Score each scene for emotional valence using LLM analysis.
+        If chapter is None, analyze all chapters.
+        Returns scores + flat zones + recommendations.
+        """
+        ...
+
+    async def analyze_character_voices(self, character_ids: list[str] | None = None) -> VoiceScorecardResult:
+        """
+        Extract dialogue per character, compute voice metrics.
+        If character_ids is None, analyze all characters with dialogue.
+        Returns profiles + similarity warnings.
+        """
+        ...
+
+    def compute_character_ribbons(self, chapter: int | None = None) -> list[CharacterRibbon]:
+        """
+        Derive character presence + prominence per scene from KG relationships.
+        No LLM call — pure KG query + heuristic scoring.
+        Returns ribbon data for SVG visualization.
+        """
+        ...
+```
+
+### 10.2 New API Endpoints
+
+**Router:** `src/antigravity_tool/server/routers/analysis.py`
+
+| Method | Path | Request Body | Response | Description |
+|--------|------|-------------|----------|-------------|
+| `GET` | `/api/v1/analysis/emotional-arc` | Query: `?chapter=N` (optional) | `EmotionalArcResponse` | LLM-scored emotional valence per scene |
+| `GET` | `/api/v1/analysis/voice-scorecard` | Query: `?character_ids=a,b,c` (optional) | `VoiceScorecardResponse` | Character voice analysis + similarity |
+| `GET` | `/api/v1/analysis/ribbons` | Query: `?chapter=N` (optional) | `list[CharacterRibbonResponse]` | Character presence per scene for SVG |
+
+**Pydantic response models** in `api_schemas.py`:
+
+```python
+class EmotionalScoreResponse(BaseModel):
+    scene_id: str
+    scene_name: str
+    chapter: int
+    scene_number: int
+    hope: float
+    conflict: float
+    tension: float
+    sadness: float
+    joy: float
+    dominant_emotion: str
+    summary: str
+
+class EmotionalArcResponse(BaseModel):
+    scores: list[EmotionalScoreResponse]
+    flat_zones: list[dict]
+    peak_moments: list[dict]
+    pacing_grade: str
+    recommendations: list[str]
+
+class VoiceProfileResponse(BaseModel):
+    character_id: str
+    character_name: str
+    avg_sentence_length: float
+    vocabulary_diversity: float
+    formality_score: float
+    top_phrases: list[str]
+    dialogue_sample_count: int
+
+class VoiceScorecardResponse(BaseModel):
+    profiles: list[VoiceProfileResponse]
+    similarity_matrix: list[dict]
+    warnings: list[str]
+
+class CharacterRibbonResponse(BaseModel):
+    scene_id: str
+    scene_name: str
+    chapter: int
+    scene_number: int
+    characters: list[dict]
+```
+
+### 10.3 New Frontend Components
+
+#### Emotional Arc Dashboard (`EmotionalArcChart.tsx`)
+
+**File:** `src/web/src/components/timeline/EmotionalArcChart.tsx`
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Emotional Arc                              [Analyze] 🔄 │
+├─────────────────────────────────────────────────────────┤
+│ 1.0 ┤                                                   │
+│     │      ╱╲        ╱╲                                 │
+│ 0.5 ┤   ╱╱  ╲╲   ╱╱  ╲╲____╱╲                         │
+│     │ ╱╱      ╲╲╱╱              ╲╲                      │
+│ 0.0 ┤──────────────────────────────╲╲                   │
+│     Sc1  Sc2  Sc3  Sc4  Sc5  Sc6  Sc7  Sc8             │
+│                                                          │
+│  Legend: ─ Hope  ─ Tension  ─ Conflict  ─ Joy           │
+│                                                          │
+│ ⚠ Flat Zone: Scenes 3–5 (no tension peaks)              │
+│ ⭐ Peak Moment: Scene 2 (tension: 0.95)                  │
+│ Pacing Grade: B                                          │
+│ Rec: "Consider adding a minor conflict in the Sc3-5 run"│
+└─────────────────────────────────────────────────────────┘
+```
+
+- **Charting library:** `recharts` (already lightweight, React-native)
+- **Interaction:** Click a scene data point → selects it in the workbench inspector
+- **State:** Lives on the Timeline page, fetches from `/api/v1/analysis/emotional-arc`
+
+#### Story Ribbons (`StoryRibbons.tsx`)
+
+**File:** `src/web/src/components/timeline/StoryRibbons.tsx`
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Story Ribbons                                           │
+├─────────────────────────────────────────────────────────┤
+│ Zara:  ████████░░████████████████████░░████████████     │
+│ Kael:  ░░░░████████████░░░░░░████████████████████░     │
+│ Lira:  ░░░░░░░░████░░░░░░░░░░░░░░████░░░░░░████░     │
+│        Sc1  Sc2  Sc3  Sc4  Sc5  Sc6  Sc7  Sc8         │
+│                                                         │
+│ Legend: █ = Present  ░ = Absent  Width = Prominence     │
+└─────────────────────────────────────────────────────────┘
+```
+
+- **Rendering:** Pure SVG with `<rect>` elements per character per scene
+- **Color:** Each character gets a consistent color from a palette
+- **Thickness:** Maps to `prominence` value (0.0–1.0)
+- **Interaction:** Hover shows tooltip with character name + scene + prominence %
+- **State:** Fetches from `/api/v1/analysis/ribbons`, lives on Timeline page
+
+#### Character Voice Scorecard (`CharacterVoiceScorecard.tsx`)
+
+**File:** `src/web/src/components/workbench/CharacterVoiceScorecard.tsx`
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Voice Analysis                             [Analyze] 🔄 │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────┬────────┬─────────┬──────────┬────────────┐ │
+│ │ Name    │ AvgLen │ Vocab   │ Formality│ Phrases    │ │
+│ ├─────────┼────────┼─────────┼──────────┼────────────┤ │
+│ │ Zara    │ 12.3   │ 0.78    │ 0.45     │ "damn it", │ │
+│ │         │        │         │          │ "let's go" │ │
+│ │ Kael    │ 18.7   │ 0.62    │ 0.82     │ "Indeed",  │ │
+│ │         │        │         │          │ "observe"  │ │
+│ └─────────┴────────┴─────────┴──────────┴────────────┘ │
+│                                                          │
+│ ⚠ Warning: Lira and Kael sound 82% similar              │
+│   Suggestion: Give Lira shorter, more abrupt sentences   │
+└─────────────────────────────────────────────────────────┘
+```
+
+- **Location:** Rendered inside `CharacterInspector.tsx` when viewing a character
+- **Also accessible:** From a dedicated "Voice Analysis" section on the Timeline page for cross-character comparison
+- **State:** Fetches from `/api/v1/analysis/voice-scorecard`
+
+### 10.4 DI Wiring
+
+Add to `server/deps.py`:
+
+```python
+def get_analysis_service(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    context_engine: ContextEngine = Depends(get_context_engine),
+) -> AnalysisService:
+    return AnalysisService(kg_service, container_repo, context_engine)
+```
+
+### 10.5 API Client Additions
+
+Add to `src/web/src/lib/api.ts`:
+
+```typescript
+// Analysis
+getEmotionalArc: (chapter?: number) =>
+  request<EmotionalArcResponse>(
+    chapter ? `/api/v1/analysis/emotional-arc?chapter=${chapter}` : "/api/v1/analysis/emotional-arc"
+  ),
+getVoiceScorecard: (characterIds?: string[]) =>
+  request<VoiceScorecardResponse>(
+    characterIds
+      ? `/api/v1/analysis/voice-scorecard?character_ids=${characterIds.join(",")}`
+      : "/api/v1/analysis/voice-scorecard"
+  ),
+getCharacterRibbons: (chapter?: number) =>
+  request<CharacterRibbonResponse[]>(
+    chapter ? `/api/v1/analysis/ribbons?chapter=${chapter}` : "/api/v1/analysis/ribbons"
+  ),
+```
+
+### 10.6 Parallelization Strategy
+
+Phase Next-B splits cleanly into two independent work streams:
+
+| Session | Features | Touches | Dependencies |
+|---------|----------|---------|--------------|
+| **Session A** | Emotional Arc Dashboard + Story Ribbons | Timeline page, `AnalysisService` (emotional_arc + ribbons methods), `analysis.py` router (2 endpoints), 2 new frontend components | Existing KG + scene data |
+| **Session B** | Character Voice Scorecard | CharacterInspector, `AnalysisService` (voice methods), `analysis.py` router (1 endpoint), 1 new frontend component | Existing character + fragment data |
+
+Both sessions create the same `AnalysisService` file but implement different methods. Session A creates the file; Session B adds to it (or they merge afterward).
+
+---
+
+## 11. Phase Next-C: Panel Intelligence — Detailed Design
+
+### 11.1 Panel Layout Intelligence
+
+**Backend:** Add `suggest_layout(scene_id, scene_text, scene_name) -> dict` to `StoryboardService`. Uses LLM to analyze narrative beat type (action/dialogue/reveal/transition/montage/emotional) and suggest panel count, sizes, camera angles, and composition notes.
+
+**API:** `POST /api/v1/storyboard/scenes/{scene_id}/suggest-layout` → `LayoutSuggestionResponse`
+
+**Frontend:** `LayoutSuggestionPanel.tsx` — Visual preview of suggested panel sizes/types with "Apply & Generate" button. Integrated into `SceneStrip.tsx` as "Suggest Layout" button.
+
+### 11.2 Character Progressions
+
+**Backend:** Store visual DNA evolution as `attributes.progressions` array on character containers. CRUD endpoints at `/api/v1/characters/{id}/progressions`. `GET /dna-at-chapter/{chapter}` resolves DNA by deep-merging base + all progressions up to that chapter.
+
+**Frontend:** `CharacterProgressionTimeline.tsx` — Horizontal timeline with nodes at each progression chapter. Inline editing, add/delete stages. Integrated into `CharacterInspector.tsx`.
+
+### 11.3 Reader Scroll Simulation
+
+**Backend:** New `ReaderSimService` with `simulate_reading(scene_id)` — heuristic-based (no LLM). Estimates per-panel reading time, text density, info-dense flags, pacing dead zones, engagement score.
+
+**API:** `GET /api/v1/preview/scene/{scene_id}`, `GET /api/v1/preview/chapter/{chapter}`
+
+**Frontend:** New `/preview` route with vertical panel scroll (70%) + pacing sidebar (30%). Auto-scroll player with speed control. Info-dense panel warnings, dead zone highlights, engagement percentage.
+
+### 11.4 Parallelization Strategy
+
+| Session | Features | Touches |
+|---------|----------|---------|
+| **Session 22** | Panel Layout Intelligence + Enhanced Approval Gate | StoryboardService, SceneStrip, PromptReviewModal, pipeline_service |
+| **Session 23** | Character Progressions + Reader Scroll Sim | CharacterInspector, new /preview route, new ReaderSimService |
+| **Session 24** | Workflow Templates + Research UI | PipelineService, TemplateGallery, new /research page |
+
+---
+
+## 12. Phase Next-D: Workflow Power — Detailed Design
+
+### 12.1 Workflow Templates Library
+
+**Backend:** New `src/antigravity_tool/templates/workflow_templates.py` with 5 templates as PipelineDefinition data:
+1. Scene → Panels (gather → prompt → review → generate → save)
+2. Concept → Outline (input → brainstorm → review → architect → approve → save)
+3. Outline → Draft (gather → prompt → review → draft → save)
+4. Topic → Research (input → research_deep_dive → review → save)
+5. Draft → Polish (gather → style_check → review → final_edit → approve → save)
+
+**API:** `GET /api/pipeline/templates`, `POST /api/pipeline/templates/{id}/create`
+
+**Frontend:** Update `TemplateGallery.tsx` to fetch templates from API instead of hardcoded data. "Use Template" creates a definition and opens it in the builder.
+
+### 12.2 Enhanced Approval Gate
+
+**Backend:** Extend `_handle_llm_generate` in `pipeline_service.py` to support `temperature_override` and `pinned_context_ids` from the resume payload.
+
+**Frontend:** Add to `PromptReviewModal.tsx`:
+- Temperature slider (0–2, step 0.1) in header
+- Pin/unpin toggle per context bucket in Glass Box
+- "Regenerate" button (amber) in footer that re-runs with changed parameters
+
+### 12.3 Research Agent UI Surface
+
+**Backend:** Already exists (`research_service.py` + `research.py` router). No backend changes needed.
+
+**Frontend:** New `/research` page with:
+- Left panel: Research topic list with search/filter + confidence indicators
+- Right panel: Structured topic detail (summary, key_facts, constraints, story_implications)
+- Bottom: New research query input triggering agent execution
+- "Link to Scene" dropdown for relationship creation
+- `ResearchTopicCard.tsx` + `ResearchDetailPanel.tsx` components
+
+---
+
+## 13. Phase Next-E: Spatial & Structural — Implementation Summary ✅
+
+### 13.1 Story Structure Visual Editor ✅
+
+**Backend (implemented):**
+- `src/antigravity_tool/server/routers/containers.py` (131 lines) with prefix `/api/v1/containers`:
+  - `POST /` — Create container (type-validated: season/arc/act/chapter/scene)
+  - `GET /{id}` — Get container by ID
+  - `PUT /{id}` — Update container (name, sort_order, parent_id, attributes)
+  - `DELETE /{id}` — Delete container + remove from KG + emit event
+  - `POST /reorder` — Bulk update sort_order for siblings
+- `ContainerRepository` extended with `get_by_id()` and `delete_by_id()` (81 lines total)
+- Fixed `getProjectStructure()` API URL mismatch in `projectSlice.ts`
+
+**Frontend (implemented in `StoryStructureTree.tsx`, 479 lines):**
+- "Add Child" button per node (Season→Arc, Arc→Act, Act→Chapter, Chapter→Scene)
+- Delete button with confirmation dialog
+- "Open in Zen" for scene nodes → `router.push('/zen?scene_id=...')`
+- Drag reorder wired to bulk `POST /containers/reorder`
+- Completion status color-coding (green/amber/blue left border)
+
+### 13.2 Alternate Timeline Browser ✅
+
+**Backend (implemented):**
+- `EventService` extended (256 lines total) with `get_branches()`, `get_events_for_branch()`, `compare_branches()` (recursive CTE state projection diff)
+- Timeline router expanded (111 lines total):
+  - `GET /branches` — List branches with event counts
+  - `POST /branch` — Create branch from historical event
+  - `GET /branch/{id}/events` — Events filtered per branch
+  - `GET /compare?branch_a=X&branch_b=Y` — Side-by-side state diff
+  - `GET /stream` — SSE real-time event streaming
+
+**Frontend (implemented):**
+- `BranchList.tsx` (96 lines) — Sidebar with event counts + active indicator
+- `BranchComparison.tsx` (161 lines) — Two-column diff: additions (green), removals (red), changes (amber)
+- Integrated into `timeline/page.tsx` (147 lines) left panel below `StoryStructureTree`
+
+### 13.3 Spatial Brainstorming Canvas ✅
+
+**Backend (implemented in `director.py`, 194 lines total):**
+- `POST /brainstorm/suggest-connections` — AI-suggested edges/new cards/themes via `brainstorm_agent` skill
+- `POST /brainstorm/save-card` — Persist idea card as `GenericContainer` with `container_type: "idea_card"`
+- `GET /brainstorm/cards` — List all idea cards
+- `DELETE /brainstorm/cards/{id}` — Delete card
+
+**Frontend (implemented):**
+- `/brainstorm` page with ReactFlow infinite canvas (`@xyflow/react` v12)
+- `IdeaCardNode.tsx` (116 lines) — Editable text, color coding, auto-save on drag-end/blur, delete button
+- `SuggestionPanel.tsx` (189 lines) — AI suggestions with accept/dismiss, theme clusters
+- Auto-save card positions, load on mount, minimap navigation
+- "Suggest" button triggers `brainstorm_agent` analysis
+- Brainstorm nav link added to `Canvas.tsx` (200 lines)
+
+### 13.4 Voice-to-Scene ✅
+
+**Backend (implemented in `storyboard.py`, 193 lines total):**
+- `POST /api/v1/storyboard/voice-to-scene` — Receives transcribed text, orchestrates `suggest_layout()` → `generate_panels_for_scene()`, returns layout suggestion + generated panels
+
+**Frontend (implemented):**
+- `VoiceToSceneButton.tsx` — Browser-native Web Speech API with three states (idle/recording/processing)
+- Live transcript + editable textarea review + scene selector + panel count config
+- Generated panel preview with "Apply to Scene" / "Discard"
+- Integrated into `storyboard/page.tsx` (138 lines) header next to Strip/Canvas toggle
+- Textarea fallback for browsers without speech support
+
+### 13.5 Execution Summary
+
+Both sessions completed successfully with zero file conflicts:
+
+| Session | Features | Files Created/Modified |
+|---------|----------|----------------------|
+| **Session 25** ✅ | Story Structure Editor + Alternate Timeline Browser | `containers.py` (new, 131L), `container_repo.py` (81L), `event_sourcing_repo.py` (256L), `timeline.py` (111L), `StoryStructureTree.tsx` (479L), `timeline/page.tsx` (147L), `BranchList.tsx` (new, 96L), `BranchComparison.tsx` (new, 161L), `api.ts` (822L) |
+| **Session 26** ✅ | Spatial Brainstorm Canvas + Voice-to-Scene | `director.py` (194L), `storyboard.py` (193L), `brainstorm/page.tsx` (new), `IdeaCardNode.tsx` (new, 116L), `SuggestionPanel.tsx` (new, 189L), `VoiceToSceneButton.tsx` (new), `storyboard/page.tsx` (138L), `Canvas.tsx` (200L), `api.ts` (822L) |
+
+TypeScript validation: 0 errors across entire `src/web/` directory. Next.js build: successful.
+
+---
+
+## 14. Phase H: Intelligence Layer — Implementation Summary ✅
+
+All 5 features completed across 3 sessions (27–29). 21 files created/modified.
+
+### 14.1 Continuity Auto-Check ✅
+- `ContinuityService` (208 lines) — `check_continuity()`, `check_scene_continuity()`, `get_recent_issues()`. Gathers KG context + future dependencies, routes through `continuity_analyst` skill. Returns ContinuityVerdict (status, reasoning, suggestions, affected_entities, severity).
+- 3 endpoints on `analysis.py`: `POST /continuity-check`, `POST /continuity-check/scene/{id}`, `GET /continuity-issues`
+- `ContinuityPanel.tsx` (117 lines) — Severity-coded issue cards (error/warning/info) in ContextSidebar "Continuity" tab
+
+### 14.2 Style Enforcer ✅
+- `StyleService` (145 lines) — `evaluate_style(text, scene_id?)`. Loads `NarrativeStyleGuide` from containers, routes through `style_enforcer` skill. Returns StyleEvaluation (status, overall_score, issues[], strengths[], summary).
+- Endpoint: `POST /style-check` on `analysis.py`
+- `StyleScorecard.tsx` (155 lines) — Score gauge + categorized issues + strengths in ContextSidebar "Style" tab
+- Style tab added to `PromptReviewModal.tsx` (425 lines total)
+- `/check-style` slash command wired in `SlashCommandList.tsx`
+
+### 14.3 Translation Agent UI ✅
+- `TranslationService` (207 lines) — `translate()` with glossary, character profiles, cultural adaptation. Routes through `translator_agent` skill. Returns (translated_text, adaptation_notes, cultural_flags, glossary_applied, confidence).
+- `translation.py` router (83 lines): `POST /translate`, `GET /glossary`, `POST /glossary`
+- `TranslationPanel.tsx` (351 lines) — Two-column source/target with adaptation notes
+- `/translation` page (Translation Studio, 26 lines)
+- `InlineTranslation.tsx` (257 lines) — Compact widget in ContextSidebar "Translation" tab with Replace/Insert Below actions
+- `/translate` slash command wired in `SlashCommandList.tsx`
+
+### 14.4 NL → Workflow Generation ✅
+- Backend: Already existed (`PipelineService.generate_pipeline_from_nl()` + `POST /api/pipeline/definitions/generate`)
+- `NLPipelineWizard.tsx` (206 lines) — Modal with textarea, example prompts, "Open in Builder" action
+- "Create from Description" button integrated into `pipelines/page.tsx` (210 lines)
+
+### 14.5 Semantic @Mentions in Zen Mode ✅
+- `GET /api/v1/writing/semantic-search` endpoint on `writing.py` (95 lines total) using `kg_service.semantic_search()` via ChromaDB
+- `ZenEditor.tsx` (432 lines) — @mention suggestions upgraded from keyword to semantic vector search
+- `MentionList.tsx` — Relevance indicator in dropdown
+
+### 14.6 Execution Summary
+
+| Session | Features | Status |
+|---------|----------|--------|
+| **Session 27** | Continuity Auto-Check + Style Enforcer | ✅ Complete |
+| **Session 28** | Translation Agent UI + NL Pipeline Wizard | ✅ Complete |
+| **Session 29** | Semantic @Mentions + /translate Slash + Integration | ✅ Complete |
+
+Parallelization strategy (27 ∥ 28, then 29) executed cleanly with zero file conflicts.
+
+## 15. Phase I: Polish — Detailed Design
+
+### 15.1 Persistent Navbar + Command Palette + Error Boundary (Session 30)
+
+**New components:**
+- `Navbar.tsx` — Sticky top navbar with route-aware active tabs (9 pages), logo, Cmd+K trigger
+- `CommandPalette.tsx` — cmdk-powered overlay with page navigation, actions, search
+- `ErrorBoundary.tsx` — React class component with crash recovery fallback UI
+
+**Modifications:**
+- `layout.tsx` — Add Navbar + ErrorBoundary wrapping children
+- `Canvas.tsx` — Remove cross-page nav links (keep Graph/Timeline toggle + DirectorControls)
+
+### 15.2 Export UI + HTML/PDF Export (Session 31)
+
+**Backend:**
+- `export_service.py` — Add `export_html()` method generating styled, print-friendly HTML document
+- `export.py` — Add `POST /html` (download) and `POST /preview` (inline) endpoints
+
+**Frontend:**
+- `ExportModal.tsx` — Format selector (Markdown/JSON/Fountain/HTML), preview area, download + print-to-PDF
+- `ProgressOverview.tsx` — Export trigger button + custom event listener (`open:export`)
+- `api.ts` — 5 export methods (exportManuscript, exportBundle, exportScreenplay, exportHTML, exportPreview)
+
+### 15.3 Zen Mode Polish (Session 32)
+
+**Frontend:**
+- `ZenEditor.tsx` — Real-time word/char/reading-time count, focus mode (Cmd+Shift+F), session writing stats, keyboard shortcuts overlay (Cmd+/)
+- `zenSlice.ts` — Session stats state (sessionStartWordCount, sessionWordsWritten, sessionStartTime)
+- `zen/page.tsx` — Simplified header (remove redundant nav links)
+- `globals.css` — Focus mode paragraph dimming CSS
+
+**Backend:**
+- `writing_service.py` — Compute word_count on fragment save
+- `writing.py` — Include word_count in response
+- `api_schemas.py` — Add word_count to FragmentResponse
+
+### 15.4 Parallelization Strategy
+
+| Session | Features | Parallel? |
+|---------|----------|-----------|
+| **Session 30** | Navbar + Command Palette + Error Boundary | ✅ Parallel with 31 |
+| **Session 31** | Export UI + HTML Export | ✅ Parallel with 30 |
+| **Session 32** | Zen Mode Polish | ⏳ Sequential (after 30+31, touches api.ts) |
+
+Sessions 30 and 31 have zero file overlap. Session 32 touches api.ts (also modified by 31) so runs after both complete.

@@ -11,6 +11,15 @@ from antigravity_tool.server.routers import (
     schemas_router,
     graph,
     timeline,
+    writing,
+    storyboard,
+    # Phase F additions
+    projects,
+    models,
+    # Phase G Track 2
+    research,
+    # Phase I Track 4
+    export,
 )
 
 __all__ = [
@@ -24,4 +33,13 @@ __all__ = [
     "schemas_router",
     "graph",
     "timeline",
+    "writing",
+    "storyboard",
+    # Phase F additions
+    "projects",
+    "models",
+    # Phase G Track 2
+    "research",
+    # Phase I Track 4
+    "export",
 ]

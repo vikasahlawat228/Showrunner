@@ -1,6 +1,7 @@
 """FastAPI dependency injection for services.
 
 Uses Depends() to provide services to route handlers.
+Phase F adds ModelConfigRegistry as a cached singleton.
 """
 
 from __future__ import annotations
@@ -8,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from antigravity_tool.core.project import Project
 from antigravity_tool.services.base import ServiceContext
@@ -22,6 +23,20 @@ from antigravity_tool.services.session_service import SessionService
 from antigravity_tool.services.director_service import DirectorService
 from antigravity_tool.repositories.container_repo import SchemaRepository, ContainerRepository
 from antigravity_tool.services.knowledge_graph_service import KnowledgeGraphService
+from antigravity_tool.services.agent_dispatcher import AgentDispatcher
+from antigravity_tool.services.writing_service import WritingService
+from antigravity_tool.services.storyboard_service import StoryboardService
+from antigravity_tool.services.pipeline_service import PipelineService
+from antigravity_tool.services.context_engine import ContextEngine
+from antigravity_tool.services.model_config_registry import ModelConfigRegistry
+from antigravity_tool.services.research_service import ResearchService
+from antigravity_tool.services.export_service import ExportService
+from antigravity_tool.repositories.event_sourcing_repo import EventService
+from antigravity_tool.services.analysis_service import AnalysisService
+from antigravity_tool.services.reader_sim_service import ReaderSimService
+from antigravity_tool.services.translation_service import TranslationService
+from antigravity_tool.services.continuity_service import ContinuityService
+from antigravity_tool.services.style_service import StyleService
 
 
 @lru_cache()
@@ -75,23 +90,158 @@ def get_container_repo(project: Project = Depends(get_project)) -> ContainerRepo
     return ContainerRepository(project.path)
 
 
-def get_event_service(project: Project = Depends(get_project)):
-    from antigravity_tool.repositories.event_sourcing_repo import EventService
+def get_event_service(project: Project = Depends(get_project)) -> EventService:
     db_path = project.path / "event_log.db"
     return EventService(db_path)
 
 
 def get_knowledge_graph_service(
-    project: Project = Depends(get_project),
-    container_repo: ContainerRepository = Depends(get_container_repo),
-    schema_repo: SchemaRepository = Depends(get_schema_repo),
+    request: Request,
 ) -> KnowledgeGraphService:
-    # In a real app the indexer would be a singleton or app-level dependency
-    # For now we'll let the service create its own indexer pointing to the project root
+    """Return the singleton KnowledgeGraphService created during app lifespan.
+
+    Falls back to per-request creation if lifespan hasn't run (e.g. tests).
+    """
+    if hasattr(request.app.state, "kg_service"):
+        return request.app.state.kg_service
+
+    # Fallback for tests or when lifespan is not used
+    project = get_project()
+    container_repo = ContainerRepository(project.path)
+    schema_repo = SchemaRepository(project.path / "schemas")
     db_path = project.path / "knowledge_graph.db"
     from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
     indexer = SQLiteIndexer(db_path)
-    # Automatically sync on start
-    svc = KnowledgeGraphService(container_repo, schema_repo, indexer)
+
+    from antigravity_tool.repositories.chroma_indexer import ChromaIndexer
+    chroma_dir = project.path / ".chroma"
+    chroma_indexer = ChromaIndexer(persist_dir=chroma_dir)
+
+    svc = KnowledgeGraphService(container_repo, schema_repo, indexer, chroma_indexer=chroma_indexer)
     svc.sync_all(project.path)
     return svc
+
+
+def get_writing_service(
+    project: Project = Depends(get_project),
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    event_service: EventService = Depends(get_event_service),
+) -> WritingService:
+    return WritingService(container_repo, kg_service, project.path, event_service)
+
+
+def get_storyboard_service(
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    event_service: EventService = Depends(get_event_service),
+) -> StoryboardService:
+    """Create a StoryboardService with persistence and event sourcing."""
+    return StoryboardService(container_repo, event_service)
+
+
+def get_pipeline_service(
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    event_service: EventService = Depends(get_event_service),
+) -> PipelineService:
+    """Create a PipelineService with persistence and event sourcing."""
+    return PipelineService(container_repo, event_service)
+
+
+def get_context_engine(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    container_repo: ContainerRepository = Depends(get_container_repo),
+) -> ContextEngine:
+    """Create a ContextEngine for centralized context assembly and token budgeting."""
+    return ContextEngine(kg_service, container_repo)
+
+
+# ── Phase F additions ─────────────────────────────────────────────
+
+
+@lru_cache()
+def get_model_config_registry(
+    project: Project = Depends(get_project),
+) -> ModelConfigRegistry:
+    """LRU-cached ModelConfigRegistry, loaded from antigravity.yaml."""
+    return ModelConfigRegistry(project.path)
+
+
+@lru_cache()
+def get_agent_dispatcher() -> AgentDispatcher:
+    """Cached AgentDispatcher that loads skills from agents/skills/.
+
+    The skills_dir path resolves relative to the package root:
+    src/antigravity_tool/server/deps.py -> ../../../../agents/skills/
+    """
+    skills_dir = Path(__file__).resolve().parent.parent.parent.parent / "agents" / "skills"
+    return AgentDispatcher(skills_dir)
+
+
+# ── Phase G additions ─────────────────────────────────────────────
+
+
+def get_research_service(
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    event_service: EventService = Depends(get_event_service),
+    agent_dispatcher: AgentDispatcher = Depends(get_agent_dispatcher),
+) -> ResearchService:
+    """Create a ResearchService with persistence, events, and agent dispatch."""
+    return ResearchService(container_repo, event_service, agent_dispatcher)
+
+
+# ── Phase I additions ─────────────────────────────────────────────
+
+
+def get_export_service(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    schema_repo: SchemaRepository = Depends(get_schema_repo),
+    event_service: EventService = Depends(get_event_service),
+) -> ExportService:
+    """Create an ExportService for manuscript, bundle, and screenplay exports."""
+    return ExportService(kg_service, container_repo, schema_repo, event_service)
+
+
+# ── Analysis Additions ───────────────────────────────────────────
+
+def get_analysis_service(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    context_engine: ContextEngine = Depends(get_context_engine),
+) -> AnalysisService:
+    return AnalysisService(kg_service, container_repo, context_engine)
+
+
+# ── Reader Preview Simulation ───────────────────────────────────────
+
+def get_reader_sim_service(
+    container_repo: ContainerRepository = Depends(get_container_repo),
+) -> ReaderSimService:
+    return ReaderSimService(container_repo)
+
+
+def get_continuity_service(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    context_engine: ContextEngine = Depends(get_context_engine),
+    event_service: EventService = Depends(get_event_service),
+    agent_dispatcher: AgentDispatcher = Depends(get_agent_dispatcher),
+) -> ContinuityService:
+    return ContinuityService(kg_service, context_engine, event_service, agent_dispatcher)
+
+
+def get_style_service(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    context_engine: ContextEngine = Depends(get_context_engine),
+    agent_dispatcher: AgentDispatcher = Depends(get_agent_dispatcher),
+) -> StyleService:
+    return StyleService(kg_service, context_engine, agent_dispatcher)
+
+def get_translation_service(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    context_engine: ContextEngine = Depends(get_context_engine),
+    agent_dispatcher: AgentDispatcher = Depends(get_agent_dispatcher),
+    container_repo: ContainerRepository = Depends(get_container_repo),
+) -> TranslationService:
+    return TranslationService(kg_service, context_engine, agent_dispatcher, container_repo)
+
+

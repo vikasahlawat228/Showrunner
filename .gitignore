@@ -117,3 +117,16 @@ Thumbs.db
 .pylibs/
 .pylibs_v2/
 .fix_venv/
+
+# App Data & Buckets
+*.db
+.chroma/
+characters/
+containers/
+creative_room/
+fragment/
+idea_card/
+pipeline_def/
+research_topic/
+world/
+

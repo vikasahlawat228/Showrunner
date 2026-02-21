@@ -1,7 +1,7 @@
 """Graph router -- fetches all containers and relationships for React Flow."""
 
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from antigravity_tool.server.deps import get_knowledge_graph_service
 from antigravity_tool.services.knowledge_graph_service import KnowledgeGraphService
@@ -35,3 +35,17 @@ async def get_graph(
         "nodes": containers,
         "edges": relationships
     }
+
+
+@router.get("/search")
+async def search_graph(
+    q: str = Query(..., description="Natural-language search query"),
+    limit: int = Query(5, ge=1, le=50, description="Max results to return"),
+    svc: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+) -> Dict[str, Any]:
+    """Semantic search across all containers using vector similarity (RAG).
+
+    Returns the closest containers ranked by cosine distance (lower = more similar).
+    """
+    results = svc.semantic_search(q, limit=limit)
+    return {"results": results, "query": q, "count": len(results)}

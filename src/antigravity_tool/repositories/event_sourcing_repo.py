@@ -184,6 +184,73 @@ class EventService:
         except sqlite3.Error as e:
             raise PersistenceError(f"Database error during get_all_events: {e}")
 
+    def get_branches(self) -> List[Dict[str, Any]]:
+        """List all branches with their head event IDs and event counts."""
+        try:
+            cursor = self.conn.execute("""
+                SELECT b.id, b.head_event_id,
+                       (SELECT COUNT(*) FROM events e WHERE e.branch_id = b.id) as event_count
+                FROM branches b
+                ORDER BY b.id
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during get_branches: {e}")
+
+    def get_events_for_branch(self, branch_id: str) -> List[Dict[str, Any]]:
+        """Get all events that belong to a specific branch."""
+        try:
+            cursor = self.conn.execute("""
+                SELECT id, parent_event_id, branch_id, timestamp, event_type, container_id, payload_json
+                FROM events
+                WHERE branch_id = ?
+                ORDER BY timestamp ASC
+            """, (branch_id,))
+            events = []
+            for row in cursor.fetchall():
+                evt = dict(row)
+                evt['payload'] = json.loads(evt.pop('payload_json'))
+                events.append(evt)
+            return events
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during get_events_for_branch: {e}")
+
+    def compare_branches(self, branch_a: str, branch_b: str) -> Dict[str, Any]:
+        """Compare two branches by projecting their states and computing diffs."""
+        state_a = self.project_state(branch_a)
+        state_b = self.project_state(branch_b)
+
+        all_ids = set(state_a.keys()) | set(state_b.keys())
+        only_in_a = []
+        only_in_b = []
+        different = []
+        same = []
+
+        for cid in all_ids:
+            in_a = cid in state_a
+            in_b = cid in state_b
+            if in_a and not in_b:
+                only_in_a.append({"container_id": cid, "state": state_a[cid]})
+            elif in_b and not in_a:
+                only_in_b.append({"container_id": cid, "state": state_b[cid]})
+            elif state_a[cid] != state_b[cid]:
+                different.append({
+                    "container_id": cid,
+                    "state_a": state_a[cid],
+                    "state_b": state_b[cid],
+                })
+            else:
+                same.append(cid)
+
+        return {
+            "branch_a": branch_a,
+            "branch_b": branch_b,
+            "only_in_a": only_in_a,
+            "only_in_b": only_in_b,
+            "different": different,
+            "same_count": len(same),
+        }
+
     def close(self) -> None:
         """Close the local database connection."""
         self.conn.close()

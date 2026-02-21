@@ -1,0 +1,86 @@
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { 
+  LayoutDashboard, 
+  PenTool, 
+  Workflow, 
+  Film, 
+  Clock, 
+  Lightbulb, 
+  BookOpen, 
+  Globe, 
+  Smartphone,
+  Command
+} from "lucide-react";
+
+const navItems = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Zen", href: "/zen", icon: PenTool },
+  { name: "Pipelines", href: "/pipelines", icon: Workflow },
+  { name: "Storyboard", href: "/storyboard", icon: Film },
+  { name: "Timeline", href: "/timeline", icon: Clock },
+  { name: "Brainstorm", href: "/brainstorm", icon: Lightbulb },
+  { name: "Research", href: "/research", icon: BookOpen },
+  { name: "Translation", href: "/translation", icon: Globe },
+  { name: "Preview", href: "/preview", icon: Smartphone },
+];
+
+export function Navbar() {
+  const pathname = usePathname();
+
+  const handleCommandPaletteClick = () => {
+    // Trigger custom event to open the command palette
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+    // As a fallback for different OS/browsers, also dispatch a custom event
+    window.dispatchEvent(new CustomEvent('open:command-palette'));
+  };
+
+  return (
+    <nav className="fixed top-0 left-0 right-0 h-12 bg-gray-950/95 backdrop-blur-sm border-b border-gray-800 z-50 flex items-center justify-between px-4">
+      {/* Left: Brand */}
+      <div className="flex items-center">
+        <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+          Showrunner
+        </span>
+      </div>
+
+      {/* Center: Tabs */}
+      <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[60%] lg:max-w-[70%]">
+        {navItems.map((item) => {
+          const isActive = pathname?.startsWith(item.href);
+          const Icon = item.icon;
+          
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
+                isActive
+                  ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
+                  : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 border border-transparent"
+              }`}
+            >
+              <Icon className={`w-3.5 h-3.5 ${isActive ? "text-indigo-400" : "text-gray-500"}`} />
+              <span className="hidden sm:inline">{item.name}</span>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Right: Actions */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleCommandPaletteClick}
+          className="flex items-center gap-1.5 px-2 py-1 bg-gray-900 hover:bg-gray-800 border border-gray-700 hover:border-gray-600 rounded-md text-gray-400 transition-colors"
+          title="Open Command Palette (Cmd+K)"
+        >
+          <Command className="w-3.5 h-3.5" />
+          <span className="text-[10px] font-semibold tracking-wider">⌘K</span>
+        </button>
+      </div>
+    </nav>
+  );
+}

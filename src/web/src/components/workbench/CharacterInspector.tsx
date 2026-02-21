@@ -1,6 +1,8 @@
 "use client";
 
 import type { CharacterDetail } from "@/lib/api";
+import { CharacterVoiceScorecard } from "./CharacterVoiceScorecard";
+import { CharacterProgressionTimeline } from "./CharacterProgressionTimeline";
 
 interface CharacterInspectorProps {
   character: CharacterDetail;
@@ -124,6 +126,15 @@ export function CharacterInspector({ character }: CharacterInspectorProps) {
         </Section>
       )}
 
+      {/* Visual Evolution Timeline */}
+      {dna && (
+        <CharacterProgressionTimeline
+          characterId={character.id}
+          characterName={character.name}
+          baseDNA={dna}
+        />
+      )}
+
       {/* Arc */}
       {arc && (
         <Section title="Character Arc">
@@ -173,6 +184,14 @@ export function CharacterInspector({ character }: CharacterInspectorProps) {
           <Tags items={character.tags} />
         </Section>
       )}
+
+      {/* Voice Analysis */}
+      <div className="border-t border-gray-800 pt-3 mt-3 pb-4">
+        <CharacterVoiceScorecard
+          characterId={character.id}
+          characterName={character.name}
+        />
+      </div>
     </div>
   );
 }

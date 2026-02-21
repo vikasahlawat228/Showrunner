@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { useStudioStore, type SidebarTab } from "@/lib/store";
 import { SidebarItem } from "./SidebarItem";
 import { WorldStatus } from "./WorldStatus";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 const TABS: { key: SidebarTab; label: string }[] = [
   { key: "characters", label: "Characters" },
@@ -17,6 +18,7 @@ export function Sidebar() {
     characters,
     scenes,
     world,
+    loading,
     sidebarCollapsed,
     sidebarTab,
     selectedItem,
@@ -63,55 +65,49 @@ export function Sidebar() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {sidebarTab === "characters" && (
-          <>
-            {characters.length === 0 ? (
-              <p className="text-gray-600 text-xs px-2 py-4 text-center">
-                No characters yet.
-              </p>
-            ) : (
-              characters.map((c) => (
-                <SidebarItem
-                  key={c.id}
-                  id={c.id}
-                  type="character"
-                  name={c.name}
-                  subtitle={c.role}
-                  selected={selectedItem?.id === c.id}
-                  onClick={() =>
-                    selectItem({ id: c.id, type: "character", name: c.name })
-                  }
-                />
-              ))
-            )}
-          </>
-        )}
-
-        {sidebarTab === "scenes" && (
-          <>
-            {scenes.length === 0 ? (
-              <p className="text-gray-600 text-xs px-2 py-4 text-center">
-                No scenes yet.
-              </p>
-            ) : (
-              scenes.map((s) => (
-                <SidebarItem
-                  key={s.id}
-                  id={s.id}
-                  type="scene"
-                  name={s.title}
-                  subtitle={`Scene ${s.scene_number} · ${s.scene_type}`}
-                  selected={selectedItem?.id === s.id}
-                  onClick={() =>
-                    selectItem({ id: s.id, type: "scene", name: s.title })
-                  }
-                />
-              ))
-            )}
-          </>
-        )}
-
-        {sidebarTab === "world" && (
+        {loading ? (
+          <SkeletonList count={6} />
+        ) : sidebarTab === "characters" ? (
+          characters.length === 0 ? (
+            <p className="text-gray-600 text-xs px-2 py-4 text-center">
+              No characters yet.
+            </p>
+          ) : (
+            characters.map((c) => (
+              <SidebarItem
+                key={c.id}
+                id={c.id}
+                type="character"
+                name={c.name}
+                subtitle={c.role}
+                selected={selectedItem?.id === c.id}
+                onClick={() =>
+                  selectItem({ id: c.id, type: "character", name: c.name })
+                }
+              />
+            ))
+          )
+        ) : sidebarTab === "scenes" ? (
+          scenes.length === 0 ? (
+            <p className="text-gray-600 text-xs px-2 py-4 text-center">
+              No scenes yet.
+            </p>
+          ) : (
+            scenes.map((s) => (
+              <SidebarItem
+                key={s.id}
+                id={s.id}
+                type="scene"
+                name={s.title}
+                subtitle={`Scene ${s.scene_number} · ${s.scene_type}`}
+                selected={selectedItem?.id === s.id}
+                onClick={() =>
+                  selectItem({ id: s.id, type: "scene", name: s.title })
+                }
+              />
+            ))
+          )
+        ) : sidebarTab === "world" ? (
           <WorldStatus
             world={world}
             selected={selectedItem?.type === "world"}
@@ -121,7 +117,7 @@ export function Sidebar() {
               }
             }}
           />
-        )}
+        ) : null}
       </div>
     </aside>
   );

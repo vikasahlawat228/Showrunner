@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { createGraphDataSlice, type GraphDataSlice } from "./store/graphDataSlice";
 import { createCanvasUISlice, type CanvasUISlice } from "./store/canvasUISlice";
 import { createReactFlowSlice, type ReactFlowSlice } from "./store/reactFlowSlice";
+import { createProjectSlice, type ProjectSlice } from "./store/projectSlice";
+import { createModelConfigSlice, type ModelConfigSlice } from "./store/modelConfigSlice";
 
 // ── Selection & UI ──────────────────────────────────────────
 
@@ -15,10 +17,12 @@ export interface Selection {
 
 // ── Main Store Definition ───────────────────────────────────
 
-export type StudioState = GraphDataSlice & CanvasUISlice & ReactFlowSlice;
+export type StudioState = GraphDataSlice & CanvasUISlice & ReactFlowSlice & ProjectSlice & ModelConfigSlice;
 
 export const useStudioStore = create<StudioState>()((...a) => ({
   ...createGraphDataSlice(...a),
   ...createCanvasUISlice(...a),
   ...createReactFlowSlice(...a),
+  ...createProjectSlice(...a),
+  ...createModelConfigSlice(...a),
 }));

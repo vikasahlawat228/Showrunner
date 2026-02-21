@@ -48,3 +48,34 @@ class ContainerRepository(YAMLRepository[GenericContainer]):
             return [self._load_file(f) for f in files]
         finally:
             self.base_dir = original_base
+
+    def get_by_id(self, container_id: str) -> Optional[GenericContainer]:
+        """Search all type subdirectories for a container with this ID."""
+        if not self.base_dir.exists():
+            return None
+        for type_dir in self.base_dir.iterdir():
+            if type_dir.is_dir():
+                for yaml_file in type_dir.glob("*.yaml"):
+                    try:
+                        container = self._load_file(yaml_file)
+                        if container.id == container_id:
+                            return container
+                    except Exception:
+                        continue
+        return None
+
+    def delete_by_id(self, container_id: str) -> bool:
+        """Find and delete a container YAML file by its ID."""
+        if not self.base_dir.exists():
+            return False
+        for type_dir in self.base_dir.iterdir():
+            if type_dir.is_dir():
+                for yaml_file in type_dir.glob("*.yaml"):
+                    try:
+                        container = self._load_file(yaml_file)
+                        if container.id == container_id:
+                            yaml_file.unlink()
+                            return True
+                    except Exception:
+                        continue
+        return False

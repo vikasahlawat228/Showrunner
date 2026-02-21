@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+/* Zen Focus Mode — dims non-active paragraphs */
+.zen-focus-mode .ProseMirror>* {
+  opacity: 0.25;
+  transition: opacity 0.3s ease;
+}
+
+.zen-focus-mode .ProseMirror>*.has-focus,
+.zen-focus-mode .ProseMirror>*:focus,
+.zen-focus-mode .ProseMirror>*:has(.ProseMirror-focused) {
+  opacity: 1;
+}
+
+/* Use :has() selector for the parent of the cursor position */
+.zen-focus-mode .ProseMirror>.is-active,
+.zen-focus-mode .ProseMirror:focus-within>.has-focus {
+  opacity: 1;
+}
+
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -23,4 +42,97 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ── TipTap Zen Mode Styles ──────────────────────────────── */
+
+/* Prose typography in dark mode */
+.prose-invert h1 {
+  @apply text-3xl font-bold text-white mt-8 mb-4;
+}
+
+.prose-invert h2 {
+  @apply text-2xl font-semibold text-gray-100 mt-6 mb-3;
+}
+
+.prose-invert h3 {
+  @apply text-xl font-medium text-gray-200 mt-5 mb-2;
+}
+
+.prose-invert p {
+  @apply text-gray-300 leading-relaxed mb-4;
+}
+
+.prose-invert blockquote {
+  @apply border-l-2 border-indigo-500/50 pl-4 italic text-gray-400 my-4;
+}
+
+.prose-invert ul {
+  @apply list-disc pl-6 text-gray-300 mb-4;
+}
+
+.prose-invert ol {
+  @apply list-decimal pl-6 text-gray-300 mb-4;
+}
+
+.prose-invert li {
+  @apply mb-1;
+}
+
+.prose-invert strong {
+  @apply text-white font-semibold;
+}
+
+.prose-invert em {
+  @apply text-gray-200 italic;
+}
+
+/* @-mention chip */
+.mention {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 text-sm font-medium cursor-pointer hover:bg-violet-500/30 transition-colors;
+}
+
+.mention::before {
+  content: "@";
+  @apply text-violet-400 mr-0.5;
+}
+
+/* Slash command (hidden after insertion) */
+.slash-command {
+  display: none;
+}
+
+/* Empty editor placeholder */
+.is-editor-empty::before {
+  content: attr(data-placeholder);
+  @apply text-gray-600 absolute pointer-events-none;
+}
+
+/* Tippy tooltips for autocomplete */
+.tippy-box {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.tippy-content {
+  padding: 0 !important;
+}
+
+/* ── Timeline: New-event pulse animation ─────────────────── */
+
+@keyframes pulse-new {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
+.animate-pulse-new {
+  animation: pulse-new 1s ease-in-out 3;
 }

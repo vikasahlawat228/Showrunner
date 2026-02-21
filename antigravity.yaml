@@ -1,4 +1,9 @@
 name: Manual Demo Project
 version: 0.1.0
+default_model: gemini/gemini-2.0-flash
+model_overrides:
+  research_agent: gemini/gemini-2.0-pro
+  writing_agent: anthropic/claude-3.5-sonnet
+  prompt_composer: openai/gpt-4o
 variables:
   target_audience: General

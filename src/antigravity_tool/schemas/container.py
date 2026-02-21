@@ -82,7 +82,30 @@ class GenericContainer(AntigravityBase):
     container_type: str  # References a ContainerSchema.name
     name: str  # Display name for this specific instance
     attributes: Dict[str, Any] = Field(default_factory=dict)
-    
-    # Relationships can be handled as a special attribute or a separate table
-    # For now, let's keep it in attributes or a list of IDs
     relationships: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # ── Phase F additions ─────────────────────────────────────────
+    context_window: Optional[str] = Field(
+        default=None,
+        description="LLM-friendly auto-summary of this container's content.",
+    )
+    timeline_positions: List[str] = Field(
+        default_factory=list,
+        description="Story positions, e.g. ['S1.Arc1.Act2.Ch3.Sc5'].",
+    )
+    tags: List[str] = Field(
+        default_factory=list,
+        description="Free-form labels, e.g. ['#act1', '#subplot-revenge'].",
+    )
+    model_preference: Optional[str] = Field(
+        default=None,
+        description="LiteLLM model override for AI calls involving this container.",
+    )
+    parent_id: Optional[str] = Field(
+        default=None,
+        description="Hierarchical parent container ID (e.g. Chapter → Act).",
+    )
+    sort_order: int = Field(
+        default=0,
+        description="Position among sibling containers under the same parent.",
+    )
