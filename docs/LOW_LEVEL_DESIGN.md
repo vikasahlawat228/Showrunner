@@ -1,6 +1,6 @@
 # Showrunner Low-Level Design Document
-**Status:** Phase F–I Blueprint (supersedes Alpha v2.0)
-**Last Updated:** 2026-02-21
+**Status:** Phase F–K Blueprint (supersedes Alpha v2.0)
+**Last Updated:** 2026-02-22
 
 ---
 
@@ -134,6 +134,9 @@ src/web/src/app/
 | `assets.py` | `ReferenceLibrary`, `ReferenceImage`, `ReferenceType` | Image reference library | Core |
 | `style_guide.py` | `VisualStyleGuide`, `NarrativeStyleGuide` | Style guides | Core |
 | `genre.py` | `GenrePreset` | Genre presets | Core |
+| `chat.py` | `ChatMessage`, `ChatSession`, `ChatSessionSummary`, `ChatActionTrace`, `AgentInvocation`, `ChatArtifact`, `ChatCompactionResult`, `ChatEvent`, `ToolIntent`, `SessionState`, `AutonomyLevel`, `BackgroundTask` | Agentic Chat models — session, message, Glass Box trace, streaming events | J |
+| `project_memory.py` | `ProjectMemory`, `MemoryEntry`, `MemoryScope` | Persistent project-level memory (decisions, world rules, style guide) — auto-injected into every chat context | J |
+| `dal.py` | `SyncMetadata`, `CacheEntry`, `CacheStats`, `ContextScope`, `ProjectSnapshot`, `UnitOfWorkEntry`, `DBHealthReport` | Unified Data Access Layer models — caching, sync, batch loading, maintenance | K |
 
 ### 2.2 `GenericContainer` — Phase F Additions
 
@@ -243,6 +246,329 @@ class ContextResult:
 
 > **Phase F action:** Promote `ContextResult` from a dataclass to a Pydantic `BaseModel` in `schemas/` for API serialization, and add `source_container_ids: List[str]` for traceability.
 
+### 2.5 Chat Pydantic Models — Phase J
+
+#### Core Chat Models (`src/antigravity_tool/schemas/chat.py`)
+
+```python
+from enum import Enum
+from typing import List, Literal, Optional
+from pydantic import BaseModel
+from antigravity_tool.schemas.base import AntigravityBase
+
+
+class SessionState(str, Enum):
+    ACTIVE = "active"
+    COMPACTED = "compacted"
+    ENDED = "ended"
+
+
+class AutonomyLevel(int, Enum):
+    ASK = 0       # Propose every action, wait for approval
+    SUGGEST = 1   # Propose and execute on "yes", explain on ambiguity
+    EXECUTE = 2   # Act immediately for routine ops, pause for destructive actions
+
+
+class ChatSession(AntigravityBase):
+    """A chat conversation session within a project."""
+    name: str                                    # User-provided or auto-generated name
+    project_id: str                              # Project this session belongs to
+    state: SessionState = SessionState.ACTIVE
+    autonomy_level: AutonomyLevel = AutonomyLevel.SUGGEST
+    message_ids: List[str] = []                  # Ordered message IDs (loaded on demand)
+    context_budget: int = 100_000                # Max tokens for session context
+    token_usage: int = 0                         # Current token usage
+    digest: Optional[str] = None                 # Latest compaction digest
+    compaction_count: int = 0                    # How many times /compact has been called
+    background_tasks: List['BackgroundTask'] = []  # Running pipelines, research, etc.
+    tags: List[str] = []                         # User-defined session tags
+
+
+class ChatMessage(AntigravityBase):
+    """A single message in a chat session."""
+    session_id: str
+    role: Literal["user", "assistant", "system"]
+    content: str                                 # The text content
+    action_traces: List['ChatActionTrace'] = []  # Glass Box traces for this message
+    artifacts: List['ChatArtifact'] = []         # Generated content (prose, outlines, etc.)
+    mentioned_entity_ids: List[str] = []         # Container IDs from @-mentions
+    approval_state: Optional[Literal["pending", "approved", "rejected"]] = None
+
+
+class ChatActionTrace(BaseModel):
+    """Glass Box trace for a single agent/tool action within a message."""
+    tool_name: str                               # WRITE, BRAINSTORM, PIPELINE, BUCKET, etc.
+    agent_id: Optional[str] = None               # Which agent skill was invoked (if any)
+    context_summary: str                         # Human-readable context description
+    containers_used: List[str] = []              # Container IDs included in context
+    model_used: str                              # LiteLLM model string (from cascade)
+    duration_ms: int                             # Execution time
+    token_usage_in: int = 0                      # Input tokens
+    token_usage_out: int = 0                     # Output tokens
+    result_preview: str = ""                     # Truncated result for display
+    sub_invocations: List['AgentInvocation'] = []  # Agent-to-agent calls
+
+
+class AgentInvocation(BaseModel):
+    """Record of one agent invoking another agent."""
+    caller_agent_id: str                         # Agent that initiated the call
+    callee_agent_id: str                         # Agent that was invoked
+    intent: str                                  # What the caller needed
+    depth: int                                   # 0 = root, max 3
+    trace: 'ChatActionTrace'                     # Full trace of the sub-invocation
+
+
+class ChatArtifact(BaseModel):
+    """Generated content that can be previewed in the Artifact Preview panel."""
+    artifact_type: Literal["prose", "outline", "schema", "panel", "diff", "table", "yaml"]
+    title: str
+    content: str                                 # The generated content
+    container_id: Optional[str] = None           # If saved as a container
+    is_saved: bool = False
+
+
+class ChatCompactionResult(BaseModel):
+    """Result of a /compact operation."""
+    digest: str                                  # LLM-generated summary (~2K tokens)
+    original_message_count: int                  # Messages before compaction
+    token_reduction: int                         # Tokens freed
+    preserved_entities: List[str]                # Container IDs preserved in digest
+    compaction_number: int                       # Which compaction this is (1, 2, 3...)
+
+
+class ChatSessionSummary(BaseModel):
+    """Lightweight session info for the SessionPicker."""
+    id: str
+    name: str
+    state: SessionState
+    message_count: int
+    created_at: str
+    updated_at: str
+    tags: List[str] = []
+    last_message_preview: str = ""
+
+
+class BackgroundTask(BaseModel):
+    """Tracks a background operation running within a chat session."""
+    task_id: str
+    task_type: Literal["pipeline", "research", "bulk_create", "analysis"]
+    label: str                                   # Human-readable description
+    pipeline_run_id: Optional[str] = None        # If task_type == "pipeline"
+    progress: float = 0.0                        # 0.0 to 1.0
+    state: Literal["running", "paused", "completed", "failed"] = "running"
+
+
+class ToolIntent(BaseModel):
+    """Classified intent from a user message."""
+    tool: str                                    # Tool category (WRITE, PIPELINE, etc.)
+    confidence: float                            # Classification confidence 0.0–1.0
+    params: dict = {}                            # Extracted parameters
+    requires_approval: bool = False              # Whether this action needs explicit approval
+
+
+class ChatEvent(BaseModel):
+    """SSE event streamed to the frontend during message processing."""
+    event_type: Literal[
+        "token",              # Partial response token
+        "action_trace",       # Glass Box trace complete
+        "artifact",           # Generated content ready for preview
+        "approval_needed",    # Agent action needs writer approval
+        "background_update",  # Background task progress
+        "complete",           # Message processing finished
+        "error",              # Error occurred
+    ]
+    data: dict                                   # Event-specific payload
+```
+
+#### Project Memory Models (`src/antigravity_tool/schemas/project_memory.py`)
+
+```python
+from enum import Enum
+from typing import List, Optional
+from pydantic import BaseModel
+from antigravity_tool.schemas.base import AntigravityBase
+
+
+class MemoryScope(str, Enum):
+    GLOBAL = "global"          # Applies to entire project
+    CHAPTER = "chapter"        # Applies to a specific chapter
+    SCENE = "scene"            # Applies to a specific scene
+    CHARACTER = "character"    # Applies to a specific character
+
+
+class MemoryEntry(BaseModel):
+    """A single persistent memory entry."""
+    key: str                                     # Unique identifier (e.g., "tone", "pov-style")
+    value: str                                   # The memory content
+    scope: MemoryScope = MemoryScope.GLOBAL
+    scope_id: Optional[str] = None               # Container ID for non-global scopes
+    source: str = "user_decision"                # "user_decision", "agent_learned", "style_guide"
+    auto_inject: bool = True                     # Include in every chat context?
+    created_at: str = ""                         # ISO timestamp
+
+
+class ProjectMemory(AntigravityBase):
+    """Persistent project-level memory — auto-injected into every chat context."""
+    entries: List[MemoryEntry] = []
+
+    def get_auto_inject_entries(self, scope: Optional[MemoryScope] = None,
+                                 scope_id: Optional[str] = None) -> List[MemoryEntry]:
+        """Get all entries that should be auto-injected, optionally filtered by scope."""
+        ...
+
+    def to_context_string(self) -> str:
+        """Render all auto-inject entries as a formatted context block."""
+        ...
+```
+
+### 2.7 DAL Pydantic Models — Phase K
+
+Located in `schemas/dal.py`. These models support the Unified Data Access Layer (§17 in DESIGN.md).
+
+```python
+"""Data Access Layer schemas — caching, sync, batch loading, maintenance."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar
+
+from pydantic import BaseModel, Field
+
+T = TypeVar("T")
+
+
+# ── Sync & Indexing ─────────────────────────────────────────────
+
+class SyncMetadata(BaseModel):
+    """Tracks the last-indexed state of a YAML file for incremental sync."""
+
+    yaml_path: str                            # Absolute path to the YAML file
+    entity_id: str                            # ID of the indexed entity
+    entity_type: str                          # 'character', 'scene', 'container', etc.
+    content_hash: str                         # SHA-256 of file content at index time
+    mtime: float                              # os.stat().st_mtime at index time
+    indexed_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    file_size: int                            # Bytes — for quick change detection
+
+
+# ── Caching ────────────────────────────────────────────────────
+
+class CacheEntry(BaseModel, Generic[T]):
+    """A single cached entity with mtime-based invalidation metadata."""
+
+    entity: Any                               # The cached Pydantic model instance
+    path: str                                 # Absolute YAML path
+    mtime: float                              # File mtime when cached
+    accessed_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    size_bytes: int = 0                       # Approximate memory footprint
+
+
+class CacheStats(BaseModel):
+    """Cache performance metrics."""
+
+    size: int = 0                             # Current entries in cache
+    max_size: int = 500                       # Configured capacity
+    hits: int = 0                             # Cache hit count
+    misses: int = 0                           # Cache miss count
+    evictions: int = 0                        # LRU eviction count
+    hit_rate: float = 0.0                     # hits / (hits + misses)
+
+
+# ── Context Assembly ────────────────────────────────────────────
+
+class ContextScope(BaseModel):
+    """Defines what context to assemble and how to render it."""
+
+    step: str                                 # Workflow step: "scene_writing", "evaluation", etc.
+    access_level: Literal["story", "author"] = "story"
+    chapter: Optional[int] = None             # Scope to specific chapter
+    scene: Optional[int] = None               # Scope to specific scene
+    character_name: Optional[str] = None      # Scope to specific character
+    token_budget: int = 100_000               # Max tokens for assembled context
+    output_format: Literal["template", "structured", "raw"] = "template"
+    include_relationships: bool = True        # Include 1-hop KG neighbors
+    semantic_query: Optional[str] = None      # Optional semantic search query for RAG
+
+
+class ProjectSnapshot(BaseModel):
+    """Pre-loaded batch of entities for a given context scope.
+
+    Assembled by ProjectSnapshotFactory.load() in a single pass
+    through SQLite index + MtimeCache + YAML hydration.
+    """
+
+    world: Optional[Dict[str, Any]] = None
+    characters: List[Dict[str, Any]] = Field(default_factory=list)
+    story_structure: Optional[Dict[str, Any]] = None
+    scenes: List[Dict[str, Any]] = Field(default_factory=list)
+    screenplays: List[Dict[str, Any]] = Field(default_factory=list)
+    panels: List[Dict[str, Any]] = Field(default_factory=list)
+    style_guides: Dict[str, Any] = Field(default_factory=dict)
+    decisions: List[Dict[str, Any]] = Field(default_factory=list)
+    reader_knowledge: Optional[Dict[str, Any]] = None
+    creative_room: Optional[Dict[str, Any]] = None  # Only populated if access_level="author"
+
+    # Load metrics (Glass Box)
+    load_time_ms: int = 0
+    entities_loaded: int = 0
+    cache_hits: int = 0
+    cache_misses: int = 0
+
+
+# ── Unit of Work ────────────────────────────────────────────────
+
+class UnitOfWorkEntry(BaseModel):
+    """A single buffered mutation in a UnitOfWork transaction."""
+
+    operation: Literal["save", "delete"]
+    entity_id: str
+    entity_type: str
+    yaml_path: str
+    data: Optional[Dict[str, Any]] = None     # Serialized entity (for saves)
+    event_type: Optional[Literal["CREATE", "UPDATE", "DELETE"]] = None
+    event_payload: Optional[Dict[str, Any]] = None
+    branch_id: str = "main"                    # Event sourcing branch
+
+
+# ── DB Maintenance ──────────────────────────────────────────────
+
+class DBHealthReport(BaseModel):
+    """Comprehensive health check of the persistence layer."""
+
+    entity_counts: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Entity count by type: {'character': 5, 'scene': 12, ...}"
+    )
+    total_yaml_files: int = 0
+    total_indexed: int = 0
+    orphaned_indexes: int = 0                  # In SQLite but YAML file missing
+    stale_entries: int = 0                     # On disk but not in SQLite
+    mismatched_hashes: int = 0                 # YAML changed but index not updated
+    disk_usage_bytes: int = 0                  # Total YAML file sizes
+    index_size_bytes: int = 0                  # SQLite DB file size
+    chroma_doc_count: int = 0                  # Documents in vector index
+    event_count: int = 0                       # Events in event log
+    last_full_sync: Optional[datetime] = None
+    last_incremental_sync: Optional[datetime] = None
+    cache_stats: Optional[CacheStats] = None   # Current cache performance
+
+
+class ConsistencyIssue(BaseModel):
+    """A single YAML ↔ SQLite consistency issue found by db check."""
+
+    issue_type: Literal["orphaned_index", "stale_file", "hash_mismatch", "missing_entity"]
+    yaml_path: Optional[str] = None
+    entity_id: Optional[str] = None
+    entity_type: Optional[str] = None
+    description: str
+    auto_fixable: bool = True
+```
+
 ---
 
 ## 3. Backend Modules: Repositories
@@ -302,6 +628,371 @@ class ModelConfigRegistry:
 ```
 
 **Storage:** Reads `antigravity.yaml` at boot. No persistence — configuration changes go back to YAML via `PUT /api/v1/projects/{id}/model-config`.
+
+### 3.4 Chat Session Repository (Phase J)
+
+#### `ChatSessionRepository` (new file: `src/antigravity_tool/repositories/chat_session_repo.py`)
+
+```python
+class ChatSessionRepository:
+    """YAML-based persistence for chat sessions and messages.
+
+    Storage layout:
+      .antigravity/sessions/{session_id}/
+      ├── manifest.yaml         # ChatSession metadata
+      ├── messages/
+      │   ├── msg_{ulid}.yaml   # Individual ChatMessage files
+      │   └── ...
+      ├── digests/
+      │   ├── compact_001.yaml  # Compaction summaries
+      │   └── ...
+      └── artifacts/
+          └── artifact_{ulid}.yaml
+
+    Design decisions:
+    - Messages stored as individual files (not a single list) to support
+      large sessions without loading all messages into memory
+    - Manifest stores only metadata + ordered message IDs
+    - Digests stored separately for efficient resume (load digest without messages)
+    """
+
+    def __init__(self, project_path: Path):
+        self._sessions_dir = project_path / ".antigravity" / "sessions"
+        self._sessions_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Session CRUD ────────────────────────────────────────────
+
+    def save_session(self, session: ChatSession) -> None:
+        """Write session manifest to .antigravity/sessions/{id}/manifest.yaml."""
+        ...
+
+    def load_session(self, session_id: str) -> Optional[ChatSession]:
+        """Load session manifest. Returns None if not found."""
+        ...
+
+    def list_sessions(self) -> List[ChatSessionSummary]:
+        """List all sessions with lightweight summaries (no messages loaded)."""
+        ...
+
+    def delete_session(self, session_id: str) -> None:
+        """Archive or delete a session directory."""
+        ...
+
+    # ── Message CRUD ────────────────────────────────────────────
+
+    def save_message(self, session_id: str, message: ChatMessage) -> None:
+        """Write individual message to messages/msg_{id}.yaml."""
+        ...
+
+    def load_messages(self, session_id: str,
+                      offset: int = 0, limit: int = 50) -> List[ChatMessage]:
+        """Load messages with pagination. Most recent first."""
+        ...
+
+    def load_message(self, session_id: str, message_id: str) -> Optional[ChatMessage]:
+        """Load a single message by ID."""
+        ...
+
+    # ── Digest CRUD ─────────────────────────────────────────────
+
+    def save_digest(self, session_id: str, digest: ChatCompactionResult) -> None:
+        """Save compaction digest to digests/compact_{N}.yaml."""
+        ...
+
+    def load_latest_digest(self, session_id: str) -> Optional[ChatCompactionResult]:
+        """Load the most recent compaction digest for resume."""
+        ...
+
+    # ── Artifact CRUD ───────────────────────────────────────────
+
+    def save_artifact(self, session_id: str, artifact: ChatArtifact) -> None:
+        """Save generated artifact to artifacts/artifact_{id}.yaml."""
+        ...
+
+    def load_artifacts(self, session_id: str) -> List[ChatArtifact]:
+        """Load all artifacts for a session."""
+        ...
+```
+
+#### `ProjectMemoryRepository` (new file: `src/antigravity_tool/repositories/project_memory_repo.py`)
+
+```python
+class ProjectMemoryRepository:
+    """YAML persistence for project-level memory.
+
+    Storage: .antigravity/project_memory.yaml
+    """
+
+    def __init__(self, project_path: Path):
+        self._memory_file = project_path / ".antigravity" / "project_memory.yaml"
+
+    def load(self) -> ProjectMemory:
+        """Load project memory from YAML. Returns empty if file doesn't exist."""
+        ...
+
+    def save(self, memory: ProjectMemory) -> None:
+        """Write project memory to YAML."""
+        ...
+```
+
+### 3.5 Enhanced SQLite Schema (Phase K)
+
+Phase K extends the current `containers` table into a universal `entities` table that indexes **all entity types** (characters, scenes, world settings, style guides, story structures, and containers). This eliminates the O(n) directory-scanning lookups in `ContainerRepository.get_by_id()`.
+
+#### Full DDL
+
+```sql
+-- ══════════════════════════════════════════════════════════════
+-- Universal Entity Index (replaces/extends 'containers' table)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE entities (
+    id TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL,          -- 'character', 'scene', 'world_settings',
+                                        -- 'story_structure', 'style_guide', 'container', etc.
+    container_type TEXT,                 -- For GenericContainers only: sub-type
+                                        -- ('fragment', 'research_topic', 'pipeline_def')
+    name TEXT NOT NULL,
+    yaml_path TEXT NOT NULL UNIQUE,      -- Absolute path → O(1) file resolution
+    content_hash TEXT NOT NULL,          -- SHA-256 of YAML content
+    attributes_json TEXT,                -- JSON1 support for attribute queries
+    parent_id TEXT,                      -- Hierarchical: Season→Arc→Act→Chapter→Scene
+    sort_order INTEGER DEFAULT 0,
+    tags_json TEXT DEFAULT '[]',
+    model_preference TEXT,               -- Phase F: per-entity model override
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (parent_id) REFERENCES entities(id) ON DELETE SET NULL
+);
+
+-- Indexes for common query patterns
+CREATE INDEX idx_entity_type ON entities(entity_type);
+CREATE INDEX idx_entity_container_type ON entities(container_type);
+CREATE INDEX idx_entity_parent ON entities(parent_id);
+CREATE INDEX idx_entity_sort ON entities(sort_order);
+CREATE INDEX idx_entity_yaml_path ON entities(yaml_path);
+CREATE INDEX idx_entity_name ON entities(name);
+
+-- ══════════════════════════════════════════════════════════════
+-- Incremental Sync Metadata
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE sync_metadata (
+    yaml_path TEXT PRIMARY KEY,
+    entity_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    content_hash TEXT NOT NULL,           -- SHA-256 at index time
+    mtime REAL NOT NULL,                  -- os.stat().st_mtime at index time
+    indexed_at TEXT NOT NULL,             -- ISO timestamp
+    file_size INTEGER NOT NULL,           -- Bytes
+    FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_sync_mtime ON sync_metadata(mtime);
+CREATE INDEX idx_sync_entity_type ON sync_metadata(entity_type);
+
+-- ══════════════════════════════════════════════════════════════
+-- Relationships (unchanged from current schema)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE relationships (
+    source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    rel_type TEXT NOT NULL,
+    metadata_json TEXT,
+    PRIMARY KEY (source_id, target_id, rel_type),
+    FOREIGN KEY (source_id) REFERENCES entities(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_id) REFERENCES entities(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rel_type ON relationships(rel_type);
+CREATE INDEX idx_rel_source ON relationships(source_id);
+CREATE INDEX idx_rel_target ON relationships(target_id);
+```
+
+#### Migration Strategy
+
+```python
+class SQLiteIndexer:
+    def _migrate_to_entities(self) -> None:
+        """Migrate Phase F 'containers' table → Phase K 'entities' table.
+
+        1. Check if 'entities' table exists — skip if already migrated
+        2. CREATE TABLE entities (...)
+        3. INSERT INTO entities SELECT *, 'container' as entity_type FROM containers
+        4. Create sync_metadata entries from existing containers
+        5. DROP TABLE containers (after verification)
+        """
+```
+
+#### Entity Type Registration
+
+Typed repos register their entities into the universal index via existing `subscribe_save` / `subscribe_delete` callbacks on `YAMLRepository`:
+
+```python
+# In app lifespan — register typed repos with the indexer
+character_repo.subscribe_save(lambda path, entity: indexer.upsert_entity(
+    entity_id=entity.id,
+    entity_type="character",
+    name=entity.name,
+    yaml_path=str(path),
+    content_hash=hashlib.sha256(path.read_bytes()).hexdigest(),
+    attributes=entity.model_dump(mode="json"),
+    created_at=entity.created_at.isoformat(),
+    updated_at=entity.updated_at.isoformat(),
+))
+
+# Same pattern for WorldRepo, ChapterRepo, StoryRepo, StyleRepo, CreativeRoomRepo
+```
+
+### 3.6 MtimeCache Implementation (Phase K)
+
+New file: `src/antigravity_tool/repositories/mtime_cache.py`
+
+```python
+"""Mtime-based LRU cache for YAML repository entities.
+
+Uses file modification time for cache invalidation — a stat() syscall
+(~0.01ms) determines if the cached version is still valid, avoiding
+expensive YAML parse (~1-5ms per file).
+"""
+
+from __future__ import annotations
+
+import os
+from collections import OrderedDict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Generic, Optional, TypeVar
+
+from antigravity_tool.schemas.dal import CacheStats
+
+T = TypeVar("T")
+
+
+class MtimeCache(Generic[T]):
+    """Bounded LRU cache with file-modification-time invalidation.
+
+    Thread-safety: NOT thread-safe. For FastAPI's async workers,
+    this is fine since each worker is single-threaded. For
+    multi-threaded access, wrap with threading.Lock.
+    """
+
+    def __init__(self, max_size: int = 500):
+        self.max_size = max_size
+        self._cache: OrderedDict[str, tuple[T, float, datetime]] = OrderedDict()
+        # Internal stats
+        self._hits = 0
+        self._misses = 0
+        self._evictions = 0
+
+    def get(self, path: Path) -> Optional[T]:
+        """Return cached entity if file hasn't changed, else None.
+
+        Steps:
+        1. stat(path) → current_mtime
+        2. Compare against cached mtime
+        3. Return entity on match, None on mismatch or miss
+        """
+        key = str(path)
+        if key not in self._cache:
+            self._misses += 1
+            return None
+
+        entity, cached_mtime, _ = self._cache[key]
+        try:
+            current_mtime = os.stat(path).st_mtime
+        except OSError:
+            # File deleted or inaccessible — evict
+            del self._cache[key]
+            self._misses += 1
+            return None
+
+        if current_mtime == cached_mtime:
+            # LRU touch: move to end
+            self._cache.move_to_end(key)
+            self._cache[key] = (entity, cached_mtime, datetime.now(timezone.utc))
+            self._hits += 1
+            return entity
+
+        # Mtime changed — stale cache
+        del self._cache[key]
+        self._misses += 1
+        return None
+
+    def put(self, path: Path, entity: T) -> None:
+        """Cache entity with current file mtime. Evicts LRU if at capacity."""
+        key = str(path)
+        try:
+            mtime = os.stat(path).st_mtime
+        except OSError:
+            return  # Don't cache if we can't stat
+
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = (entity, mtime, datetime.now(timezone.utc))
+
+        while len(self._cache) > self.max_size:
+            self._cache.popitem(last=False)  # Evict oldest
+            self._evictions += 1
+
+    def invalidate(self, path: Path) -> None:
+        """Remove a specific entry (called by UnitOfWork on write)."""
+        key = str(path)
+        self._cache.pop(key, None)
+
+    def invalidate_all(self) -> None:
+        """Clear the entire cache."""
+        self._cache.clear()
+
+    def stats(self) -> CacheStats:
+        """Return current cache performance metrics."""
+        total = self._hits + self._misses
+        return CacheStats(
+            size=len(self._cache),
+            max_size=self.max_size,
+            hits=self._hits,
+            misses=self._misses,
+            evictions=self._evictions,
+            hit_rate=self._hits / total if total > 0 else 0.0,
+        )
+```
+
+**Integration with `YAMLRepository._load_file()`:**
+
+```python
+class YAMLRepository(Generic[T]):
+    def __init__(self, base_dir: Path, model_class: Type[T],
+                 cache: Optional[MtimeCache] = None):
+        self.base_dir = base_dir
+        self.model_class = model_class
+        self._cache = cache  # Injected by DI; None for backward compat
+        # ... existing fields ...
+
+    def _load_file(self, path: Path) -> T:
+        # 1. Try cache
+        if self._cache:
+            cached = self._cache.get(path)
+            if cached is not None:
+                return cached
+
+        # 2. Read from disk (existing logic)
+        data = read_yaml(path)
+        entity = self.model_class(**data)
+
+        # 3. Populate cache
+        if self._cache:
+            self._cache.put(path, entity)
+
+        return entity
+
+    def _save_file(self, path: Path, entity: T) -> Path:
+        # ... existing write logic ...
+        # After successful write, invalidate cache
+        if self._cache:
+            self._cache.invalidate(path)
+        return path
+```
 
 ---
 
@@ -392,6 +1083,1013 @@ class AgentDispatcher:
 
 The ReAct loop is implemented as a multi-turn LLM conversation within `execute()`.
 
+### 4.3 Chat Services — Phase J
+
+Four new services implement the Agentic Chat system. They follow existing patterns (constructor DI, async methods, YAML persistence) and integrate with all existing services.
+
+#### `ChatOrchestrator` (new file: `src/antigravity_tool/services/chat_orchestrator.py`)
+
+The central brain for all chat interactions. Routes user intents to tools/agents, manages the ReAct loop, and streams responses.
+
+```python
+from typing import AsyncGenerator, Dict, List, Optional
+from antigravity_tool.schemas.chat import (
+    ChatActionTrace, ChatEvent, ChatMessage, ChatSession,
+    AgentInvocation, ToolIntent, BackgroundTask,
+)
+
+MAX_AGENT_DEPTH = 3
+
+
+class ChatTool:
+    """Base class for tools the orchestrator can invoke."""
+    name: str
+    description: str
+
+    async def execute(self, params: dict, context: str,
+                      session: ChatSession) -> ChatActionTrace:
+        """Execute the tool and return a Glass Box trace."""
+        ...
+
+
+class ChatOrchestrator:
+    """Central brain for chat interactions. Routes intents to tools/agents."""
+
+    def __init__(
+        self,
+        agent_dispatcher: 'AgentDispatcher',
+        context_engine: 'ContextEngine',
+        pipeline_service: 'PipelineService',
+        container_repo: 'ContainerRepository',
+        kg_service: 'KnowledgeGraphService',
+        model_config_registry: 'ModelConfigRegistry',
+        event_service: 'EventService',
+        project_memory_service: 'ProjectMemoryService',
+    ):
+        self._agent_dispatcher = agent_dispatcher
+        self._context_engine = context_engine
+        self._pipeline_service = pipeline_service
+        self._container_repo = container_repo
+        self._kg_service = kg_service
+        self._model_config = model_config_registry
+        self._event_service = event_service
+        self._memory_service = project_memory_service
+        self._tools: Dict[str, ChatTool] = {}
+        self._register_tools()
+
+    def _register_tools(self) -> None:
+        """Register all 14 chat tools mapped to backend services.
+
+        Tools registered:
+          WRITE, BRAINSTORM, OUTLINE, RESEARCH, CONTINUITY, STYLE,
+          TRANSLATE, STORYBOARD, PIPELINE, BUCKET, SEARCH, NAVIGATE,
+          STATUS, MEMORY
+        """
+        ...
+
+    async def process_message(
+        self,
+        session: ChatSession,
+        message: str,
+        mentioned_ids: List[str] = [],
+        chat_context_manager: 'ChatContextManager' = None,
+    ) -> AsyncGenerator[ChatEvent, None]:
+        """
+        Process a user message through the full pipeline:
+
+        1. Build context (3-layer model via ChatContextManager)
+        2. Classify intent (LLM-based classification)
+        3. Check autonomy level — if Level 0, propose action and wait
+        4. Execute tool (via tool registry)
+        5. Collect ChatActionTrace (Glass Box)
+        6. If agent-to-agent needed, invoke sub-agent with depth tracking
+        7. Stream response tokens + traces + artifacts via ChatEvent
+        8. Persist message via ChatSessionService
+
+        Yields ChatEvent instances for SSE streaming.
+        """
+        # Step 1: Context assembly
+        context = await chat_context_manager.build_context(
+            session, message, mentioned_ids
+        )
+
+        # Step 2: Intent classification
+        intent = await self._classify_intent(message, context.text)
+
+        # Step 3: Autonomy check
+        if session.autonomy_level == AutonomyLevel.ASK:
+            yield ChatEvent(event_type="approval_needed", data={
+                "proposed_action": intent.tool,
+                "params": intent.params,
+                "explanation": f"I'd like to use {intent.tool} to {intent.params}",
+            })
+            return  # Wait for approval message
+
+        # Step 4–7: Execute and stream
+        trace = await self._execute_tool(intent, session, context)
+        yield ChatEvent(event_type="action_trace", data=trace.model_dump())
+        ...
+
+    async def _classify_intent(
+        self, message: str, context: str,
+    ) -> ToolIntent:
+        """
+        LLM classifies user intent into one of 14 tool categories.
+
+        Uses a fast model (e.g., gemini-flash) with the tool descriptions
+        as system prompt. Returns ToolIntent with extracted parameters.
+
+        Fallback: if classification confidence < 0.5, ask user to clarify.
+        """
+        ...
+
+    async def _execute_tool(
+        self, intent: ToolIntent, session: ChatSession, context: 'ChatContext',
+    ) -> ChatActionTrace:
+        """
+        Execute the resolved tool and collect a Glass Box trace.
+
+        Records: tool_name, agent_id, context_summary, containers_used,
+        model_used, duration_ms, token_usage, result_preview.
+        """
+        ...
+
+    async def _invoke_agent(
+        self,
+        agent_id: str,
+        intent: str,
+        context: str,
+        depth: int = 0,
+        call_chain: Optional[List[str]] = None,
+    ) -> AgentInvocation:
+        """
+        Invoke an agent with depth tracking for agent-to-agent composition.
+
+        Rules:
+        - Max depth: MAX_AGENT_DEPTH (3)
+        - Circular detection: rejects if agent_id already in call_chain
+        - Each invocation produces its own ChatActionTrace
+        - Sub-agents inherit parent context but can request additional via @-mentions
+
+        Example chain:
+          Writing Agent (depth 0)
+            → Continuity Analyst (depth 1)
+              → Research Agent (depth 2) for fact verification
+        """
+        if depth > MAX_AGENT_DEPTH:
+            raise AgentDepthExceeded(
+                f"Agent chain exceeded {MAX_AGENT_DEPTH} levels: {call_chain}"
+            )
+        call_chain = call_chain or []
+        if agent_id in call_chain:
+            raise AgentCircularCall(
+                f"Circular agent call detected: {call_chain} → {agent_id}"
+            )
+        call_chain.append(agent_id)
+
+        # Dispatch to agent via AgentDispatcher
+        skill = self._agent_dispatcher.route(agent_id)
+        result = await self._agent_dispatcher.execute(skill, intent, {"text": context})
+
+        # Build trace
+        trace = ChatActionTrace(
+            tool_name=agent_id,
+            agent_id=agent_id,
+            context_summary=f"Invoked by {call_chain[-2] if len(call_chain) > 1 else 'orchestrator'}",
+            model_used=self._model_config.resolve(agent_id=agent_id).model,
+            duration_ms=result.duration_ms,
+            token_usage_in=result.tokens_in,
+            token_usage_out=result.tokens_out,
+            result_preview=result.content[:200],
+        )
+
+        return AgentInvocation(
+            caller_agent_id=call_chain[-2] if len(call_chain) > 1 else "orchestrator",
+            callee_agent_id=agent_id,
+            intent=intent,
+            depth=depth,
+            trace=trace,
+        )
+
+    async def handle_pipeline_approval(
+        self, session: ChatSession, run_id: str, user_response: str,
+    ) -> None:
+        """
+        Translate a natural language chat response into a pipeline resume call.
+
+        Parses user intent:
+        - "approve" / "looks good" → resume with approved payload
+        - "use option B" → resume with selection
+        - "skip this step" → resume with skip flag
+        - "change model to opus" → update model config, then resume
+        - "pause" → pause the pipeline
+        - "cancel" → cancel the pipeline
+        """
+        ...
+```
+
+#### `ChatSessionService` (new file: `src/antigravity_tool/services/chat_session_service.py`)
+
+```python
+class ChatSessionService:
+    """Manages chat session lifecycle: create, messages, compact, end, resume."""
+
+    def __init__(self, project_path: Path):
+        self._repo = ChatSessionRepository(project_path)
+
+    async def create_session(
+        self, name: str, project_id: str,
+        autonomy_level: AutonomyLevel = AutonomyLevel.SUGGEST,
+    ) -> ChatSession:
+        """Create a new chat session with initial Project Memory injection."""
+        session = ChatSession(
+            name=name,
+            project_id=project_id,
+            autonomy_level=autonomy_level,
+        )
+        self._repo.save_session(session)
+        return session
+
+    async def add_message(self, session_id: str, message: ChatMessage) -> None:
+        """Persist a message and update session token usage."""
+        session = self._repo.load_session(session_id)
+        session.message_ids.append(message.id)
+        session.token_usage += self._estimate_tokens(message.content)
+        self._repo.save_message(session_id, message)
+        self._repo.save_session(session)
+
+    async def compact_session(self, session_id: str,
+                               llm_summarize_fn) -> ChatCompactionResult:
+        """
+        Trigger /compact:
+        1. Load all messages since last compaction
+        2. Call LLM to summarize into ~2K token digest
+        3. Preserve story-critical entities (mentioned container IDs)
+        4. Save digest, update session state
+        5. Reset token_usage to digest size
+        """
+        ...
+
+    async def end_session(self, session_id: str, summary: str) -> ChatCompactionResult:
+        """
+        Trigger /end:
+        1. Generate final digest (if not already compacted)
+        2. Persist end summary and stats
+        3. Set state to ENDED
+        4. Suggest "next steps" based on session content
+        """
+        ...
+
+    async def resume_session(self, session_id: str) -> ChatSession:
+        """
+        Resume a previously ended session:
+        1. Load session manifest
+        2. Load latest digest (not full messages)
+        3. Set state back to ACTIVE
+        4. Return session ready for new messages
+        """
+        ...
+
+    async def list_sessions(self, project_id: str) -> List[ChatSessionSummary]:
+        """List all sessions with lightweight summaries for SessionPicker."""
+        return self._repo.list_sessions()
+
+    async def get_session(self, session_id: str) -> Optional[ChatSession]:
+        """Load full session metadata."""
+        return self._repo.load_session(session_id)
+
+    async def get_messages(self, session_id: str,
+                            offset: int = 0, limit: int = 50) -> List[ChatMessage]:
+        """Load paginated messages for a session."""
+        return self._repo.load_messages(session_id, offset, limit)
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Estimate token count (4 chars ≈ 1 token, matching ContextEngine)."""
+        return len(text) // 4
+```
+
+#### `ProjectMemoryService` (new file: `src/antigravity_tool/services/project_memory_service.py`)
+
+```python
+class ProjectMemoryService:
+    """Manages persistent project-level memory.
+
+    This is the story's equivalent of CLAUDE.md — decisions, world rules,
+    style preferences, and character DNA that persist across all sessions.
+    """
+
+    def __init__(self, project_path: Path):
+        self._repo = ProjectMemoryRepository(project_path)
+
+    async def get_memory(self) -> ProjectMemory:
+        """Load project memory."""
+        return self._repo.load()
+
+    async def add_entry(
+        self, key: str, value: str,
+        scope: MemoryScope = MemoryScope.GLOBAL,
+        scope_id: Optional[str] = None,
+        source: str = "user_decision",
+        auto_inject: bool = True,
+    ) -> MemoryEntry:
+        """
+        Add or update a memory entry.
+
+        Examples:
+          "remember: always use present tense" → key="tense", value="present tense", scope=GLOBAL
+          "remember for Zara: she never smiles" → key="zara-smile", scope=CHARACTER, scope_id="zara_id"
+        """
+        memory = self._repo.load()
+        entry = MemoryEntry(
+            key=key, value=value, scope=scope, scope_id=scope_id,
+            source=source, auto_inject=auto_inject,
+        )
+        # Replace if key exists, otherwise append
+        memory.entries = [e for e in memory.entries if e.key != key]
+        memory.entries.append(entry)
+        self._repo.save(memory)
+        return entry
+
+    async def remove_entry(self, key: str) -> bool:
+        """Remove a memory entry by key. Returns True if found and removed."""
+        memory = self._repo.load()
+        original_count = len(memory.entries)
+        memory.entries = [e for e in memory.entries if e.key != key]
+        if len(memory.entries) < original_count:
+            self._repo.save(memory)
+            return True
+        return False
+
+    async def get_auto_inject_context(
+        self,
+        scope: Optional[MemoryScope] = None,
+        scope_id: Optional[str] = None,
+    ) -> str:
+        """
+        Render all auto-inject entries as a formatted context block.
+
+        Returns a string like:
+          ## Project Memory
+          - **Tone:** Dark fantasy, literary
+          - **POV:** Close third-person, present tense
+          - **World Rule:** Magic costs memories (Whisper Magic)
+          - **Zara:** Never smiles (CHARACTER scope)
+        """
+        memory = self._repo.load()
+        return memory.to_context_string()
+
+    async def list_entries(
+        self, scope: Optional[MemoryScope] = None,
+    ) -> List[MemoryEntry]:
+        """List memory entries, optionally filtered by scope."""
+        memory = self._repo.load()
+        if scope:
+            return [e for e in memory.entries if e.scope == scope]
+        return memory.entries
+```
+
+#### `ChatContextManager` (new file: `src/antigravity_tool/services/chat_context_manager.py`)
+
+```python
+from dataclasses import dataclass
+from typing import List, Optional
+
+
+@dataclass
+class ChatContext:
+    """Assembled context for a chat message."""
+    text: str                          # Full context string
+    token_estimate: int                # Estimated token count
+    layer1_tokens: int                 # Project Memory tokens
+    layer2_tokens: int                 # Session History tokens
+    layer3_tokens: int                 # On-Demand Retrieval tokens
+    entity_ids_included: List[str]     # Container IDs in context
+
+
+class ChatContextManager:
+    """Assembles context for chat messages using the Three-Layer Model.
+
+    Layer 1: Project Memory (always present, ~500–2K tokens)
+    Layer 2: Session Context (conversation history, within budget)
+    Layer 3: On-Demand Retrieval (@-mentioned entities, semantic search)
+    """
+
+    def __init__(
+        self,
+        session_service: ChatSessionService,
+        memory_service: ProjectMemoryService,
+        context_engine: 'ContextEngine',
+    ):
+        self._session_service = session_service
+        self._memory_service = memory_service
+        self._context_engine = context_engine
+
+    async def build_context(
+        self,
+        session: ChatSession,
+        message: str,
+        mentioned_ids: List[str] = [],
+    ) -> ChatContext:
+        """
+        Assemble the three-layer context:
+
+        1. Layer 1 — Project Memory:
+           memory_service.get_auto_inject_context()
+           Always included. ~500–2K tokens.
+
+        2. Layer 2 — Session History:
+           Load recent messages from session (within token budget).
+           If session has a digest, include digest instead of full history.
+           Budget = session.context_budget - layer1_tokens - estimated_layer3
+
+        3. Layer 3 — On-Demand Retrieval:
+           For each mentioned_id: load full container data via ContextEngine
+           If no explicit @-mentions: run semantic search on message text
+           to auto-detect relevant entities.
+
+        Total must fit within session.context_budget.
+        """
+        ...
+
+    async def compact(self, session: ChatSession) -> ChatCompactionResult:
+        """
+        Summarize conversation into a ~2K token digest.
+
+        Uses LLM (fast model via ModelConfigRegistry) to:
+        1. Read all messages since last compaction
+        2. Extract: key decisions, entity states, pending actions, writer preferences
+        3. Produce a structured digest preserving story-critical info
+        4. Discard routine exchanges (greetings, minor edits, etc.)
+
+        The digest replaces the full history in Layer 2 for future messages.
+        """
+        ...
+
+    def _should_suggest_compact(self, session: ChatSession) -> bool:
+        """Returns True if token usage exceeds 80% of budget."""
+        return session.token_usage > (session.context_budget * 0.8)
+```
+
+### 4.4 UnitOfWork Service (Phase K)
+
+New file: `src/antigravity_tool/services/unit_of_work.py`
+
+The `UnitOfWork` enforces atomic writes across YAML, SQLite index, and EventService. Services buffer mutations, then commit them in a single transaction.
+
+```python
+"""Atomic write coordinator for YAML + SQLite + EventService.
+
+Ensures the 'Key Invariant' from §12 (End-to-End Mutation) is
+structurally enforced, not left to convention.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+import os
+import tempfile
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
+from antigravity_tool.repositories.event_sourcing_repo import EventService
+from antigravity_tool.repositories.mtime_cache import MtimeCache
+from antigravity_tool.schemas.dal import UnitOfWorkEntry
+from antigravity_tool.utils.io import write_yaml
+
+logger = logging.getLogger(__name__)
+
+
+class UnitOfWork:
+    """Ensures YAML + SQLite + EventService writes are atomic.
+
+    Usage:
+        async with UnitOfWork(indexer, event_service, chroma, cache) as uow:
+            uow.save("char_01", "character", "/path/to/hero.yaml",
+                      data=hero.model_dump(mode="json"))
+            uow.save("scene_01", "scene", "/path/to/scene.yaml",
+                      data=scene.model_dump(mode="json"))
+            # commit() is called automatically on exit
+            # rollback() is called automatically on exception
+    """
+
+    def __init__(
+        self,
+        indexer: SQLiteIndexer,
+        event_service: EventService,
+        chroma_indexer: Optional[Any] = None,
+        cache: Optional[MtimeCache] = None,
+    ):
+        self._indexer = indexer
+        self._event_service = event_service
+        self._chroma = chroma_indexer
+        self._cache = cache
+        self._entries: List[UnitOfWorkEntry] = []
+        self._temp_files: List[tuple[str, str]] = []  # (temp_path, final_path)
+
+    def save(
+        self,
+        entity_id: str,
+        entity_type: str,
+        yaml_path: str,
+        data: Dict[str, Any],
+        name: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        event_type: str = "CREATE",
+        branch_id: str = "main",
+    ) -> None:
+        """Buffer a save operation."""
+        self._entries.append(UnitOfWorkEntry(
+            operation="save",
+            entity_id=entity_id,
+            entity_type=entity_type,
+            yaml_path=yaml_path,
+            data=data,
+            event_type=event_type,
+            event_payload=data,
+            branch_id=branch_id,
+        ))
+
+    def delete(
+        self,
+        entity_id: str,
+        yaml_path: str,
+        branch_id: str = "main",
+    ) -> None:
+        """Buffer a delete operation."""
+        self._entries.append(UnitOfWorkEntry(
+            operation="delete",
+            entity_id=entity_id,
+            entity_type="",
+            yaml_path=yaml_path,
+            event_type="DELETE",
+            event_payload={"id": entity_id},
+            branch_id=branch_id,
+        ))
+
+    def commit(self) -> None:
+        """Execute all buffered operations atomically.
+
+        Commit sequence:
+        1. Write YAML to temp files (.tmp suffix)
+        2. BEGIN SQLite transaction
+        3. Upsert entities + sync_metadata into SQLite
+        4. Append events to EventService
+        5. Atomic rename: temp → final for each YAML file
+        6. COMMIT SQLite transaction
+        7. Invalidate MtimeCache for affected paths
+        8. Async ChromaDB upsert (non-fatal)
+
+        On failure at any step: temp files deleted, SQLite auto-rollback,
+        original YAML files untouched.
+        """
+        if not self._entries:
+            return
+
+        try:
+            # Step 1: Write temps
+            for entry in self._entries:
+                if entry.operation == "save" and entry.data:
+                    temp_path = entry.yaml_path + ".tmp"
+                    Path(temp_path).parent.mkdir(parents=True, exist_ok=True)
+                    write_yaml(Path(temp_path), entry.data)
+                    self._temp_files.append((temp_path, entry.yaml_path))
+
+            # Steps 2-4: SQLite transaction + events
+            with self._indexer.conn:  # SQLite context manager = transaction
+                for entry in self._entries:
+                    if entry.operation == "save" and entry.data:
+                        content_hash = hashlib.sha256(
+                            Path(entry.yaml_path + ".tmp").read_bytes()
+                        ).hexdigest()
+                        self._indexer.upsert_container(
+                            container_id=entry.entity_id,
+                            container_type=entry.entity_type,
+                            name=entry.data.get("name", entry.entity_id),
+                            yaml_path=entry.yaml_path,
+                            attributes=entry.data,
+                            created_at=entry.data.get("created_at", ""),
+                            updated_at=entry.data.get("updated_at", ""),
+                            parent_id=entry.data.get("parent_id"),
+                        )
+                    elif entry.operation == "delete":
+                        self._indexer.delete_container(entry.entity_id)
+
+                    # Append event
+                    if entry.event_type and entry.event_payload:
+                        self._event_service.append_event(
+                            parent_event_id=None,
+                            branch_id=entry.branch_id,
+                            event_type=entry.event_type,
+                            container_id=entry.entity_id,
+                            payload=entry.event_payload,
+                        )
+
+            # Step 5: Atomic rename
+            for temp_path, final_path in self._temp_files:
+                os.rename(temp_path, final_path)
+
+            # Step 6: SQLite already committed (context manager)
+
+            # Step 7: Invalidate cache
+            if self._cache:
+                for entry in self._entries:
+                    self._cache.invalidate(Path(entry.yaml_path))
+
+            # Step 8: Async ChromaDB (non-fatal)
+            if self._chroma:
+                for entry in self._entries:
+                    if entry.operation == "save" and entry.data:
+                        try:
+                            text = f"{entry.data.get('name', '')} {entry.data}"
+                            self._chroma.upsert(entry.entity_id, text[:2000])
+                        except Exception as exc:
+                            logger.warning("ChromaDB upsert failed for %s: %s",
+                                           entry.entity_id, exc)
+
+        except Exception:
+            # Cleanup temp files on failure
+            for temp_path, _ in self._temp_files:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+            raise
+        finally:
+            self._entries.clear()
+            self._temp_files.clear()
+
+    def rollback(self) -> None:
+        """Discard all buffered operations without writing."""
+        self._entries.clear()
+        self._temp_files.clear()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None:
+            self.commit()
+        else:
+            self.rollback()
+        return False  # Don't suppress exceptions
+```
+
+### 4.5 ProjectSnapshotFactory (Phase K)
+
+New file: `src/antigravity_tool/services/project_snapshot.py`
+
+Batch-loads all project data needed for a context scope in a single pass through the SQLite index + MtimeCache.
+
+```python
+"""Batch loader for context assembly — replaces N individual YAML reads
+with a single SQLite query + cached hydration pass.
+"""
+
+from __future__ import annotations
+
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
+from antigravity_tool.repositories.mtime_cache import MtimeCache
+from antigravity_tool.schemas.dal import ContextScope, ProjectSnapshot
+from antigravity_tool.utils.io import read_yaml
+
+
+# Maps workflow steps to the entity types needed
+STEP_ENTITY_MAP: Dict[str, List[str]] = {
+    "world_building": ["world_settings"],
+    "character_creation": ["world_settings", "character", "style_guide"],
+    "story_structure": ["world_settings", "character", "story_structure"],
+    "scene_writing": [
+        "world_settings", "character", "story_structure",
+        "scene", "style_guide", "decision",
+    ],
+    "screenplay_writing": ["scene", "character", "style_guide"],
+    "panel_division": ["screenplay", "style_guide", "character"],
+    "image_prompt_generation": ["panel", "style_guide", "character"],
+    "evaluation": [
+        "world_settings", "character", "story_structure",
+        "scene", "creative_room", "style_guide", "decision",
+    ],
+    "creative_room": ["creative_room"],
+}
+
+
+class ProjectSnapshotFactory:
+    """Batch-loads project data for a given context scope in a single pass.
+
+    Algorithm:
+    1. Look up required entity types from STEP_ENTITY_MAP
+    2. Query SQLite for matching entities (with scope filters)
+    3. For each entity: check MtimeCache
+    4. Hydrate from YAML only on cache miss
+    5. Return pre-loaded ProjectSnapshot
+    """
+
+    def __init__(
+        self,
+        indexer: SQLiteIndexer,
+        cache: MtimeCache,
+    ):
+        self._indexer = indexer
+        self._cache = cache
+
+    def load(self, scope: ContextScope) -> ProjectSnapshot:
+        """Batch-load all entities needed for the given context scope."""
+        start = time.monotonic()
+        snapshot = ProjectSnapshot()
+        hits = 0
+        misses = 0
+
+        # Determine which entity types to load
+        entity_types = STEP_ENTITY_MAP.get(scope.step, [])
+
+        # Filter by scope
+        for etype in entity_types:
+            # Skip creative_room unless author access
+            if etype == "creative_room" and scope.access_level != "author":
+                continue
+
+            # Query SQLite index
+            filters: Dict[str, Any] = {}
+            if scope.chapter is not None and etype in ("scene", "screenplay", "panel"):
+                filters["parent_id"] = f"chapter-{scope.chapter:02d}"
+
+            rows = self._indexer.query_containers(
+                container_type=etype, filters=filters if filters else None
+            )
+
+            # Hydrate each entity
+            for row in rows:
+                yaml_path = Path(row["yaml_path"])
+
+                # Try cache first
+                cached = self._cache.get(yaml_path)
+                if cached is not None:
+                    entity_data = cached if isinstance(cached, dict) else cached.model_dump(mode="json")
+                    hits += 1
+                else:
+                    # Cache miss — read from disk
+                    entity_data = read_yaml(yaml_path)
+                    self._cache.put(yaml_path, entity_data)
+                    misses += 1
+
+                # Route into snapshot fields
+                self._route_entity(snapshot, etype, entity_data)
+
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        snapshot.load_time_ms = elapsed_ms
+        snapshot.entities_loaded = hits + misses
+        snapshot.cache_hits = hits
+        snapshot.cache_misses = misses
+        return snapshot
+
+    def _route_entity(
+        self, snapshot: ProjectSnapshot, etype: str, data: Dict[str, Any]
+    ) -> None:
+        """Route a loaded entity into the correct snapshot field."""
+        if etype == "world_settings":
+            snapshot.world = data
+        elif etype == "character":
+            snapshot.characters.append(data)
+        elif etype == "story_structure":
+            snapshot.story_structure = data
+        elif etype == "scene":
+            snapshot.scenes.append(data)
+        elif etype == "screenplay":
+            snapshot.screenplays.append(data)
+        elif etype == "panel":
+            snapshot.panels.append(data)
+        elif etype == "style_guide":
+            snapshot.style_guides[data.get("name", "default")] = data
+        elif etype == "decision":
+            snapshot.decisions.append(data)
+        elif etype == "creative_room":
+            snapshot.creative_room = data
+```
+
+### 4.6 Unified ContextAssembler (Phase K)
+
+New file: `src/antigravity_tool/services/context_assembler.py`
+
+Merges the CLI's `ContextCompiler` (Jinja2 templates, no token budget) and the Web's `ContextEngine` (token budget, Glass Box, no templates) into a single service.
+
+```python
+"""Unified context assembly for CLI, Web, and Chat paths.
+
+Replaces the dual-pipeline problem where ContextCompiler (CLI) and
+ContextEngine (Web) had completely different implementations for the
+same task — assembling context for LLM prompts.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any, Dict, List, Optional
+
+from antigravity_tool.core.template_engine import TemplateEngine
+from antigravity_tool.schemas.dal import ContextScope, ProjectSnapshot
+from antigravity_tool.services.context_engine import ContextResult, ContextBucketInfo
+from antigravity_tool.services.project_snapshot import ProjectSnapshotFactory
+
+logger = logging.getLogger(__name__)
+
+
+# Maps workflow steps to their Jinja2 template (for "template" output_format)
+STEP_TEMPLATE_MAP: Dict[str, str] = {
+    "world_building": "world/build_setting.md.j2",
+    "character_creation": "character/create_character.md.j2",
+    "story_structure": "story/outline_beats.md.j2",
+    "scene_writing": "scene/write_scene.md.j2",
+    "screenplay_writing": "screenplay/scene_to_screenplay.md.j2",
+    "panel_division": "panel/divide_panels.md.j2",
+    "image_prompt_generation": "panel/panel_to_image_prompt.md.j2",
+    "evaluation": "evaluate/evaluate_scene.md.j2",
+    "creative_room": "creative_room/extract_knowledge.md.j2",
+}
+
+
+class ContextAssembler:
+    """Unified context assembly for CLI, Web, and Chat paths.
+
+    Pipeline:
+    1. ProjectSnapshotFactory.load(scope) — batch-load from SQLite + cache
+    2. Apply creative room isolation (access_level check)
+    3. Inject decisions (scoped to current context)
+    4. Apply token budget (rank by relevance, drop least relevant)
+    5. Render output (Jinja2 | structured text | raw dict)
+    6. Collect Glass Box metadata
+    """
+
+    def __init__(
+        self,
+        snapshot_factory: ProjectSnapshotFactory,
+        template_engine: TemplateEngine,
+        decision_log: Any,  # DecisionLog from session_manager
+        kg_service: Any,    # KnowledgeGraphService for relationship traversal
+    ):
+        self._snapshot_factory = snapshot_factory
+        self._template_engine = template_engine
+        self._decision_log = decision_log
+        self._kg_service = kg_service
+
+    def compile(self, scope: ContextScope, **extra_context) -> ContextResult:
+        """Assemble context for any consumer path.
+
+        Args:
+            scope: What to assemble and how to render it
+            **extra_context: Additional template variables (e.g., new_character_name)
+
+        Returns:
+            ContextResult with assembled text, token estimate, and Glass Box metadata
+        """
+        # Step 1: Batch-load project data
+        snapshot = self._snapshot_factory.load(scope)
+
+        # Step 2: Build context dict from snapshot
+        context = self._build_context_dict(snapshot, scope)
+        context.update(extra_context)
+
+        # Step 3: Inject decisions
+        if self._decision_log:
+            decisions_text = self._decision_log.format_for_prompt(
+                chapter=scope.chapter,
+                scene=scope.scene,
+                character=scope.character_name,
+            )
+            if decisions_text:
+                context["author_decisions"] = decisions_text
+
+        # Step 4: Collect Glass Box metadata
+        buckets = self._collect_buckets(snapshot)
+
+        # Step 5: Apply token budget
+        context_text = self._render_context(context, scope)
+        token_estimate = len(context_text) // 4
+
+        containers_truncated = 0
+        if token_estimate > scope.token_budget:
+            context_text, containers_truncated = self._apply_token_budget(
+                context_text, scope.token_budget
+            )
+            token_estimate = len(context_text) // 4
+
+        return ContextResult(
+            text=context_text,
+            token_estimate=token_estimate,
+            containers_included=snapshot.entities_loaded,
+            containers_truncated=containers_truncated,
+            was_summarized=False,
+            buckets=buckets,
+        )
+
+    def _build_context_dict(
+        self, snapshot: ProjectSnapshot, scope: ContextScope
+    ) -> Dict[str, Any]:
+        """Convert ProjectSnapshot into the context dict expected by templates."""
+        ctx: Dict[str, Any] = {}
+
+        if snapshot.world:
+            ctx["world_summary"] = snapshot.world
+        if snapshot.characters:
+            ctx["characters"] = snapshot.characters
+        if snapshot.story_structure:
+            ctx["story_structure"] = snapshot.story_structure
+        if snapshot.scenes:
+            ctx["scenes"] = snapshot.scenes
+            ctx["previous_scenes"] = snapshot.scenes  # For scene writing
+        if snapshot.screenplays:
+            ctx["screenplays"] = snapshot.screenplays
+        if snapshot.panels:
+            ctx["panels"] = snapshot.panels
+        if snapshot.style_guides:
+            ctx["visual_style"] = snapshot.style_guides.get("visual", {})
+            ctx["narrative_style"] = snapshot.style_guides.get("narrative", {})
+        if snapshot.creative_room and scope.access_level == "author":
+            ctx["creative_room"] = snapshot.creative_room
+        if snapshot.reader_knowledge:
+            ctx["reader_knowledge"] = snapshot.reader_knowledge
+
+        return ctx
+
+    def _render_context(
+        self, context: Dict[str, Any], scope: ContextScope
+    ) -> str:
+        """Render context in the requested output format."""
+        if scope.output_format == "template":
+            template = STEP_TEMPLATE_MAP.get(scope.step)
+            if template and self._template_engine.template_exists(template):
+                return self._template_engine.render(template, **context)
+            # Fall back to structured if no template
+            return self._render_structured(context)
+
+        elif scope.output_format == "structured":
+            return self._render_structured(context)
+
+        else:  # "raw"
+            return json.dumps(context, indent=2, default=str)
+
+    def _render_structured(self, context: Dict[str, Any]) -> str:
+        """Render context as structured text with markdown headers."""
+        sections = []
+        for key, value in context.items():
+            if key.startswith("_"):
+                continue
+            if isinstance(value, list):
+                items = "\n".join(f"- {json.dumps(v, default=str)[:200]}" for v in value[:20])
+                sections.append(f"## {key}\n{items}")
+            elif isinstance(value, dict):
+                items = "\n".join(f"- **{k}**: {str(v)[:200]}" for k, v in value.items())
+                sections.append(f"## {key}\n{items}")
+            elif isinstance(value, str):
+                sections.append(f"## {key}\n{value}")
+        return "\n\n---\n\n".join(sections)
+
+    def _collect_buckets(self, snapshot: ProjectSnapshot) -> List[ContextBucketInfo]:
+        """Collect Glass Box metadata from the snapshot."""
+        buckets = []
+        if snapshot.world:
+            buckets.append(ContextBucketInfo(
+                id=snapshot.world.get("id", "world"),
+                name="World Settings",
+                container_type="world_settings",
+                summary=str(snapshot.world.get("description", ""))[:120],
+            ))
+        for char in snapshot.characters:
+            buckets.append(ContextBucketInfo(
+                id=char.get("id", ""),
+                name=char.get("name", "Unknown"),
+                container_type="character",
+                summary=str(char.get("role", ""))[:120],
+            ))
+        for scene in snapshot.scenes:
+            buckets.append(ContextBucketInfo(
+                id=scene.get("id", ""),
+                name=scene.get("title", scene.get("name", "Scene")),
+                container_type="scene",
+                summary=str(scene.get("setting", ""))[:120],
+            ))
+        return buckets
+
+    def _apply_token_budget(
+        self, text: str, budget: int
+    ) -> tuple[str, int]:
+        """Truncate text to fit within token budget."""
+        max_chars = budget * 4
+        if len(text) <= max_chars:
+            return text, 0
+        truncated = text[:max_chars]
+        truncated += "\n\n[...context truncated to fit token budget]"
+        # Estimate how many containers were dropped (rough)
+        lines_dropped = text[max_chars:].count("\n## ")
+        return truncated, lines_dropped
+```
+
 ---
 
 ## 5. Backend Modules: FastAPI Routers & Dependency Injection
@@ -461,6 +2159,9 @@ app.include_router(containers.router)             # /api/v1/containers
 
 # Phase H additions:
 app.include_router(translation.router)            # /api/v1/translation
+
+# Phase J additions:
+app.include_router(chat.router)                   # /api/v1/chat
 ```
 
 ### 5.3 Dependency Injection (`server/deps.py`)
@@ -560,9 +2261,90 @@ get_project()
 │   ├── get_pipeline_service(container_repo, event_service, context_engine, model_config_registry) → PipelineService [UPDATED]
 │   └── get_agent_dispatcher() → AgentDispatcher [LRU cached]
 │
-└── model_config_registry → AgentDispatcher (injected for model resolution)
-    model_config_registry → PipelineService (injected for model resolution)
-    context_engine → PipelineService (injected for context assembly)
+├── model_config_registry → AgentDispatcher (injected for model resolution)
+│   model_config_registry → PipelineService (injected for model resolution)
+│   context_engine → PipelineService (injected for context assembly)
+│
+└── Phase J Chat providers:
+    ├── get_chat_session_service(project) → ChatSessionService
+    ├── get_project_memory_service(project) → ProjectMemoryService
+    ├── get_chat_context_manager(session_service, memory_service, context_engine) → ChatContextManager
+    └── get_chat_orchestrator(agent_dispatcher, context_engine, pipeline_service,
+                              container_repo, kg_service, model_config_registry,
+                              event_service, memory_service) → ChatOrchestrator
+```
+
+**Phase J additions to `deps.py`:**
+
+```python
+def get_chat_session_service(
+    project: Project = Depends(get_project),
+) -> ChatSessionService:
+    """Chat session lifecycle: create, compact, end, resume."""
+    return ChatSessionService(project.path)
+
+def get_project_memory_service(
+    project: Project = Depends(get_project),
+) -> ProjectMemoryService:
+    """Persistent project-level memory (decisions, world rules, style guide)."""
+    return ProjectMemoryService(project.path)
+
+def get_chat_context_manager(
+    session_service: ChatSessionService = Depends(get_chat_session_service),
+    memory_service: ProjectMemoryService = Depends(get_project_memory_service),
+    context_engine: ContextEngine = Depends(get_context_engine),
+) -> ChatContextManager:
+    """Three-layer context assembly for chat messages."""
+    return ChatContextManager(session_service, memory_service, context_engine)
+
+def get_chat_orchestrator(
+    agent_dispatcher: AgentDispatcher = Depends(get_agent_dispatcher),
+    context_engine: ContextEngine = Depends(get_context_engine),
+    pipeline_service: PipelineService = Depends(get_pipeline_service),
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    model_config_registry: ModelConfigRegistry = Depends(get_model_config_registry),
+    event_service: EventService = Depends(get_event_service),
+    memory_service: ProjectMemoryService = Depends(get_project_memory_service),
+) -> ChatOrchestrator:
+    """Central brain for chat interactions."""
+    return ChatOrchestrator(
+        agent_dispatcher, context_engine, pipeline_service,
+        container_repo, kg_service, model_config_registry,
+        event_service, memory_service,
+    )
+
+# ── Phase K additions — Unified Data Access Layer ─────────────
+
+@lru_cache()
+def get_mtime_cache() -> MtimeCache:
+    """Singleton LRU cache with 500-entry capacity."""
+    return MtimeCache(max_size=500)
+
+def get_unit_of_work(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    event_service: EventService = Depends(get_event_service),
+    cache: MtimeCache = Depends(get_mtime_cache),
+) -> UnitOfWork:
+    """Per-request UnitOfWork for atomic YAML + SQLite + Event writes."""
+    chroma = getattr(kg_service, 'chroma_indexer', None)
+    return UnitOfWork(kg_service.indexer, event_service, chroma, cache)
+
+@lru_cache()
+def get_project_snapshot_factory(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    cache: MtimeCache = Depends(get_mtime_cache),
+) -> ProjectSnapshotFactory:
+    """Singleton batch loader for context assembly."""
+    return ProjectSnapshotFactory(kg_service.indexer, cache)
+
+def get_context_assembler(
+    factory: ProjectSnapshotFactory = Depends(get_project_snapshot_factory),
+    ctx: ServiceContext = Depends(get_service_context),
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+) -> ContextAssembler:
+    """Unified context assembly for CLI, Web, and Chat."""
+    return ContextAssembler(factory, ctx.engine, ctx.compiler.decision_log, kg_service)
 ```
 
 ### 5.4 New Endpoint Details
@@ -600,6 +2382,115 @@ get_project()
 | `POST` | `/branch` | `BranchCreate` | `BranchResponse` | Create new alternate timeline branch |
 | `GET` | `/stream` | — | SSE | Stream new event sourcing events |
 
+#### Chat Router (`/api/v1/chat`) — Phase J
+
+| Method | Path | Request Body | Response | Description |
+|--------|------|-------------|----------|-------------|
+| `POST` | `/sessions` | `ChatSessionCreate` | `ChatSession` | Create a new chat session |
+| `GET` | `/sessions` | — | `List[ChatSessionSummary]` | List all sessions for current project |
+| `GET` | `/sessions/{id}` | — | `ChatSession` | Get session with metadata (no messages) |
+| `DELETE` | `/sessions/{id}` | — | `204` | End/archive a session |
+| `POST` | `/sessions/{id}/messages` | `ChatMessageCreate` | SSE stream of `ChatEvent` | Send message; response streams via SSE |
+| `GET` | `/sessions/{id}/messages` | `?offset=0&limit=50` | `List[ChatMessage]` | Get paginated message history |
+| `GET` | `/sessions/{id}/stream` | — | SSE | Persistent SSE stream for real-time updates (background tasks, pipeline events) |
+| `POST` | `/sessions/{id}/compact` | — | `ChatCompactionResult` | Trigger context compaction |
+| `POST` | `/sessions/{id}/resume` | — | `ChatSession` | Resume an ended session |
+| `GET` | `/memory` | — | `ProjectMemory` | Get all project memory entries |
+| `POST` | `/memory` | `MemoryEntryCreate` | `MemoryEntry` | Add or update a memory entry |
+| `DELETE` | `/memory/{key}` | — | `204` | Remove a memory entry |
+| `POST` | `/sessions/{id}/messages/{mid}/approve` | `ApprovalPayload` | `ChatMessage` | Approve a pending agent action |
+| `POST` | `/sessions/{id}/messages/{mid}/reject` | `RejectionPayload` | `ChatMessage` | Reject a pending agent action |
+
+**Request/Response models:**
+
+```python
+class ChatSessionCreate(BaseModel):
+    name: str = ""                               # Auto-generated if empty
+    autonomy_level: AutonomyLevel = AutonomyLevel.SUGGEST
+    tags: List[str] = []
+
+class ChatMessageCreate(BaseModel):
+    content: str                                 # User message text
+    mentioned_entity_ids: List[str] = []         # Container IDs from @-mentions
+
+class MemoryEntryCreate(BaseModel):
+    key: str
+    value: str
+    scope: MemoryScope = MemoryScope.GLOBAL
+    scope_id: Optional[str] = None
+    auto_inject: bool = True
+
+class ApprovalPayload(BaseModel):
+    action: Literal["approve", "approve_with_edit"]
+    edited_content: Optional[str] = None         # If the writer edited before approving
+
+class RejectionPayload(BaseModel):
+    reason: Optional[str] = None                 # Optional rejection reason
+```
+
+**SSE streaming for messages:** The `POST /sessions/{id}/messages` endpoint returns an `EventSourceResponse` that streams `ChatEvent` objects as the `ChatOrchestrator` processes the message. This enables:
+- Progressive token streaming (response appears word-by-word)
+- Real-time `ChatActionTrace` delivery (Glass Box blocks appear as actions complete)
+- Artifact delivery (preview panel updates when content is generated)
+- Error handling (errors stream as `ChatEvent(event_type="error")`)
+
+#### DB Maintenance Router (`/api/v1/db`) — Phase K
+
+| Method | Path | Request Body | Response | Description |
+|--------|------|-------------|----------|-------------|
+| `GET` | `/health` | — | `DBHealthReport` | Entity counts, index health, cache stats, disk usage |
+| `POST` | `/reindex` | `ReindexRequest` | SSE stream of `ReindexEvent` | Full rebuild of SQLite + ChromaDB indexes from YAML files |
+| `POST` | `/check` | — | `ConsistencyReport` | Verify YAML ↔ SQLite consistency (mismatches, orphans, stale entries) |
+| `GET` | `/stats` | — | `DBStatsResponse` | Detailed entity counts by type, cache hit rates, sync timestamps |
+
+**Request/Response models:**
+
+```python
+class ReindexRequest(BaseModel):
+    """Controls reindex scope."""
+    full: bool = True                          # True = full rebuild, False = incremental only
+    include_chroma: bool = True                # Whether to rebuild ChromaDB vectors too
+    entity_types: Optional[List[str]] = None   # If set, only reindex these types
+
+class ReindexEvent(BaseModel):
+    """SSE event emitted during reindex progress."""
+    phase: str                                 # "scanning", "indexing", "vectors", "cleanup", "complete"
+    processed: int                             # Files processed so far
+    total: int                                 # Total files to process
+    current_file: Optional[str] = None         # Currently processing
+    errors: List[str] = []                     # Non-fatal errors encountered
+
+class ConsistencyReport(BaseModel):
+    """Result of a YAML ↔ SQLite consistency check."""
+    checked_at: datetime
+    total_yaml_files: int
+    total_indexed: int
+    issues: List[ConsistencyIssue]             # From dal.py schema
+    is_consistent: bool                        # True if zero issues
+
+class DBStatsResponse(BaseModel):
+    """Detailed database statistics."""
+    entity_counts: Dict[str, int]              # {"character": 12, "scene": 45, ...}
+    total_entities: int
+    total_yaml_files: int
+    index_size_bytes: int
+    chroma_doc_count: int
+    cache_stats: Optional[CacheStats] = None   # From MtimeCache.stats()
+    last_full_sync: Optional[datetime] = None
+    last_incremental_sync: Optional[datetime] = None
+    sync_metadata_entries: int
+    orphaned_indexes: int                      # In SQLite but not on disk
+    stale_entries: int                         # On disk but not indexed
+```
+
+**SSE streaming for reindex:** The `POST /reindex` endpoint returns an `EventSourceResponse` that streams `ReindexEvent` objects as the rebuild progresses. The frontend renders a progress bar (`processed / total`) with the current file being indexed. Non-fatal errors (e.g., malformed YAML) are collected and returned in the final `complete` event without halting the reindex.
+
+**Implementation notes:**
+- `GET /health` is fast (single SQLite query + cache stats read) — safe for polling
+- `POST /reindex` acquires a global lock to prevent concurrent reindexes; returns `409 Conflict` if already running
+- `POST /check` does NOT modify any data — read-only comparison between disk and index
+- All endpoints use the `get_unit_of_work` / `get_mtime_cache` DI providers from §5.3
+
 ---
 
 ## 6. Frontend Modules
@@ -624,6 +2515,7 @@ get_project()
 |-------|------|---------------|-----------|:-----:|
 | `useZenStore` | `zenSlice.ts` | Fragments, entities, auto-save, AI commands | `currentFragmentId`, `isSaving`, `detectedEntities`, `contextEntries`, `searchResults` | A |
 | `usePipelineBuilderStore` | `pipelineBuilderSlice.ts` | Step registry, definitions, RF nodes/edges, config | `stepRegistry`, `definitions`, `nodes`, `edges`, `selectedStepId`, `activeRunId` | B |
+| `useChatStore`* | `chatSlice.ts` | **Agentic Chat** — sessions, messages, streaming, traces, artifacts, @-mentions | `sessions`, `activeSessionId`, `messages`, `isStreaming`, `streamingContent`, `actionTraces`, `activeArtifact`, `mentionSuggestions`, `backgroundTasks` | J |
 
 *Starred slices are **new** for Phase F+.
 
@@ -642,6 +2534,7 @@ get_project()
 | `research/` | `components/research/` | `ResearchDetailPanel.tsx`, `ResearchTopicCard.tsx` | Next-D |
 | `brainstorm/` | `components/brainstorm/` | `IdeaCardNode.tsx`, `SuggestionPanel.tsx` | Next-E |
 | `workbench/` | `components/workbench/` | `WorkbenchLayout.tsx`, `Canvas.tsx`, `Sidebar.tsx`, `SidebarItem.tsx`, `Inspector.tsx`, `CharacterInspector.tsx`, `CharacterProgressionTimeline.tsx`, `CharacterVoiceScorecard.tsx`, `SceneInspector.tsx`, `WorldStatus.tsx`, `WorkflowBar.tsx`, `DirectorControls.tsx` | Core+Next-B+Next-C |
+| `chat/`* | `components/chat/` | `ChatSidebar.tsx`, `ChatInput.tsx`, `ChatMessageList.tsx`, `ChatMessage.tsx`, `ActionTraceBlock.tsx`, `ArtifactPreview.tsx`, `SessionPicker.tsx`, `MentionPopover.tsx`, `BackgroundTaskIndicator.tsx`, `useChatStream.ts` | J |
 
 *Starred components are **new** for Phase F+.
 
@@ -651,6 +2544,21 @@ get_project()
 |-----------|---------|
 | `TemplateGallery.tsx` | Browse and 1-click launch pre-built workflow templates |
 | `LogicStepNode.tsx`* | Specialized React Flow node for if/else/loop steps with condition editor |
+
+**Phase J `chat/` component details:**
+
+| Component | Purpose | Key Props / State |
+|-----------|---------|-------------------|
+| `ChatSidebar.tsx` | Global collapsible sidebar on the right side of every page. Contains SessionPicker, ChatMessageList, ChatInput, and ArtifactPreview. Rendered in root `layout.tsx`. | `isOpen`, `width` (resizable), mounted on every route |
+| `ChatInput.tsx` | Message input with @-mention autocomplete and /command detection. Uses TipTap (shared with ZenEditor) for rich text input. | `onSubmit(content, mentionedIds)`, `isStreaming` (disabled during response) |
+| `ChatMessageList.tsx` | Virtualized scrolling message list (react-window). Auto-scrolls to bottom on new messages. Supports infinite scroll for history. | `messages[]`, `isStreaming`, `streamingContent` |
+| `ChatMessage.tsx` | Single message bubble with role-based styling. Contains nested ActionTraceBlock(s) and artifact links. | `message: ChatMessage`, `isStreaming` |
+| `ActionTraceBlock.tsx` | Collapsible Glass Box action block. Shows tool name, model, duration as header. Expands to show full context, containers, token counts. Nested sub-invocations render recursively. | `trace: ChatActionTrace`, `defaultExpanded: false` |
+| `ArtifactPreview.tsx` | Split-pane preview panel for generated content. Supports prose, outlines, schemas, panels, diffs. Shows alongside the chat when an artifact is active. | `artifact: ChatArtifact`, `onSave()`, `onRevise()`, `onRegenerate()` |
+| `SessionPicker.tsx` | Dropdown/modal for session management. Lists sessions with name, date, message count, tags. Supports create, resume, and end actions. | `sessions[]`, `activeSessionId`, `onSwitch(id)`, `onCreate()` |
+| `MentionPopover.tsx` | @-mention autocomplete popover. Queries KG for matching containers by type. Shows icon + name + type for each suggestion. | `query: string`, `onSelect(containerId)`, keyboard navigation |
+| `BackgroundTaskIndicator.tsx` | Compact progress indicator for background tasks (pipelines, research). Shown inline in the chat when tasks are running. | `task: BackgroundTask`, `onApprove()`, `onPause()` |
+| `useChatStream.ts` | Custom hook for SSE streaming. Connects to `GET /sessions/{id}/stream` and `POST /sessions/{id}/messages`. Demultiplexes ChatEvent types. | `useChatStream(sessionId)` → `{ streamingContent, actionTraces, artifact, isStreaming }` |
 
 ### 6.3 API Client (`lib/api.ts`)
 
@@ -695,6 +2603,21 @@ get_project()
 | **Translation** | `translate(body)`, `getGlossary()`, `addGlossaryTerm(body)` | H |
 | **Writing (additions)** | `semanticSearchContainers(query, limit?)` | H |
 | **Pipeline (additions)** | `generatePipelineFromNL(description)` | H |
+| **Chat Sessions** | `createChatSession(body)`, `listChatSessions()`, `getChatSession(id)`, `endChatSession(id)` | J |
+| **Chat Messages** | `sendChatMessage(sessionId, body)` → EventSource, `getChatMessages(sessionId, page?)` | J |
+| **Chat Lifecycle** | `compactSession(sessionId)`, `resumeSession(sessionId)` | J |
+| **Chat Actions** | `approveChatAction(sessionId, messageId, body)`, `rejectChatAction(sessionId, messageId, body)` | J |
+| **Project Memory** | `getProjectMemory()`, `addMemoryEntry(body)`, `removeMemoryEntry(key)` | J |
+| **Chat Stream** | `subscribeChatStream(sessionId)` → EventSource (persistent SSE for background tasks) | J |
+
+**Phase K additions:**
+
+| Category | Methods | Phase |
+|----------|---------|:-----:|
+| **DB Health** | `getDBHealth()` → `DBHealthReport` | K |
+| **DB Reindex** | `triggerReindex(body?)` → EventSource of `ReindexEvent` | K |
+| **DB Check** | `runConsistencyCheck()` → `ConsistencyReport` | K |
+| **DB Stats** | `getDBStats()` → `DBStatsResponse` | K |
 
 ---
 
@@ -1044,6 +2967,487 @@ get_project()
      c. The writer sees "Context included: Railgun Physics in Low Gravity" in the glass box UI
 ```
 
+### 7.5 The Agentic Chat Message Flow
+
+**Scenario:** The writer types "write a scene where Zara enters the market" with @Zara and @The Market mentions in the Chat Sidebar.
+
+```
+1. USER ACTION
+   Writer types in ChatInput at any page (chat sidebar is global)
+   Types: "write a scene where Zara enters the market"
+   @-mentions: [@Zara, @The Market] resolved to container IDs
+
+2. FRONTEND → API
+   chatSlice.sendMessage(sessionId, content, mentionedIds) fires
+   POST /api/v1/chat/sessions/{sessionId}/messages
+     Body: { content: "write a scene where Zara enters the market",
+             mentioned_entity_ids: ["ulid_zara", "ulid_market"] }
+   Response: SSE EventSourceResponse (streaming)
+
+3. CHAT ROUTER → CHAT ORCHESTRATOR
+   src/antigravity_tool/server/routers/chat.py
+     @router.post("/sessions/{id}/messages")
+     async def send_message(req: ChatMessageCreate,
+                            orchestrator: ChatOrchestrator = Depends(get_chat_orchestrator),
+                            context_manager: ChatContextManager = Depends(get_chat_context_manager)):
+       → Save user message via ChatSessionService
+       → Return EventSourceResponse(orchestrator.process_message(...))
+
+4. CONTEXT ASSEMBLY (Three-Layer Model)
+   ChatContextManager.build_context(session, message, mentioned_ids):
+     a. Layer 1 — Project Memory:
+          ProjectMemoryService.get_auto_inject_context()
+          → "## Project Memory\n- Tone: Dark fantasy\n- POV: Close third, present tense\n- World Rule: Magic costs memories"
+          → ~800 tokens
+
+     b. Layer 2 — Session History:
+          Load recent messages from ChatSessionRepository (within token budget)
+          → Last 5 messages from this session (or digest if compacted)
+          → ~2,400 tokens
+
+     c. Layer 3 — On-Demand Retrieval:
+          For each mentioned_id:
+            ContextEngine.assemble_context(container_ids=["ulid_zara", "ulid_market"])
+            → Load Zara's full character DNA, The Market location details
+            → Load relationships: Zara → Cursed Blade, Market → Chapter 1
+          → ~1,800 tokens
+
+     d. Total context: ~5,000 tokens (well within 100K budget)
+
+5. INTENT CLASSIFICATION
+   ChatOrchestrator._classify_intent(message, context):
+     → LLM (fast model, e.g. gemini-flash) classifies:
+       ToolIntent{
+         tool: "WRITE",
+         confidence: 0.95,
+         params: { "action": "draft_scene", "scene_context": "Zara enters the market" },
+         requires_approval: false  (autonomy_level == SUGGEST)
+       }
+
+6. TOOL EXECUTION — Writing Agent
+   ChatOrchestrator._execute_tool(intent, session, context):
+     a. Resolve tool: self._tools["WRITE"] → WriteTool
+     b. WriteTool wraps AgentDispatcher.execute("writing_agent", ...)
+     c. AgentDispatcher:
+          → Route: "writing_agent" skill
+          → ModelConfigRegistry.resolve(agent_id="writing_agent")
+            → anthropic/claude-3.5-sonnet
+          → Build prompt: system prompt + assembled context + user intent
+          → LiteLLM completion (streaming)
+
+     d. AGENT-TO-AGENT: Writing Agent decides to verify continuity
+        ChatOrchestrator._invoke_agent("continuity_analyst", intent, context, depth=1):
+          → Continuity Analyst checks Zara's state, market details
+          → No issues found
+          → Returns AgentInvocation record (nested in parent trace)
+
+     e. Build ChatActionTrace:
+          tool_name: "WRITE"
+          agent_id: "writing_agent"
+          context_summary: "Project Memory (800t) + Session (2,400t) + @Zara + @The Market (1,800t)"
+          containers_used: ["ulid_zara", "ulid_market", "ulid_cursed_blade"]
+          model_used: "anthropic/claude-3.5-sonnet"
+          duration_ms: 3200
+          token_usage_in: 5000, token_usage_out: 847
+          sub_invocations: [AgentInvocation(continuity_analyst, depth=1)]
+
+7. SSE STREAMING TO FRONTEND
+   ChatOrchestrator yields ChatEvent sequence:
+     a. ChatEvent(event_type="token", data={"text": "The rain fell..."})    → partial response
+     b. ChatEvent(event_type="token", data={"text": " in sheets..."})       → continues
+     ... (many token events)
+     c. ChatEvent(event_type="action_trace", data={...trace...})             → Glass Box block
+     d. ChatEvent(event_type="artifact", data={                              → Artifact preview
+          "artifact_type": "prose",
+          "title": "Scene: Zara Enters the Market",
+          "content": "The rain fell in sheets as Zara stepped into..."
+        })
+     e. ChatEvent(event_type="complete", data={                              → Done
+          "message_id": "msg_ulid",
+          "token_usage": 5847
+        })
+
+8. MESSAGE PERSISTENCE
+   ChatSessionService.add_message(session_id, ChatMessage{
+     role: "assistant",
+     content: "The rain fell in sheets as Zara...",
+     action_traces: [trace],
+     artifacts: [artifact],
+     mentioned_entity_ids: ["ulid_zara", "ulid_market"],
+   })
+   → ChatSessionRepository.save_message(session_id, message)
+   → Update session.token_usage += 5847
+   → ChatSessionRepository.save_session(session)
+
+9. FRONTEND STATE UPDATE
+   useChatStream hook demultiplexes events:
+     → "token" events → chatSlice.streamingContent appends
+     → "action_trace" → chatSlice.actionTraces.push(trace)
+       → ChatMessage renders ActionTraceBlock (collapsed by default)
+     → "artifact" → chatSlice.activeArtifact = artifact
+       → ArtifactPreview panel opens alongside chat
+       → Shows: [✅ Save to Ch.3]  [✏️ Revise]  [🔄 Regenerate]
+     → "complete" → chatSlice.isStreaming = false
+       → Final message added to chatSlice.messages
+
+10. ARTIFACT SAVE (Optional — if writer clicks "Save to Ch.3")
+    Writer clicks "Save to Ch.3" in ArtifactPreview
+    → chatSlice.saveArtifact(artifactId, targetContainerId)
+    → POST /api/v1/writing/fragments { scene_id, text, title }
+    → Standard Unified Mutation Flow (§7.1) takes over:
+      WritingService → ContainerRepository → YAML → SQLite → Chroma → EventService
+    → Chat confirms: "✅ Scene saved to Ch.3, Scene 1"
+    → KG canvas updates via SSE (if visible behind chat sidebar)
+```
+
+### 7.6 The Chat-Initiated Pipeline Flow
+
+**Scenario:** The writer types "run Scene→Panels on Ch.3 Sc.1" in the Chat Sidebar while working in Zen Mode.
+
+```
+1. USER ACTION
+   Writer is in Zen Mode (/zen), chat sidebar open on right
+   Types: "run Scene→Panels on Ch.3 Sc.1"
+
+2. INTENT CLASSIFICATION
+   ChatOrchestrator._classify_intent():
+     → ToolIntent{tool: "PIPELINE", params: {
+           "pipeline_name": "Scene→Panels",
+           "target": "Ch.3 Sc.1",
+           "action": "run"
+       }}
+
+3. PIPELINE RESOLUTION
+   ChatOrchestrator → PipelineService.find_definition_by_name("Scene→Panels"):
+     → Returns PipelineDefinition (8 steps)
+   ChatOrchestrator → Resolve target container:
+     → KnowledgeGraphService.find_containers(type="scene", chapter=3, scene=1)
+     → Returns scene container ID
+
+4. PREVIEW (Before Launch)
+   ChatEvent(event_type="artifact", data={
+     "artifact_type": "table",
+     "title": "Scene→Panels Pipeline — Execution Plan",
+     "content": "1. 🧠 Brainstorm (3 variations)\n2. ⏸️ Pick Variation...\n..."
+   })
+   → ArtifactPreview shows execution plan
+   → Writer responds: "start it"
+
+5. PIPELINE LAUNCH (Background)
+   ChatOrchestrator → PipelineService.start_pipeline(definition_id, payload={
+     "scene_id": scene_container_id,
+     "concept": "Ch.3 Sc.1 content",
+   })
+   → Returns run_id
+   → Add to session.background_tasks:
+     BackgroundTask(task_id=run_id, task_type="pipeline",
+                    label="Scene→Panels on Ch.3 Sc.1", pipeline_run_id=run_id)
+
+6. SSE MULTIPLEXING
+   PipelineService pushes events to _events[run_id] queue
+   ChatOrchestrator multiplexes pipeline events into chat SSE stream:
+     → ChatEvent(event_type="background_update", data={
+         "task_id": run_id,
+         "step": "brainstorm",
+         "state": "running",
+         "progress": 0.125  (1/8)
+       })
+   → BackgroundTaskIndicator renders in chat
+   → Writer can continue chatting about other topics
+
+7. APPROVAL GATE (Inline in Chat)
+   PipelineService reaches Step 2: approve_output (pick brainstorm variation)
+   → Pipeline pauses (PAUSED_FOR_USER)
+   → ChatEvent(event_type="approval_needed", data={
+       "task_id": run_id,
+       "step": "pick_variation",
+       "options": ["[A] Zara discovers...", "[B] Kael reveals...", "[C] The blade..."],
+     })
+   → Chat renders inline: "Pick a variation: [A] [B] [C]"
+   → Writer types: "use B"
+
+8. CHAT → PIPELINE RESUME
+   ChatOrchestrator.handle_pipeline_approval(session, run_id, "use B"):
+     → Parse "use B" → selected option index 1
+     → PipelineService.resume(run_id, payload={"selected": "B"})
+     → Pipeline continues execution
+
+9. PIPELINE COMPLETION
+   All steps complete:
+   → ChatEvent(event_type="background_update", data={
+       "task_id": run_id,
+       "state": "completed",
+       "progress": 1.0,
+       "result_summary": "Scene saved to Ch.3, Scene 1. 847 words."
+     })
+   → BackgroundTaskIndicator shows ✅
+   → Chat notification: "Pipeline complete! Scene saved."
+   → Remove from session.background_tasks
+
+10. ERROR HANDLING
+    If any step fails:
+    → ChatEvent(event_type="error", data={
+        "task_id": run_id,
+        "step": "llm_generate",
+        "error": "LiteLLM timeout after 30s",
+        "suggestion": "Try again with a different model, or skip this step"
+      })
+    → Chat shows error inline with suggested actions
+    → Writer can: "retry with gemini-pro" or "skip and save what we have"
+```
+
+### 7.7 The Unified Write Path (Phase K)
+
+**Scenario:** Any service saves a modified character entity through the Unit of Work.
+
+```
+1. SERVICE MUTATION
+   WritingService / ChatOrchestrator / PipelineService calls:
+     uow.save(entity_id="char_01JABC", entity_type="character",
+              yaml_path="characters/zara.yaml",
+              data=character.model_dump(),
+              event_payload={"field": "backstory", "action": "update"})
+   → UoW buffers the operation in _pending: List[UnitOfWorkEntry]
+   → No disk I/O yet — caller can buffer multiple saves before commit
+
+2. COMMIT — TEMP FILE WRITE
+   uow.commit() begins:
+   → For each buffered save:
+     Write serialized YAML to temp file: characters/zara.yaml.tmp
+     Compute content_hash = SHA-256(file_content)
+   → If any temp write fails: immediate rollback (delete all .tmp files), raise
+
+3. COMMIT — SQLITE TRANSACTION
+   → BEGIN TRANSACTION on SQLite
+   → For each buffered save:
+     UPSERT INTO entities (id, entity_type, name, yaml_path, content_hash,
+                           attributes_json, updated_at)
+     UPSERT INTO sync_metadata (yaml_path, entity_id, entity_type,
+                                content_hash, mtime=now(), indexed_at=now(),
+                                file_size=len(content))
+   → If SQL fails: ROLLBACK, delete all .tmp files, raise
+
+4. COMMIT — EVENT APPEND
+   → For each buffered save with event_payload:
+     EventService.append_event(
+       event_type="UPDATE", container_id="char_01JABC",
+       branch_id="main", payload=event_payload)
+   → Events are append-only (no rollback needed for events on failure,
+     but the entry includes a "pending" flag cleared on step 6)
+
+5. COMMIT — ATOMIC RENAME
+   → For each buffered save:
+     os.rename("characters/zara.yaml.tmp", "characters/zara.yaml")
+   → This is the point of no return: YAML files now reflect new state
+   → atomic on POSIX (same filesystem), near-atomic on macOS APFS
+
+6. COMMIT — FINALIZE
+   → COMMIT SQLite transaction
+   → For each affected path: MtimeCache.invalidate(path)
+   → Async (fire-and-forget): ChromaDB upsert for semantic index
+   → Clear _pending buffer
+
+7. ROLLBACK (if any step 2-5 fails)
+   → Delete all .tmp files (glob project_path for *.yaml.tmp)
+   → SQLite transaction auto-rolls back (no COMMIT was issued)
+   → MtimeCache unchanged (old cached data still valid)
+   → ChromaDB unchanged
+   → Raise original exception to caller
+
+8. DOWNSTREAM EFFECTS
+   → FileWatcher detects YAML modification → but checks content_hash
+     against sync_metadata → hash matches → skips re-index (no duplicate work)
+   → SSE broadcasts container_updated event to connected frontends
+   → MtimeCache will re-cache on next read (lazy population)
+```
+
+### 7.8 The Unified Read Path — Context Assembly (Phase K)
+
+**Scenario:** The Chat Orchestrator or CLI ContextCompiler needs full context for scene writing in Chapter 3.
+
+```
+1. CONTEXT REQUEST
+   Consumer calls:
+     assembler.compile(ContextScope(
+       step="scene_writing", chapter=3, scene=1,
+       access_level="story", token_budget=100_000,
+       output_format="structured"  # Chat path
+     ))
+
+2. SNAPSHOT FACTORY — ENTITY RESOLUTION
+   ProjectSnapshotFactory.load(scope):
+   → Consult STEP_ENTITY_MAP["scene_writing"]:
+     Required types: ["world_settings", "character", "story_structure",
+                      "scene", "style_guide"]
+   → Query SQLite:
+     SELECT id, entity_type, yaml_path, content_hash
+     FROM entities
+     WHERE entity_type IN ('world_settings', 'character', 'story_structure',
+                           'style_guide')
+        OR (entity_type = 'scene' AND
+            json_extract(attributes_json, '$.chapter') = 3
+            AND json_extract(attributes_json, '$.scene_number') = 1)
+   → Returns: ~15-25 rows with yaml_paths (no YAML read yet)
+
+3. BATCH CACHE CHECK
+   For each entity row from SQLite:
+   → MtimeCache.get(yaml_path):
+     a) os.stat(yaml_path) → current_mtime
+     b) Compare current_mtime vs cached_mtime
+     c) If match AND path in cache: CACHE HIT → return cached entity
+     d) If mismatch or not cached: CACHE MISS → continue to step 4
+   → Typical result: 80-95% cache hits after first request
+
+4. YAML HYDRATION (cache misses only)
+   For each cache miss:
+   → Read YAML file from disk
+   → Parse into Pydantic model (type determined by entity_type)
+   → MtimeCache.put(path, entity)  # store for future reads
+   → Typical: 1-3 files read on warm cache vs 15-25 on cold start
+
+5. SNAPSHOT ASSEMBLY
+   Route loaded entities into ProjectSnapshot fields:
+   → snapshot.world = world_settings entity dict
+   → snapshot.characters = [character dicts...]
+   → snapshot.story_structure = story structure dict
+   → snapshot.scenes = [matching scene dicts...]
+   → snapshot.style_guides = style guide dict
+   → snapshot.load_time_ms = elapsed
+   → snapshot.cache_hits / cache_misses = tracked counts
+
+6. CONTEXT DICT CONSTRUCTION
+   ContextAssembler builds step-specific context:
+   → context = {
+       "world": snapshot.world,
+       "characters": snapshot.characters,
+       "story_structure": snapshot.story_structure,
+       "current_scene": snapshot.scenes[0],
+       "style_guide": snapshot.style_guides,
+     }
+   → Inject decisions: DecisionLog.get_decisions(chapter=3, scene=1)
+   → If scope.include_relationships:
+       KnowledgeGraphService.get_neighbors(scene_id) → add related entities
+
+7. TOKEN BUDGET APPLICATION
+   → Estimate tokens per context bucket (chars / 4 heuristic)
+   → If total > scope.token_budget:
+     a) Rank buckets by step-specific priority
+        (for scene_writing: current_scene > characters > world > style > decisions)
+     b) Truncate lowest-priority buckets first
+     c) Track truncation in Glass Box metadata
+
+8. OUTPUT RENDERING
+   Based on scope.output_format:
+   → "template": Jinja2 render via TemplateEngine (CLI path)
+   → "structured": Markdown-formatted text with headers (Chat/Web path)
+   → "raw": Dict of loaded entities (API consumers)
+
+9. RETURN
+   → ContextResult(
+       text=rendered_output,          # Final assembled prompt context
+       snapshot=snapshot,              # For inspection/debugging
+       glass_box=GlassBoxMetadata(
+         buckets=[ContextBucketInfo(name="world", tokens=2400, truncated=False), ...],
+         total_tokens=48_200,
+         budget=100_000,
+         cache_hit_rate=0.87,
+         load_time_ms=12
+       )
+     )
+```
+
+### 7.9 The Incremental Sync on Startup (Phase K)
+
+**Scenario:** The Antigravity server starts up. Instead of `sync_all()` (which crawls every YAML file), the DAL performs an incremental sync.
+
+```
+1. STARTUP — LOAD SYNC METADATA
+   App lifespan begins:
+   → SQLiteIndexer loads sync_metadata table into memory:
+     known_files: Dict[str, SyncMetadata] = {
+       "characters/zara.yaml": SyncMetadata(mtime=1706000000.0, content_hash="abc123..."),
+       "characters/kael.yaml": SyncMetadata(mtime=1706000100.0, content_hash="def456..."),
+       "world/settings.yaml": SyncMetadata(mtime=1705999000.0, content_hash="789abc..."),
+       ... (N entries)
+     }
+
+2. DISK SCAN — STRUCTURED GLOB
+   → Instead of rglob("*.yaml") across entire project:
+     Scan known directories only:
+       characters/*.yaml
+       world/*.yaml
+       story_structure/*.yaml
+       scenes/**/*.yaml
+       creative_room/*.yaml
+       containers/**/*.yaml
+       schemas/*.yaml
+   → Result: disk_files: Dict[str, float] = {path: mtime for each found file}
+   → O(known_dirs) glob operations, not recursive full-tree walk
+
+3. CLASSIFY FILES INTO THREE BUCKETS
+
+   a) UNCHANGED: disk_files[path].mtime == known_files[path].mtime
+      → Skip entirely (no read, no index update)
+      → This is the fast path — typically 90%+ of files
+
+   b) CHANGED: path exists in both, but disk mtime > known mtime
+      → Must re-read YAML, re-compute content_hash, update index
+      → Caused by: user edited file externally, git pull, Claude Code edit
+
+   c) NEW: path exists on disk but not in known_files
+      → Must read YAML, compute content_hash, insert into index
+      → Caused by: new entity created outside the server
+
+   d) DELETED: path exists in known_files but not on disk
+      → Must remove from entities table + sync_metadata
+      → Caused by: user deleted file, git checkout to different branch
+
+4. PROCESS CHANGED FILES (bucket b)
+   For each changed file:
+   → Read YAML content from disk
+   → Parse into appropriate entity type (inferred from directory or YAML content)
+   → Compute content_hash = SHA-256(raw_content)
+   → If content_hash == known_files[path].content_hash:
+       Touch only (mtime updated but content identical — e.g., git checkout)
+       UPDATE sync_metadata SET mtime = disk_mtime WHERE yaml_path = path
+   → Else (actual content change):
+       UPSERT entities row with new attributes_json, content_hash, updated_at
+       UPDATE sync_metadata with new content_hash, mtime, indexed_at
+       Async: ChromaDB upsert for semantic index
+       MtimeCache.invalidate(path)  # force re-read on next access
+
+5. PROCESS NEW FILES (bucket c)
+   For each new file:
+   → Read YAML, parse, compute content_hash
+   → INSERT INTO entities (...)
+   → INSERT INTO sync_metadata (...)
+   → Async: ChromaDB insert
+
+6. PROCESS DELETED FILES (bucket d)
+   For each deleted file:
+   → DELETE FROM entities WHERE yaml_path = path
+   → DELETE FROM sync_metadata WHERE yaml_path = path
+   → Async: ChromaDB delete by entity_id
+   → MtimeCache.invalidate(path)
+
+7. FINALIZE
+   → Log summary:
+     "Incremental sync complete: 142 unchanged, 3 changed, 1 new, 0 deleted (12ms)"
+   → Compare to sync_all():
+     "Full sync would have processed 146 files (~2.1s). Saved ~2.1s."
+   → Update last_incremental_sync timestamp in app state
+   → Server ready to accept requests
+
+FALLBACK — FULL RESYNC
+   Triggered by: `antigravity db reindex` CLI command or `POST /api/v1/db/reindex`
+   → Drop all sync_metadata rows
+   → Process ALL disk files as "new" (bucket c)
+   → Rebuild entities table from scratch
+   → Rebuild ChromaDB vectors
+   → Invalidate entire MtimeCache
+   → This is the nuclear option — only needed after schema migrations or corruption
+```
+
 ---
 
 ## 8. SSE Streaming Endpoints
@@ -1053,6 +3457,10 @@ get_project()
 | `GET /api/pipeline/{id}/stream` | Pipeline step/state transitions | `usePipelineStream` hook | `PipelineRun.model_dump_json()` on every state change |
 | `GET /api/v1/project/events` | File watcher changes, KG updates | `graphDataSlice` | `{ "type": "container_updated", "container_id": "...", ... }` |
 | `GET /api/v1/timeline/stream`* | New event sourcing events | `TimelineView` | `{ "type": "event_appended", "event": {...} }` |
+| `POST /api/v1/chat/sessions/{id}/messages`* | Chat message response streaming | `useChatStream` hook | `ChatEvent` (token, action_trace, artifact, approval_needed, complete, error) |
+| `GET /api/v1/chat/sessions/{id}/stream`* | Persistent SSE for background task updates | `useChatStream` hook | `ChatEvent` (background_update only) |
+
+*Phase J additions. The chat message endpoint uses POST (not GET) because it sends the user's message in the request body and returns the streamed response via SSE — this is a combined send-and-stream pattern similar to Claude API's streaming response.
 
 ---
 
@@ -1595,3 +4003,588 @@ Parallelization strategy (27 ∥ 28, then 29) executed cleanly with zero file co
 | **Session 32** | Zen Mode Polish | ⏳ Sequential (after 30+31, touches api.ts) |
 
 Sessions 30 and 31 have zero file overlap. Session 32 touches api.ts (also modified by 31) so runs after both complete.
+
+---
+
+## 16. Phase J: Testing & Evaluation Strategy for Agentic Chat
+
+### 16.1 Test Infrastructure Setup
+
+**Backend:**
+- Framework: `pytest` + `pytest-asyncio` (existing)
+- New shared fixtures in `tests/conftest.py` (currently missing — create as part of Phase J)
+
+```python
+# tests/conftest.py — Phase J additions
+
+@pytest.fixture
+def project_path(tmp_path):
+    """Create a temporary project directory with required structure."""
+    (tmp_path / ".antigravity" / "sessions").mkdir(parents=True)
+    (tmp_path / "containers").mkdir()
+    (tmp_path / "schemas").mkdir()
+    (tmp_path / "antigravity.yaml").write_text("name: test-project\n")
+    return tmp_path
+
+@pytest.fixture
+def chat_session_repo(project_path):
+    """ChatSessionRepository with temporary storage."""
+    return ChatSessionRepository(project_path)
+
+@pytest.fixture
+def project_memory_repo(project_path):
+    """ProjectMemoryRepository with temporary storage."""
+    return ProjectMemoryRepository(project_path)
+
+@pytest.fixture
+def mock_llm():
+    """AsyncMock for LiteLLM completion calls."""
+    mock = AsyncMock()
+    mock.return_value = _make_llm_response("Mock LLM response")
+    return mock
+
+@pytest.fixture
+def mock_agent_dispatcher():
+    """AgentDispatcher with mocked skills and LLM calls."""
+    dispatcher = AsyncMock(spec=AgentDispatcher)
+    dispatcher.route.return_value = AgentSkill(name="writing_agent", system_prompt="...")
+    dispatcher.execute.return_value = AgentResult(content="Generated content", tokens_in=100, tokens_out=50)
+    return dispatcher
+
+@pytest.fixture
+def chat_session_service(project_path):
+    """ChatSessionService with temporary storage."""
+    return ChatSessionService(project_path)
+
+@pytest.fixture
+def project_memory_service(project_path):
+    """ProjectMemoryService with temporary storage."""
+    return ProjectMemoryService(project_path)
+
+def _make_llm_response(content: str):
+    """Helper to create a mock LiteLLM response."""
+    return MagicMock(choices=[MagicMock(message=MagicMock(content=content))])
+```
+
+**Frontend:**
+- Framework: Vitest + React Testing Library (new — add to `src/web/package.json`)
+- E2E: Playwright (new — add to project root)
+
+### 16.2 Unit Tests — Backend
+
+#### `tests/test_chat_orchestrator.py`
+
+```python
+class TestChatOrchestrator:
+    """Test the central chat brain."""
+
+    async def test_classify_intent_write(self, mock_llm):
+        """User message about writing → WRITE tool intent."""
+        orchestrator = ChatOrchestrator(...)
+        intent = await orchestrator._classify_intent(
+            "write a scene where Zara enters the market", ""
+        )
+        assert intent.tool == "WRITE"
+        assert intent.confidence > 0.8
+
+    async def test_classify_intent_pipeline(self, mock_llm):
+        """User message about running pipeline → PIPELINE tool intent."""
+        intent = await orchestrator._classify_intent(
+            "run Scene→Panels on Ch.3 Sc.1", ""
+        )
+        assert intent.tool == "PIPELINE"
+
+    async def test_classify_intent_ambiguous(self, mock_llm):
+        """Ambiguous message → low confidence, asks for clarification."""
+        intent = await orchestrator._classify_intent("help me", "")
+        assert intent.confidence < 0.5
+
+    async def test_tool_execution_produces_trace(self, mock_agent_dispatcher):
+        """Every tool execution must produce a ChatActionTrace."""
+        trace = await orchestrator._execute_tool(
+            ToolIntent(tool="WRITE", params={...}), session, context
+        )
+        assert isinstance(trace, ChatActionTrace)
+        assert trace.tool_name == "WRITE"
+        assert trace.model_used != ""
+        assert trace.duration_ms > 0
+
+    async def test_agent_to_agent_depth_limit(self, mock_agent_dispatcher):
+        """Agent invocation respects MAX_AGENT_DEPTH."""
+        with pytest.raises(AgentDepthExceeded):
+            await orchestrator._invoke_agent("writing_agent", "test", "", depth=4)
+
+    async def test_agent_to_agent_circular_detection(self, mock_agent_dispatcher):
+        """Circular agent calls are rejected."""
+        with pytest.raises(AgentCircularCall):
+            await orchestrator._invoke_agent(
+                "writing_agent", "test", "", depth=1,
+                call_chain=["writing_agent"]
+            )
+
+    async def test_agent_to_agent_records_sub_invocation(self, mock_agent_dispatcher):
+        """Sub-agent invocation recorded in parent trace."""
+        invocation = await orchestrator._invoke_agent(
+            "continuity_analyst", "check consistency", "", depth=1,
+            call_chain=["writing_agent"]
+        )
+        assert invocation.caller_agent_id == "writing_agent"
+        assert invocation.callee_agent_id == "continuity_analyst"
+        assert invocation.depth == 1
+
+    async def test_process_message_streams_events(self, mock_agent_dispatcher):
+        """process_message yields correct ChatEvent sequence."""
+        events = []
+        async for event in orchestrator.process_message(session, "write a scene", []):
+            events.append(event)
+        event_types = [e.event_type for e in events]
+        assert "token" in event_types or "action_trace" in event_types
+        assert event_types[-1] == "complete"
+
+    async def test_autonomy_level_ask_pauses(self):
+        """Level 0 (ASK) yields approval_needed before executing."""
+        session.autonomy_level = AutonomyLevel.ASK
+        events = [e async for e in orchestrator.process_message(session, "create a character", [])]
+        assert events[0].event_type == "approval_needed"
+```
+
+#### `tests/test_chat_session_service.py`
+
+```python
+class TestChatSessionService:
+    """Test session lifecycle: create, messages, compact, end, resume."""
+
+    async def test_create_session(self, chat_session_service):
+        session = await chat_session_service.create_session("worldbuilding", "proj_1")
+        assert session.name == "worldbuilding"
+        assert session.state == SessionState.ACTIVE
+        assert session.token_usage == 0
+
+    async def test_add_message_updates_token_usage(self, chat_session_service):
+        session = await chat_session_service.create_session("test", "proj_1")
+        msg = ChatMessage(session_id=session.id, role="user", content="Hello " * 100)
+        await chat_session_service.add_message(session.id, msg)
+        updated = await chat_session_service.get_session(session.id)
+        assert updated.token_usage > 0
+        assert msg.id in updated.message_ids
+
+    async def test_compact_session_reduces_tokens(self, chat_session_service, mock_llm):
+        """Compaction reduces token usage and produces a digest."""
+        session = await chat_session_service.create_session("test", "proj_1")
+        # Add many messages to simulate high token usage
+        for i in range(20):
+            msg = ChatMessage(session_id=session.id, role="user", content=f"Message {i} " * 50)
+            await chat_session_service.add_message(session.id, msg)
+        result = await chat_session_service.compact_session(session.id, mock_llm)
+        assert result.token_reduction > 0
+        assert result.digest != ""
+        assert result.compaction_number == 1
+
+    async def test_end_session_sets_state(self, chat_session_service):
+        session = await chat_session_service.create_session("test", "proj_1")
+        await chat_session_service.end_session(session.id, "Finished worldbuilding")
+        ended = await chat_session_service.get_session(session.id)
+        assert ended.state == SessionState.ENDED
+
+    async def test_resume_session_restores_active(self, chat_session_service):
+        session = await chat_session_service.create_session("test", "proj_1")
+        await chat_session_service.end_session(session.id, "Done")
+        resumed = await chat_session_service.resume_session(session.id)
+        assert resumed.state == SessionState.ACTIVE
+
+    async def test_list_sessions(self, chat_session_service):
+        await chat_session_service.create_session("session1", "proj_1")
+        await chat_session_service.create_session("session2", "proj_1")
+        sessions = await chat_session_service.list_sessions("proj_1")
+        assert len(sessions) == 2
+
+    async def test_get_messages_paginated(self, chat_session_service):
+        session = await chat_session_service.create_session("test", "proj_1")
+        for i in range(10):
+            msg = ChatMessage(session_id=session.id, role="user", content=f"Msg {i}")
+            await chat_session_service.add_message(session.id, msg)
+        page1 = await chat_session_service.get_messages(session.id, offset=0, limit=5)
+        assert len(page1) == 5
+```
+
+#### `tests/test_project_memory_service.py`
+
+```python
+class TestProjectMemoryService:
+    """Test persistent project memory CRUD and context injection."""
+
+    async def test_add_entry(self, project_memory_service):
+        entry = await project_memory_service.add_entry("tone", "Dark fantasy, literary")
+        assert entry.key == "tone"
+        assert entry.scope == MemoryScope.GLOBAL
+        assert entry.auto_inject == True
+
+    async def test_add_entry_replaces_existing(self, project_memory_service):
+        await project_memory_service.add_entry("tone", "Dark fantasy")
+        await project_memory_service.add_entry("tone", "Light comedy")
+        entries = await project_memory_service.list_entries()
+        assert len(entries) == 1
+        assert entries[0].value == "Light comedy"
+
+    async def test_remove_entry(self, project_memory_service):
+        await project_memory_service.add_entry("tone", "Dark fantasy")
+        removed = await project_memory_service.remove_entry("tone")
+        assert removed == True
+        entries = await project_memory_service.list_entries()
+        assert len(entries) == 0
+
+    async def test_auto_inject_context(self, project_memory_service):
+        await project_memory_service.add_entry("tone", "Dark fantasy")
+        await project_memory_service.add_entry("pov", "Close third-person")
+        await project_memory_service.add_entry("debug_note", "test only",
+                                                auto_inject=False)
+        context = await project_memory_service.get_auto_inject_context()
+        assert "Dark fantasy" in context
+        assert "Close third-person" in context
+        assert "test only" not in context
+
+    async def test_scoped_entries(self, project_memory_service):
+        await project_memory_service.add_entry("tone", "Dark fantasy", scope=MemoryScope.GLOBAL)
+        await project_memory_service.add_entry("mood", "Tense", scope=MemoryScope.CHAPTER, scope_id="ch5")
+        global_entries = await project_memory_service.list_entries(scope=MemoryScope.GLOBAL)
+        assert len(global_entries) == 1
+```
+
+#### `tests/test_chat_context_manager.py`
+
+```python
+class TestChatContextManager:
+    """Test three-layer context assembly and token budget enforcement."""
+
+    async def test_build_context_includes_all_layers(self, ...):
+        """Context includes project memory, session history, and @-mentioned entities."""
+        context = await context_manager.build_context(session, "test message", ["entity_1"])
+        assert context.layer1_tokens > 0  # Project Memory
+        assert context.layer2_tokens > 0  # Session History
+        assert context.layer3_tokens > 0  # @-mentioned entity
+        assert "entity_1" in context.entity_ids_included
+
+    async def test_token_budget_enforced(self, ...):
+        """Context assembly stays within session.context_budget."""
+        session.context_budget = 1000  # Very small budget
+        context = await context_manager.build_context(session, "test", [])
+        assert context.token_estimate <= 1000
+
+    async def test_compact_produces_digest(self, ...):
+        """Compaction summarizes conversation to ~2K tokens."""
+        result = await context_manager.compact(session)
+        assert result.digest != ""
+        assert len(result.digest) // 4 < 3000  # ~2K tokens
+
+    async def test_should_suggest_compact(self, ...):
+        """Suggests compaction when usage > 80% of budget."""
+        session.context_budget = 10000
+        session.token_usage = 8500
+        assert context_manager._should_suggest_compact(session) == True
+        session.token_usage = 5000
+        assert context_manager._should_suggest_compact(session) == False
+```
+
+#### `tests/test_agent_composition.py`
+
+```python
+class TestAgentComposition:
+    """Test agent-to-agent calling, depth limits, and circular prevention."""
+
+    async def test_single_agent_invocation(self, mock_agent_dispatcher):
+        invocation = await orchestrator._invoke_agent(
+            "research_agent", "research railguns", "", depth=0
+        )
+        assert invocation.depth == 0
+        assert invocation.callee_agent_id == "research_agent"
+
+    async def test_nested_invocation(self, mock_agent_dispatcher):
+        """Agent at depth 0 can invoke agent at depth 1."""
+        invocation = await orchestrator._invoke_agent(
+            "continuity_analyst", "check plot", "", depth=1,
+            call_chain=["writing_agent"]
+        )
+        assert invocation.depth == 1
+
+    async def test_max_depth_exceeded(self, mock_agent_dispatcher):
+        with pytest.raises(AgentDepthExceeded):
+            await orchestrator._invoke_agent("agent_a", "", "", depth=4)
+
+    async def test_circular_call_detected(self, mock_agent_dispatcher):
+        with pytest.raises(AgentCircularCall):
+            await orchestrator._invoke_agent(
+                "writing_agent", "", "", depth=2,
+                call_chain=["writing_agent", "continuity_analyst"]
+            )
+
+    async def test_trace_nesting(self, mock_agent_dispatcher):
+        """Sub-invocations produce nested traces."""
+        # Mock: writing_agent invokes continuity_analyst
+        invocation = await orchestrator._invoke_agent(
+            "continuity_analyst", "verify", "", depth=1,
+            call_chain=["writing_agent"]
+        )
+        assert invocation.trace.agent_id == "continuity_analyst"
+        assert "writing_agent" in invocation.trace.context_summary
+```
+
+### 16.3 Integration Tests — Backend
+
+#### `tests/test_chat_api.py`
+
+```python
+class TestChatAPI:
+    """Full router integration tests using TestClient."""
+
+    def test_create_session(self, client):
+        resp = client.post("/api/v1/chat/sessions", json={"name": "test"})
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "test"
+        assert resp.json()["state"] == "active"
+
+    def test_list_sessions(self, client):
+        client.post("/api/v1/chat/sessions", json={"name": "s1"})
+        client.post("/api/v1/chat/sessions", json={"name": "s2"})
+        resp = client.get("/api/v1/chat/sessions")
+        assert len(resp.json()) == 2
+
+    def test_send_message_streams_sse(self, client):
+        session = client.post("/api/v1/chat/sessions", json={"name": "test"}).json()
+        # Note: SSE testing requires special handling with TestClient
+        resp = client.post(
+            f"/api/v1/chat/sessions/{session['id']}/messages",
+            json={"content": "hello"},
+        )
+        assert resp.status_code == 200
+
+    def test_compact_session(self, client):
+        session = client.post("/api/v1/chat/sessions", json={"name": "test"}).json()
+        resp = client.post(f"/api/v1/chat/sessions/{session['id']}/compact")
+        assert resp.status_code == 200
+        assert "digest" in resp.json()
+
+    def test_project_memory_crud(self, client):
+        # Create
+        resp = client.post("/api/v1/chat/memory",
+                          json={"key": "tone", "value": "Dark fantasy"})
+        assert resp.status_code == 200
+        # Read
+        resp = client.get("/api/v1/chat/memory")
+        assert len(resp.json()["entries"]) == 1
+        # Delete
+        resp = client.delete("/api/v1/chat/memory/tone")
+        assert resp.status_code == 204
+```
+
+#### `tests/test_chat_session_lifecycle.py`
+
+```python
+class TestChatSessionLifecycle:
+    """End-to-end session lifecycle: create → messages → compact → end → resume."""
+
+    async def test_full_lifecycle(self, chat_session_service, project_memory_service):
+        # 1. Create session
+        session = await chat_session_service.create_session("worldbuilding", "proj_1")
+
+        # 2. Add messages
+        for i in range(5):
+            msg = ChatMessage(session_id=session.id, role="user", content=f"Build world part {i}")
+            await chat_session_service.add_message(session.id, msg)
+
+        # 3. Compact
+        result = await chat_session_service.compact_session(session.id, mock_summarize)
+        assert result.original_message_count == 5
+
+        # 4. Add more messages after compaction
+        msg = ChatMessage(session_id=session.id, role="user", content="Continue building")
+        await chat_session_service.add_message(session.id, msg)
+
+        # 5. End session
+        await chat_session_service.end_session(session.id, "Finished worldbuilding")
+        ended = await chat_session_service.get_session(session.id)
+        assert ended.state == SessionState.ENDED
+        assert ended.digest is not None
+
+        # 6. Resume session
+        resumed = await chat_session_service.resume_session(session.id)
+        assert resumed.state == SessionState.ACTIVE
+        # Digest preserved from end
+        assert resumed.digest is not None
+```
+
+### 16.4 Evaluation Framework
+
+Extend the existing `evaluator.py` / `evaluation_service.py` pattern to evaluate chat quality:
+
+| Evaluation Dimension | Metric | Method | Target |
+|---------------------|--------|--------|--------|
+| **Intent Classification** | Accuracy on labeled test set | 100+ user messages with expected tool labels; measure precision/recall per tool | 90%+ accuracy |
+| **Context Relevance** | Precision@K for included entities | For each @-mention, verify the correct container data is included in context | 95%+ precision |
+| **Action Correctness** | Match rate against expected service calls | Given intent + context, verify the correct service method is called with correct params | 85%+ match |
+| **Session Continuity** | Information retention after compact | After compact + resume, verify key decisions and entity states are preserved in digest | 90%+ retention |
+| **Glass Box Completeness** | Trace coverage | Every agent action produces a valid `ChatActionTrace` with all required fields | 100% coverage |
+| **Response Quality** | Human evaluation (1-5 scale) | Writers rate chat responses on helpfulness, accuracy, and creativity | 4.0+ average |
+| **Latency** | P50/P95 response time | Measure time from message send to first token | P50 < 1s, P95 < 3s |
+
+**Evaluation test set creation:**
+- Curate 100+ labeled user messages spanning all 14 tool categories
+- Include edge cases: ambiguous messages, multi-intent messages, messages with and without @-mentions
+- Store as `tests/fixtures/chat_eval_dataset.yaml`
+
+### 16.5 Frontend Tests
+
+**Setup:** Add Vitest + React Testing Library to `src/web/`:
+
+```json
+// src/web/package.json (devDependencies additions)
+{
+  "vitest": "^3.0.0",
+  "@testing-library/react": "^16.0.0",
+  "@testing-library/jest-dom": "^6.0.0",
+  "@testing-library/user-event": "^14.0.0",
+  "jsdom": "^25.0.0"
+}
+```
+
+#### `src/web/src/components/chat/__tests__/ChatSidebar.test.tsx`
+
+```typescript
+describe('ChatSidebar', () => {
+  it('renders collapsed by default', () => {
+    render(<ChatSidebar />);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('expands when toggle clicked', async () => {
+    render(<ChatSidebar />);
+    await userEvent.click(screen.getByRole('button', { name: /open chat/i }));
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('shows session picker on session button click', async () => {
+    render(<ChatSidebar />);
+    // ... expand sidebar first
+    await userEvent.click(screen.getByRole('button', { name: /sessions/i }));
+    expect(screen.getByText(/create new session/i)).toBeInTheDocument();
+  });
+});
+```
+
+#### `src/web/src/components/chat/__tests__/ActionTraceBlock.test.tsx`
+
+```typescript
+describe('ActionTraceBlock', () => {
+  const mockTrace: ChatActionTrace = {
+    tool_name: 'WRITE',
+    agent_id: 'writing_agent',
+    context_summary: 'Project Memory (800t) + @Zara (500t)',
+    containers_used: ['ulid_zara'],
+    model_used: 'anthropic/claude-3.5-sonnet',
+    duration_ms: 3200,
+    token_usage_in: 1300,
+    token_usage_out: 847,
+    result_preview: 'The rain fell in sheets...',
+    sub_invocations: [],
+  };
+
+  it('renders collapsed by default showing summary', () => {
+    render(<ActionTraceBlock trace={mockTrace} />);
+    expect(screen.getByText('WRITE')).toBeInTheDocument();
+    expect(screen.getByText('3.2s')).toBeInTheDocument();
+    expect(screen.queryByText('anthropic/claude-3.5-sonnet')).not.toBeInTheDocument();
+  });
+
+  it('expands to show full details on click', async () => {
+    render(<ActionTraceBlock trace={mockTrace} />);
+    await userEvent.click(screen.getByText('WRITE'));
+    expect(screen.getByText('anthropic/claude-3.5-sonnet')).toBeInTheDocument();
+    expect(screen.getByText('1,300 in / 847 out')).toBeInTheDocument();
+  });
+
+  it('renders nested sub-invocations', () => {
+    const traceWithSub = {
+      ...mockTrace,
+      sub_invocations: [{
+        caller_agent_id: 'writing_agent',
+        callee_agent_id: 'continuity_analyst',
+        intent: 'verify consistency',
+        depth: 1,
+        trace: { ...mockTrace, tool_name: 'CONTINUITY', agent_id: 'continuity_analyst' },
+      }],
+    };
+    render(<ActionTraceBlock trace={traceWithSub} />);
+    // Expand parent
+    // Verify sub-invocation is rendered
+  });
+});
+```
+
+#### `src/web/src/components/chat/__tests__/ChatInput.test.tsx`
+
+```typescript
+describe('ChatInput', () => {
+  it('triggers @-mention popover on @ character', async () => {
+    render(<ChatInput onSubmit={vi.fn()} />);
+    await userEvent.type(screen.getByRole('textbox'), '@');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+  });
+
+  it('submits message on Enter', async () => {
+    const onSubmit = vi.fn();
+    render(<ChatInput onSubmit={onSubmit} />);
+    await userEvent.type(screen.getByRole('textbox'), 'hello{enter}');
+    expect(onSubmit).toHaveBeenCalledWith('hello', []);
+  });
+
+  it('disables input during streaming', () => {
+    render(<ChatInput onSubmit={vi.fn()} isStreaming={true} />);
+    expect(screen.getByRole('textbox')).toBeDisabled();
+  });
+});
+```
+
+### 16.6 End-to-End Smoke Tests (Playwright)
+
+```typescript
+// e2e/chat.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('Agentic Chat E2E', () => {
+  test('complete chat interaction flow', async ({ page }) => {
+    await page.goto('/dashboard');
+
+    // 1. Open chat sidebar
+    await page.click('[data-testid="chat-toggle"]');
+    await expect(page.locator('[data-testid="chat-sidebar"]')).toBeVisible();
+
+    // 2. Create a session
+    await page.click('[data-testid="new-session"]');
+    await page.fill('[data-testid="session-name"]', 'E2E Test');
+    await page.click('[data-testid="create-session"]');
+
+    // 3. Send a message
+    await page.fill('[data-testid="chat-input"]', 'Hello, tell me about this project');
+    await page.press('[data-testid="chat-input"]', 'Enter');
+
+    // 4. Verify response streams
+    await expect(page.locator('[data-testid="chat-message"][data-role="assistant"]')).toBeVisible({
+      timeout: 10000,
+    });
+
+    // 5. Verify action traces appear
+    await expect(page.locator('[data-testid="action-trace"]')).toBeVisible();
+
+    // 6. Verify session appears in picker
+    await page.click('[data-testid="session-picker"]');
+    await expect(page.locator('text=E2E Test')).toBeVisible();
+  });
+});
+```
+
+### 16.7 CI/CD Considerations (Future)
+
+When CI/CD is added, the chat test suite should include:
+- **Pre-commit:** Unit tests only (fast, no LLM calls)
+- **PR gate:** Unit + integration tests with mocked LLM
+- **Nightly:** Full evaluation suite with real LLM calls (uses test project fixtures)
+- **Weekly:** E2E Playwright suite against running dev server

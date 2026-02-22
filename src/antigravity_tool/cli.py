@@ -33,6 +33,7 @@ from antigravity_tool.commands import (
     pacing,
     analytics,
     server,
+    db,
 )
 from antigravity_tool.core.project import Project, ProjectError
 from antigravity_tool.core.workflow import WorkflowState, STEP_LABELS
@@ -73,6 +74,7 @@ app.add_typer(branch.app, name="branch")
 app.add_typer(pacing.app, name="pacing")
 app.add_typer(analytics.app, name="analytics")
 app.add_typer(server.app, name="server")
+app.add_typer(db.app, name="db")
 
 
 @app.command("status")

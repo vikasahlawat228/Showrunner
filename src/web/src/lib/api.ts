@@ -494,12 +494,12 @@ export const api = {
 
   // Pipeline execution
   startPipeline: (initialPayload?: any, definitionId?: string) =>
-    post<{ run_id: string }>("/api/pipeline/run", {
+    post<{ run_id: string }>("/api/v1/pipeline/run", {
       initial_payload: initialPayload || {},
       definition_id: definitionId || null,
     }),
   resumePipeline: (runId: string, payload: any) =>
-    post<{ status: string; run_id: string }>(`/api/pipeline/${runId}/resume`, { payload }),
+    post<{ status: string; run_id: string }>(`/api/v1/pipeline/${runId}/resume`, { payload }),
 
   // Research
   queryResearch: (query: string) =>
@@ -511,21 +511,21 @@ export const api = {
 
   // Pipeline definitions (composable)
   getPipelineStepRegistry: () =>
-    request<any[]>("/api/pipeline/steps/registry"),
+    request<any[]>("/api/v1/pipeline/steps/registry"),
   getWorkflowTemplates: () =>
-    request<WorkflowTemplate[]>("/api/pipeline/templates"),
+    request<WorkflowTemplate[]>("/api/v1/pipeline/templates"),
   createFromTemplate: (templateId: string) =>
-    post<any>(`/api/pipeline/templates/${encodeURIComponent(templateId)}/create`),
+    post<any>(`/api/v1/pipeline/templates/${encodeURIComponent(templateId)}/create`),
   getPipelineDefinitions: () =>
-    request<any[]>("/api/pipeline/definitions"),
+    request<any[]>("/api/v1/pipeline/definitions"),
   getPipelineDefinition: (id: string) =>
-    request<any>(`/api/pipeline/definitions/${encodeURIComponent(id)}`),
+    request<any>(`/api/v1/pipeline/definitions/${encodeURIComponent(id)}`),
   createPipelineDefinition: (body: any) =>
-    post<any>("/api/pipeline/definitions", body),
+    post<any>("/api/v1/pipeline/definitions", body),
   updatePipelineDefinition: (id: string, body: any) =>
-    put<any>(`/api/pipeline/definitions/${encodeURIComponent(id)}`, body),
+    put<any>(`/api/v1/pipeline/definitions/${encodeURIComponent(id)}`, body),
   deletePipelineDefinition: (id: string) =>
-    del(`/api/pipeline/definitions/${encodeURIComponent(id)}`),
+    del(`/api/v1/pipeline/definitions/${encodeURIComponent(id)}`),
 
   // Timeline & Event Sourcing
   getTimelineEvents: () => request<TimelineEvent[]>("/api/v1/timeline/events"),
@@ -549,6 +549,8 @@ export const api = {
     request<ContainerContextResponse>(`/api/v1/writing/context/${encodeURIComponent(containerId)}`),
   searchContainers: (q: string, limit = 10) =>
     request<ContainerSearchResult[]>(`/api/v1/writing/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  searchEntities: (q: string, limit = 10) =>
+    request<ContainerSearchResult[]>(`/api/v1/writing/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   semanticSearchContainers: (q: string, limit = 8) =>
     request<Array<ContainerSearchResult & { similarity?: number }>>(`/api/v1/writing/semantic-search?q=${encodeURIComponent(q)}&limit=${limit}`),
 
@@ -563,6 +565,31 @@ export const api = {
   getGlossary: () => request<GlossaryEntry[]>("/api/v1/translation/glossary"),
   saveGlossaryEntry: (body: { term: string; translations: Record<string, string>; notes?: string }) =>
     post<GlossaryEntry>("/api/v1/translation/glossary", body),
+
+  // Chat
+  getChatSessions: (projectId?: string) =>
+    request<any[]>(
+      projectId
+        ? `/api/v1/chat/sessions?project_id=${encodeURIComponent(projectId)}`
+        : "/api/v1/chat/sessions"
+    ),
+  createChatSession: (body: { name?: string; project_id?: string; autonomy_level?: number; tags?: string[] }) =>
+    post<any>("/api/v1/chat/sessions", body),
+  getChatSession: (sessionId: string) =>
+    request<any>(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`),
+  deleteChatSession: (sessionId: string) =>
+    del(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`),
+  getChatMessages: (sessionId: string, limit = 100, offset = 0) =>
+    request<any[]>(
+      `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}&offset=${offset}`
+    ),
+  // Note: sendMessage uses SSE streaming via useChatStream hook, not this API client
+
+  // DB Maintenance
+  getDBHealth: () => request<any>("/api/v1/db/health"),
+  getDBStats: () => request<any>("/api/v1/db/stats"),
+  runDBCheck: () => post<any>("/api/v1/db/check"),
+  runDBReindex: () => post<any>("/api/v1/db/reindex"),
 
   // Storyboard
   getStoryboardPanels: (sceneId: string) =>
@@ -624,13 +651,13 @@ export const api = {
   getPipelineRuns: (state?: string) =>
     request<PipelineRunSummary[]>(
       state
-        ? `/api/pipeline/runs?state=${encodeURIComponent(state)}`
-        : "/api/pipeline/runs"
+        ? `/api/v1/pipeline/runs?state=${encodeURIComponent(state)}`
+        : "/api/v1/pipeline/runs"
     ),
 
   // Pipeline definition tools
   generatePipelineFromNL: (body: { intent: string; title: string }) =>
-    post<PipelineDefinitionResponse>("/api/pipeline/definitions/generate", body),
+    post<PipelineDefinitionResponse>("/api/v1/pipeline/definitions/generate", body),
 
   // Containers
   createContainer: (body: { container_type: string; name: string; parent_id?: string; attributes?: Record<string, unknown>; sort_order?: number }) =>

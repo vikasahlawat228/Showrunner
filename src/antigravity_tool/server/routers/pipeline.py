@@ -238,6 +238,27 @@ async def generate_definition(
 # Pipeline Execution (extended)
 # ------------------------------------------------------------------
 
+@router.get("/runs")
+async def list_pipeline_runs(
+    state: str | None = None,
+    pipeline_service: PipelineService = Depends(get_pipeline_service),
+):
+    """List pipeline runs, optionally filtered by state."""
+    runs = list(PipelineService._runs.values())
+    if state:
+        runs = [r for r in runs if r.state.value == state]
+    return [
+        {
+            "id": r.id,
+            "definition_id": r.definition_id,
+            "state": r.state.value,
+            "current_step": r.current_step,
+            "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at),
+        }
+        for r in runs
+    ]
+
+
 @router.post("/run", status_code=201)
 async def start_pipeline_run(
     request: PipelineRunCreate,

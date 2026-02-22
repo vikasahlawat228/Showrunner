@@ -7,6 +7,7 @@ import { Navbar } from "@/components/ui/Navbar";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { QuickAddModal } from "@/components/ui/QuickAddModal";
 import { GlobalActivityBar } from "@/components/ui/GlobalActivityBar";
+import { ChatSidebarWrapper } from "@/components/chat/ChatSidebarWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,6 +44,7 @@ export default function RootLayout({
         <CommandPalette />
         <QuickAddModal />
         <GlobalActivityBar />
+        <ChatSidebarWrapper />
         <Toaster
           theme="dark"
           position="bottom-right"

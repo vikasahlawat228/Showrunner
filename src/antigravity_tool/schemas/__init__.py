@@ -97,6 +97,16 @@ from antigravity_tool.schemas.pipeline import (
     PipelineRunCreate,
     PipelineResume,
 )
+from antigravity_tool.schemas.dal import (
+    SyncMetadata,
+    CacheEntry,
+    CacheStats,
+    ContextScope,
+    ProjectSnapshot,
+    UnitOfWorkEntry,
+    DBHealthReport,
+    ConsistencyIssue,
+)
 
 __all__ = [
     "AntigravityBase",
@@ -126,4 +136,6 @@ __all__ = [
     "SessionAction", "SessionEntry",
     "ChapterSummary", "ProjectBrief",
     "PipelineState", "PipelineRun", "PipelineRunCreate", "PipelineResume",
+    "SyncMetadata", "CacheEntry", "CacheStats", "ContextScope",
+    "ProjectSnapshot", "UnitOfWorkEntry", "DBHealthReport", "ConsistencyIssue",
 ]

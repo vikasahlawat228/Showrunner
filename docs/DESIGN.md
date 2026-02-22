@@ -1,18 +1,20 @@
 # Showrunner Architecture & High-Level Design Document
-**Status:** Phase F–I Blueprint (supersedes Alpha v2.0)  
-**Last Updated:** 2026-02-21
+**Status:** Phase F–K Blueprint (supersedes Alpha v2.0)
+**Last Updated:** 2026-02-22
 
 ---
 
 ## 1. System Overview
 
-Showrunner is a **Glass Box, Visual Co-Writer Platform** built as a dual-server, local-first application. Every AI decision is inspectable, every entity type is user-defined, every model is selectable, and every mutation is event-sourced into a Git-style undo tree.
+Showrunner is a **Glass Box, Agent-Native Co-Writer Platform** built as a dual-server, local-first application. Every AI decision is inspectable, every entity type is user-defined, every model is selectable, and every mutation is event-sourced into a Git-style undo tree.
 
-The system supports **multi-project isolation**, a **10-agent AI ecosystem**, **hierarchical story structures** (Season → Scene), a **persistent Research Library**, and a **Model Configuration Cascade** that lets writers pick the right LLM for every task.
+The system is **chat-first**: a persistent Agentic Chat Co-Pilot serves as the primary interaction surface, with visual surfaces (canvas, storyboard, timeline) as complementary views that the agent can control. The platform supports **multi-project isolation**, a **10-agent AI ecosystem** orchestrated through a central `ChatOrchestrator`, **hierarchical story structures** (Season → Scene), a **persistent Research Library**, a **Three-Layer Context Model** for intelligent memory, and a **Model Configuration Cascade** that lets writers pick the right LLM for every task.
 
 ```mermaid
 graph TB
     subgraph Frontend["Next.js Frontend (Port 3000)"]
+        CS[💬 Chat Sidebar — Primary Interface]
+        AP[📄 Artifact Preview Panel]
         CC[Command Center]
         RC[React Flow Canvas]
         ZM[Writing Desk / Zen Mode]
@@ -25,8 +27,12 @@ graph TB
 
     subgraph Backend["FastAPI Backend (Port 8000)"]
         API[REST API Routers]
+        CO[ChatOrchestrator — Central Brain]
         AD[AgentDispatcher]
         CE[ContextEngine]
+        CCM[ChatContextManager]
+        CSS[ChatSessionService]
+        PMS[ProjectMemoryService]
         PS[PipelineService]
         KG[KnowledgeGraphService]
         ES[EventService]
@@ -49,33 +55,57 @@ graph TB
         TA[🌍 Translator Agent]
     end
 
-    subgraph Storage["Local Persistence"]
-        YAML[YAML Files — Source of Truth]
-        SQLite1[knowledge_graph.db — Relational Index]
-        SQLite2[event_log.db — Event Sourcing DAG]
-        Chroma[.chroma/ — Vector Embeddings]
+    subgraph DAL["Unified Data Access Layer (Phase K)"]
+        UoW[UnitOfWork — Atomic Writes]
+        MTC[MtimeCache — Read Cache]
+        PSF[ProjectSnapshotFactory — Batch Loader]
+        CAS[ContextAssembler — Unified Prompt Assembly]
     end
 
-    CC --> ZS --> API
+    subgraph Storage["Local Persistence"]
+        YAML[YAML Files — Source of Truth]
+        SQLite1[knowledge_graph.db — Universal Entity Index]
+        SQLite2[event_log.db — Event Sourcing DAG]
+        Chroma[.chroma/ — Vector Embeddings]
+        SESSIONS[.antigravity/sessions/ — Chat Sessions]
+    end
+
+    CS --> ZS --> API
+    AP --> ZS
+    CC --> ZS
     RC --> ZS
     ZM --> ZS
     WS --> ZS
     SBC --> ZS
     TL --> ZS
 
-    API --> AD --> Agents
-    AD --> CE
+    API --> CO --> AD --> Agents
+    CO --> CCM --> CAS
+    CO --> CSS --> SESSIONS
+    CO --> PMS
+    CO --> PS
+    AD --> CAS
     PS -->|SSE| ZS
-    API --> PS --> CE
+    CO -->|SSE stream| CS
+    API --> PS --> CAS
+    CAS --> PSF --> MTC
+    PSF -->|batch query| SQLite1
+    MTC -->|hydrate on miss| YAML
+    UoW -->|atomic write| YAML
+    UoW -->|index upsert| SQLite1
+    UoW -->|event append| SQLite2
+    UoW -->|async embed| Chroma
     API --> KG --> SQLite1
     API --> ES --> SQLite2
     KG --> YAML
     KG --> Chroma
     CE --> KG
     FW -->|watchdog| YAML
+    FW -->|incremental reindex| SQLite1
     FW -->|SSE broadcast| ZS
     MCR --> AD
     MCR --> PS
+    MCR --> CO
 ```
 
 ### Architectural Principles
@@ -88,6 +118,7 @@ graph TB
 6. **Everything is Event-Sourced** — Every mutation tracked, every state recoverable, every timeline branchable.
 7. **Progressive Complexity** — Quick Actions → Workflow Templates → Full Pipeline Builder.
 8. **Local-First** — YAML + SQLite. No cloud dependency. Git-friendly persistence.
+9. **CQRS Persistence** — YAML is truth (writes), SQLite is the read path (queries). All mutations flow through UnitOfWork for atomicity.
 
 ---
 
@@ -644,6 +675,51 @@ class PipelineService:
 
 **Streaming protocol:** `EventSourceResponse` pushes `PipelineRun.model_dump_json()` on every state or step transition. The frontend `usePipelineStream` hook consumes these events.
 
+### 7.5 Chat-Initiated Pipeline Control
+
+Pipelines can be started, paused, resumed, and cancelled entirely from the Agentic Chat Sidebar. This eliminates the need to navigate to `/pipelines` for execution.
+
+```mermaid
+sequenceDiagram
+    participant W as Writer (Chat)
+    participant CO as ChatOrchestrator
+    participant PS as PipelineService
+    participant SSE as SSE Stream
+
+    W->>CO: "run Scene→Panels on Ch.3 Sc.1"
+    CO->>CO: Classify intent → PIPELINE tool
+    CO->>PS: find_definition("Scene→Panels")
+    PS-->>CO: PipelineDefinition (8 steps)
+    CO-->>W: Preview: execution plan + context
+    W->>CO: "start it"
+    CO->>PS: start_pipeline(definition_id, payload)
+    PS-->>SSE: Step events stream
+    SSE-->>W: Step 1 complete (brainstorm results)
+
+    Note over W,PS: Approval Gate Reached
+    SSE-->>W: "Pick a variation: [A] [B] [C]"
+    W->>CO: "use B"
+    CO->>PS: resume(run_id, {selected: "B"})
+    PS-->>SSE: Continue pipeline...
+
+    Note over W,PS: Writer interrupts
+    W->>CO: "pause the pipeline"
+    CO->>PS: pause(run_id)
+    PS-->>SSE: state: PAUSED
+
+    W->>CO: "skip style check and save"
+    CO->>PS: resume(run_id, {skip_steps: ["style_check"]})
+    PS-->>SSE: state: COMPLETED
+    SSE-->>W: "Pipeline complete! Scene saved."
+```
+
+**Dual-mode approval gates:** When a pipeline reaches a human checkpoint:
+- **GUI mode (default):** `PromptReviewModal` opens in the main panel
+- **Chat mode (when initiated from chat):** The approval gate is presented as an inline chat message with action buttons. The writer responds in natural language ("use option B", "skip this step", "change the model to opus")
+- The `ChatOrchestrator` translates chat responses into `POST /runs/{id}/resume` calls with the appropriate payload
+
+**Background execution:** Long-running pipelines continue executing in the background while the writer chats about other topics. Pipeline SSE events are multiplexed into the chat session's event stream. A compact notification appears when steps complete or need attention.
+
 ---
 
 ## 8. AI Agent Ecosystem
@@ -728,6 +804,34 @@ The ReAct loop is implemented as a multi-turn LLM conversation within the `Agent
 
 **Phase H evolution:** Agents gain autonomy to chain actions — e.g., the Continuity Analyst can detect a plot hole AND suggest a fix AND create a draft correction for the writer to approve.
 
+**Phase J evolution:** The `ChatOrchestrator` becomes the primary agent invocation path, wrapping the `AgentDispatcher` with:
+
+1. **Multi-turn conversation state** — agents retain context across messages within a chat session
+2. **Agent-to-agent composition** — agents can invoke other agents through the orchestrator (not direct calls), with depth tracking (max 3 levels) to prevent infinite loops
+3. **Execution trace collection** — every tool/agent invocation produces a `ChatActionTrace` for Glass Box transparency
+4. **Expanded tool registry** — 14 chat tools mapped to existing services: WRITE, BRAINSTORM, OUTLINE, RESEARCH, CONTINUITY, STYLE, TRANSLATE, STORYBOARD, PIPELINE, BUCKET, SEARCH, NAVIGATE, STATUS, MEMORY
+5. **Progressive autonomy** — Level 0 (Ask before every action) → Level 1 (Suggest, execute on approval) → Level 2 (Execute, report results). Configurable per-session.
+
+```python
+# Phase J: Agent-to-Agent Composition
+class ChatOrchestrator:
+    async def _invoke_agent(self, agent_id: str, intent: str,
+                             context: str, depth: int = 0) -> AgentInvocation:
+        """
+        Invoke an agent with depth tracking.
+        Agents can call other agents via this method (depth + 1).
+        Max depth: 3. Each invocation recorded in the Glass Box trace.
+
+        Example chain:
+          Writing Agent (depth 0)
+            → invokes Continuity Analyst (depth 1)
+              → invokes Research Agent (depth 2) for fact verification
+        """
+        if depth > MAX_AGENT_DEPTH:
+            raise AgentDepthExceeded(f"Agent chain exceeded {MAX_AGENT_DEPTH} levels")
+        ...
+```
+
 ---
 
 ## 9. API Surface
@@ -752,6 +856,8 @@ The ReAct loop is implemented as a multi-turn LLM conversation within the `Agent
 | `models` | `/api/v1/models` | `GET /available` (LiteLLM models), `GET /config`, `PUT /config` | F |
 | `agents` | `/api/v1/agents` | `GET /` (list skills), `PUT /{name}/model-config` | F |
 | `research` | `/api/v1/research` | `POST /query`, `GET /library`, `GET /topic/{id}` | G |
+| `chat` | `/api/v1/chat` | Session CRUD, `POST /sessions/{id}/messages` (SSE stream), `/compact`, `/resume`, memory CRUD, action approve/reject | J |
+| `db` | `/api/v1/db` | `GET /health`, `POST /reindex` (SSE), `POST /check`, `GET /stats` — index maintenance and consistency checks | K |
 
 ### 9.2 API Proxying
 
@@ -764,12 +870,13 @@ Next.js `rewrites` in `next.config.ts` proxy all `/api/*` requests from port 300
 | `GET /api/pipeline/{id}/stream` | Pipeline step/state transitions | `usePipelineStream` hook |
 | `GET /api/v1/project/events` | File watcher changes, KG updates | `graphDataSlice` |
 | `GET /api/v1/timeline/stream` | New event sourcing events | `TimelineView` |
+| `GET /api/v1/chat/sessions/{id}/stream` | Chat response streaming + background task notifications | `useChatStream` hook |
 
 ---
 
 ## 10. Dependency Injection (FastAPI)
 
-All service instantiation flows through `server/deps.py`. Phase F adds `ModelConfigRegistry`, `ContextEngine`, and `AgentDispatcher` as shared singletons:
+All service instantiation flows through `server/deps.py`. Phase F adds `ModelConfigRegistry`, `ContextEngine`, and `AgentDispatcher` as shared singletons. Phase J adds Chat services. Phase K adds the Unified Data Access Layer (`MtimeCache`, `UnitOfWork`, `ProjectSnapshotFactory`, `ContextAssembler`):
 
 ```mermaid
 graph TD
@@ -805,6 +912,33 @@ graph TD
     SC --> CS["get_character_service()"]
     SC --> DS["get_director_service()"]
     SC --> StS["get_story_service()"]
+
+    %% Phase J: Chat services
+    P --> CSess["get_chat_session_service()"]
+    P --> PMS["get_project_memory_service()"]
+    CSess --> CCM["get_chat_context_manager()"]
+    PMS --> CCM
+    CE --> CCM
+    AD --> ChatO["get_chat_orchestrator()"]
+    CE --> ChatO
+    PS --> ChatO
+    CR --> ChatO
+    KG --> ChatO
+    MCR --> ChatO
+    ES --> ChatO
+    PMS --> ChatO
+    CCM --> ChatO
+
+    %% Phase K: Unified Data Access Layer
+    MCache["get_mtime_cache()"] -->|"LRU singleton"| MCache
+    KG --> UoW["get_unit_of_work()"]
+    ES --> UoW
+    MCache --> UoW
+    KG --> PSFac["get_project_snapshot_factory()"]
+    MCache --> PSFac
+    PSFac --> CAsm["get_context_assembler()"]
+    SC --> CAsm
+    KG --> CAsm
 ```
 
 **Key dependency providers:**
@@ -831,6 +965,76 @@ def get_agent_dispatcher() -> AgentDispatcher:
     """Cached AgentDispatcher that loads skills from agents/skills/."""
     skills_dir = Path(__file__).resolve().parent.parent.parent.parent / "agents" / "skills"
     return AgentDispatcher(skills_dir)
+
+# ── Phase J additions ──────────────────────────────────────────
+
+def get_chat_session_service(
+    project: Project = Depends(get_project),
+) -> ChatSessionService:
+    """Chat session lifecycle: create, compact, end, resume."""
+    return ChatSessionService(project.path)
+
+def get_project_memory_service(
+    project: Project = Depends(get_project),
+) -> ProjectMemoryService:
+    """Persistent project-level memory (decisions, world rules, style guide)."""
+    return ProjectMemoryService(project.path)
+
+def get_chat_context_manager(
+    session_service: ChatSessionService = Depends(get_chat_session_service),
+    memory_service: ProjectMemoryService = Depends(get_project_memory_service),
+    context_engine: ContextEngine = Depends(get_context_engine),
+) -> ChatContextManager:
+    """Three-layer context assembly for chat messages."""
+    return ChatContextManager(session_service, memory_service, context_engine)
+
+def get_chat_orchestrator(
+    agent_dispatcher: AgentDispatcher = Depends(get_agent_dispatcher),
+    context_engine: ContextEngine = Depends(get_context_engine),
+    pipeline_service: PipelineService = Depends(get_pipeline_service),
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    model_config_registry: ModelConfigRegistry = Depends(get_model_config_registry),
+    event_service: EventService = Depends(get_event_service),
+    memory_service: ProjectMemoryService = Depends(get_project_memory_service),
+) -> ChatOrchestrator:
+    """Central brain for chat interactions. Routes intents to tools/agents."""
+    return ChatOrchestrator(
+        agent_dispatcher, context_engine, pipeline_service,
+        container_repo, kg_service, model_config_registry,
+        event_service, memory_service,
+    )
+
+# ── Phase K additions — Unified Data Access Layer ─────────────
+
+@lru_cache()
+def get_mtime_cache() -> MtimeCache:
+    """Singleton LRU cache with file-mtime invalidation (500 entries)."""
+    return MtimeCache(max_size=500)
+
+def get_unit_of_work(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    event_service: EventService = Depends(get_event_service),
+    cache: MtimeCache = Depends(get_mtime_cache),
+) -> UnitOfWork:
+    """Per-request UnitOfWork for atomic YAML + SQLite + Event writes."""
+    return UnitOfWork(kg_service.indexer, event_service, kg_service.chroma_indexer, cache)
+
+@lru_cache()
+def get_project_snapshot_factory(
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+    cache: MtimeCache = Depends(get_mtime_cache),
+) -> ProjectSnapshotFactory:
+    """Singleton batch loader for context assembly."""
+    return ProjectSnapshotFactory(kg_service.indexer, cache)
+
+def get_context_assembler(
+    snapshot_factory: ProjectSnapshotFactory = Depends(get_project_snapshot_factory),
+    ctx: ServiceContext = Depends(get_service_context),
+    kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+) -> ContextAssembler:
+    """Unified context assembly for CLI, Web, and Chat paths."""
+    return ContextAssembler(snapshot_factory, ctx.engine, ctx.compiler.decision_log, kg_service)
 ```
 
 ---
@@ -850,6 +1054,9 @@ def get_agent_dispatcher() -> AgentDispatcher:
 | `projectSlice` | `projectSlice.ts` | **Multi-project state**, active project, structure tree | F |
 | `modelConfigSlice` | `modelConfigSlice.ts` | **Model cascade config**, available models, overrides | F |
 | `researchSlice` | `researchSlice.ts` | **Research Library** state, topic CRUD | G |
+| `chatSlice`* | `chatSlice.ts` | **Agentic Chat** — sessions, messages, streaming, action traces, artifacts, @-mention suggestions | J |
+
+*`chatSlice` is an **independent store** (like `zenSlice`), not composed into the main store — to isolate chat state and prevent unnecessary re-renders across the rest of the app.
 
 ### 11.2 Component Architecture
 
@@ -896,6 +1103,15 @@ src/web/src/components/
 ├── research/                          # Phase G: Research Library
 │   ├── ResearchPanel.tsx             # Browse/search research topics
 │   └── ResearchCard.tsx              # Individual finding card
+├── chat/                              # Phase J: Agentic Chat Co-Pilot
+│   ├── ChatSidebar.tsx               # Global collapsible sidebar (right side)
+│   ├── ChatInput.tsx                 # Message input with @-mention + /command
+│   ├── ChatMessageList.tsx           # Virtualized message list
+│   ├── ChatMessage.tsx               # Single message with action traces
+│   ├── ActionTraceBlock.tsx          # Collapsible Glass Box action block
+│   ├── ArtifactPreview.tsx           # Split-pane preview for generated content
+│   ├── SessionPicker.tsx             # Session list + resume/create
+│   └── MentionPopover.tsx            # @-mention autocomplete popover
 └── workbench/                         # Dashboard shell
     ├── Canvas.tsx
     ├── Sidebar.tsx
@@ -939,6 +1155,20 @@ ZenEditor onChange (debounced 2s)
   → update zenSlice.entities
   → ContextSidebar renders entity summaries
   → Knowledge Graph canvas updates via SSE
+```
+
+**Chat message (Agentic Chat):**
+```
+ChatInput.onSubmit(message, mentionedIds)
+  → chatSlice.sendMessage(sessionId, message, mentionedIds)
+  → POST /api/v1/chat/sessions/{id}/messages
+  → SSE EventSource on response:
+      → on "token": append to chatSlice.streamingContent
+      → on "action_trace": append to chatSlice.actionTraces → render ActionTraceBlock
+      → on "artifact": set chatSlice.activeArtifact → render ArtifactPreview
+      → on "approval_needed": show inline approve/reject buttons
+      → on "complete": finalize message, update chatSlice.messages
+  → Background pipeline events multiplexed into same stream
 ```
 
 ---
@@ -1019,6 +1249,23 @@ flowchart LR
 - Auth & Collaboration (multi-user, sharing)
 - Export (PDF, EPUB, image pack, print-ready)
 
+### Phase J: Agentic Chat Co-Pilot
+- **Track 1 — Chat Foundation:** `ChatOrchestrator`, `ChatSessionService`, chat router, SSE streaming, `ChatSidebar` component with message list and input
+- **Track 2 — Context & Memory:** `ProjectMemoryService`, `ChatContextManager` (3-layer model), @-mention entity resolution, `/compact` command, token budget enforcement
+- **Track 3 — Agent Tool Belt:** 14 chat tools mapped to existing services, intent classification, Glass Box `ChatActionTrace` for every action, `ActionTraceBlock` component
+- **Track 4 — Artifact Preview:** `ArtifactPreview` split-pane component for generated content (prose, outlines, schemas, panels), diff view for revisions
+- **Track 5 — Session Management:** `SessionPicker` component, session CRUD, resume with digest reload, multi-session support, session naming
+- **Track 6 — Plan/Execute Mode:** `/plan` command for complex multi-step tasks, agent proposes steps, writer approves per-step, execution with rollback points
+- **Track 7 — Pipeline Control:** Chat-initiated pipeline launch/pause/resume/cancel, dual-mode approval gates (modal + inline chat), background execution with multiplexed SSE notifications
+
+### Phase K: Unified Data Access Layer
+- **Track 1 — Enhanced SQLite Schema:** Universal `entities` table replacing `containers`, `sync_metadata` table for incremental sync, migration from existing schema
+- **Track 2 — MtimeCache + Batch Loading:** `MtimeCache` with LRU eviction and mtime invalidation, `ProjectSnapshotFactory` for single-pass context loading, integration into `YAMLRepository._load_file()`
+- **Track 3 — Unit of Work:** `UnitOfWork` pattern for atomic YAML + SQLite + Event writes, temp-file + atomic-rename commit strategy, context manager API
+- **Track 4 — Unified Context Assembler:** Merge `ContextCompiler` (CLI) + `ContextEngine` (Web) into single `ContextAssembler`, token budgeting for all paths, Glass Box metadata for all paths, `ContextScope` model for routing
+- **Track 5 — DB Maintenance:** `antigravity db check|reindex|compact|stats` CLI commands, `/api/v1/db/*` maintenance endpoints, consistency verification and self-healing
+- **Track 6 — Legacy Repo Migration:** Wire all typed repos (Character, World, Chapter, Story, Style) into SQLite index via existing `subscribe_save`/`subscribe_delete` callbacks, migrate services from direct repo calls to UnitOfWork
+
 ---
 
 ## 14. Known Architectural Gaps (Current State → Target)
@@ -1035,6 +1282,18 @@ flowchart LR
 | **Agent Skills** | 5 static markdown files, keyword routing | 10 agents, ReAct executors, model-specific routing | 🟡 | G+H |
 | **Workflow Templates** | Does not exist | Pre-built `PipelineDefinition` YAML files, template gallery UI | 🟡 | G |
 | **RAG** | ChromaDB indexer exists but not widely used | Vector search integrated into `ContextEngine.assemble_context()` | 🟡 | H |
+| **Chat Interface** | No chat sidebar exists | `ChatOrchestrator` + `ChatSidebar` as primary interaction surface for all operations | 🔴 | J |
+| **Session Persistence** | `SessionLog` stores basic session entries | Full `ChatSessionService` with message-level persistence, compaction, resume, multi-session | 🔴 | J |
+| **Agent Composition** | Agents cannot invoke other agents | `ChatOrchestrator._invoke_agent()` with depth tracking, max 3 levels, trace collection | 🟠 | J |
+| **Project Memory** | Decisions stored in flat `decisions.yaml` | `ProjectMemoryService` with scoped entries, auto-injection into every chat context | 🟠 | J |
+| **Glass Box in Chat** | Agent actions only visible in pipeline view | `ChatActionTrace` on every action, collapsible `ActionTraceBlock` component in chat | 🟡 | J |
+| **Frontend Tests** | No frontend test framework | Vitest + React Testing Library + Playwright E2E | 🟡 | J |
+| **Dual Data Paths** | CLI typed repos bypass SQLite index; Web container repos use SQLite. No unified read/write path | Universal `entities` table indexes ALL entity types; both paths use SQLite for queries | 🔴 | K |
+| **No Caching** | Every request re-reads YAML from disk; context compilation does 20+ file reads | `MtimeCache` with stat()-based invalidation; `ProjectSnapshot` batch loading | 🔴 | K |
+| **Non-Atomic Writes** | YAML + SQLite + EventService writes are convention-based, not transactional | `UnitOfWork` pattern: temp-write → SQLite txn → event → atomic rename | 🟠 | K |
+| **Expensive Startup** | `sync_all()` full crawls project directory on every server start | Incremental sync via `sync_metadata` table — only reindex changed files | 🟠 | K |
+| **Split Prompt Assembly** | CLI uses ContextCompiler + Jinja2; Web uses ContextEngine + token budget. No shared abstraction | `ContextAssembler` unifies both with token budgeting and Glass Box for all paths | 🟠 | K |
+| **DB Self-Healing** | No tools to verify or repair YAML ↔ SQLite consistency | `antigravity db check|reindex|compact|stats` CLI + API endpoints | 🟡 | K |
 
 ---
 
@@ -1044,10 +1303,10 @@ flowchart LR
 
 | Directory | Key Files | Count |
 |-----------|----------|:-----:|
-| `schemas/` | `base.py`, `container.py`, `pipeline.py`, `pipeline_steps.py`, `fragment.py`, `storyboard.py`, `timeline.py` | 24 |
-| `repositories/` | `container_repo.py`, `sqlite_indexer.py`, `chroma_indexer.py`, `event_sourcing_repo.py` | 4 |
-| `services/` | `pipeline_service.py`, `writing_service.py`, `knowledge_graph_service.py`, `agent_dispatcher.py`, `context_engine.py`, `storyboard_service.py`, `file_watcher_service.py`, `director_service.py` | 18 |
-| `server/routers/` | `project.py`, `pipeline.py`, `writing.py`, `graph.py`, `timeline.py`, `schemas_router.py`, `storyboard.py`, `chapters.py`, `characters.py`, `world.py`, `workflow.py`, `director.py` | 12 |
+| `schemas/` | `base.py`, `container.py`, `pipeline.py`, `pipeline_steps.py`, `fragment.py`, `storyboard.py`, `timeline.py`, **`chat.py`** (J), **`project_memory.py`** (J), **`dal.py`** (K) | 27 |
+| `repositories/` | `container_repo.py`, `sqlite_indexer.py`, `chroma_indexer.py`, `event_sourcing_repo.py`, **`chat_session_repo.py`** (J), **`mtime_cache.py`** (K) | 6 |
+| `services/` | `pipeline_service.py`, `writing_service.py`, `knowledge_graph_service.py`, `agent_dispatcher.py`, `context_engine.py`, `storyboard_service.py`, `file_watcher_service.py`, `director_service.py`, **`chat_orchestrator.py`** (J), **`chat_session_service.py`** (J), **`project_memory_service.py`** (J), **`chat_context_manager.py`** (J), **`unit_of_work.py`** (K), **`project_snapshot.py`** (K), **`context_assembler.py`** (K) | 25 |
+| `server/routers/` | `project.py`, `pipeline.py`, `writing.py`, `graph.py`, `timeline.py`, `schemas_router.py`, `storyboard.py`, `chapters.py`, `characters.py`, `world.py`, `workflow.py`, `director.py`, **`chat.py`** (J), **`db.py`** (K) | 14 |
 | `server/` | `app.py`, `deps.py` | 2 |
 | `agent/` | Agent package | 5 |
 
@@ -1055,8 +1314,8 @@ flowchart LR
 
 | Directory | Key Files | Count |
 |-----------|----------|:-----:|
-| `lib/store/` | `graphDataSlice.ts`, `reactFlowSlice.ts`, `canvasUISlice.ts`, `zenSlice.ts`, `pipelineBuilderSlice.ts`, `storyboardSlice.ts` | 6 |
-| `components/` | 7 component groups across canvas, pipeline, zen, storyboard, schema-builder, timeline, workbench | ~30 |
+| `lib/store/` | `graphDataSlice.ts`, `reactFlowSlice.ts`, `canvasUISlice.ts`, `zenSlice.ts`, `pipelineBuilderSlice.ts`, `storyboardSlice.ts`, **`chatSlice.ts`** (J) | 7 |
+| `components/` | 8 component groups across canvas, pipeline, zen, storyboard, schema-builder, timeline, workbench, **chat** (J) | ~38 |
 | `app/` | Routes: dashboard, schemas, zen, pipelines, storyboard, timeline-test | 6 |
 | `lib/` | `api.ts` (API client) | 1 |
 
@@ -1076,3 +1335,578 @@ flowchart LR
 | `prompt_composer.md` | Image prompt optimization | 🆕 Phase G |
 | `style_enforcer.md` | Tone/voice consistency | 🆕 Phase H |
 | `translator_agent.md` | Content translation | 🆕 Phase H |
+
+---
+
+## 16. Agentic Chat System Architecture
+
+The Agentic Chat Co-Pilot is the **primary interaction surface** of Showrunner. It is a persistent sidebar conversation interface through which the writer can perform nearly every operation — from brainstorming and world-building to pipeline execution and continuity checking — without navigating between pages.
+
+### 16.1 Design Principles
+
+| Principle | Description |
+|-----------|-------------|
+| **Chat-Native** | Every backend capability (bucket CRUD, agent invocation, pipeline control, search, analysis) is invocable from a natural language chat message. The GUI pages become complementary views, not primary workflows. |
+| **Glass Box Transparency** | Every agent action produces a `ChatActionTrace` showing: which tool/agent was used, what context was assembled (container IDs, token count), which model was selected (from the cascade), duration, and result. Rendered as collapsible action blocks in the chat (like Claude Code). |
+| **Progressive Autonomy** | The writer controls how much autonomy the agent has per-session: **Level 0 (Ask)** — agent proposes every action and waits for approval. **Level 1 (Suggest)** — agent proposes and executes on "yes", explains what it would do on ambiguity. **Level 2 (Execute)** — agent acts immediately for routine operations, only pauses for destructive/irreversible actions. |
+| **Graceful Degradation** | If an agent fails (LLM error, context too large, missing entity), the chat explains what went wrong, suggests alternatives, and never leaves the session in a broken state. All agent actions are idempotent — retrying a failed action produces the same result. |
+| **Session Continuity** | Writers can work across multiple sessions. Each session persists its messages, context, and decisions. `/compact` summarizes conversation when tokens run low. `/resume` reloads a previous session's digest + project memory. Session digests feed into future sessions automatically. |
+
+### 16.2 Chat Orchestrator — The Central Brain
+
+The `ChatOrchestrator` is a new service that serves as the single entry point for all chat interactions. It wraps the existing `AgentDispatcher` and connects to all existing services.
+
+```mermaid
+sequenceDiagram
+    participant W as Writer
+    participant CS as ChatSidebar
+    participant CO as ChatOrchestrator
+    participant CI as Intent Classifier
+    participant T as Tool Registry
+    participant AD as AgentDispatcher
+    participant S as Services
+    participant SSE as SSE Stream
+
+    W->>CS: Types message + @mentions
+    CS->>CO: process_message(session_id, msg, mentioned_ids)
+    CO->>CO: ChatContextManager.build_context()
+    Note over CO: Layer 1: Project Memory<br/>Layer 2: Session History<br/>Layer 3: @-mentioned entities
+
+    CO->>CI: classify_intent(message, context)
+    CI-->>CO: ToolIntent{tool: "WRITE", params: {...}}
+
+    CO->>T: resolve_tool("WRITE")
+    T-->>CO: WriteTool (wraps WritingService)
+    CO->>AD: execute(skill="writing_agent", intent, context)
+    AD->>S: WritingService / ContainerRepo / etc.
+    S-->>AD: Result
+    AD-->>CO: AgentResult + ChatActionTrace
+
+    CO->>SSE: Stream tokens + action_trace + artifact
+    SSE-->>CS: Render message + ActionTraceBlock + ArtifactPreview
+    CO->>CO: ChatSessionService.add_message(msg)
+```
+
+**Tool Registry:** The orchestrator maintains a registry of 14 chat tools, each mapping to existing backend services:
+
+| Tool | Backend Service | Capabilities |
+|------|----------------|--------------|
+| `WRITE` | WritingService + Writing Agent | Draft prose, expand, rewrite, dialogue |
+| `BRAINSTORM` | AgentDispatcher → Brainstorm Agent | Generate ideas, "what if" scenarios |
+| `OUTLINE` | AgentDispatcher → Story Architect | Create/modify story structure |
+| `RESEARCH` | Research router + Research Agent | Deep-dive topics, search Research Library |
+| `CONTINUITY` | ContinuityService + Continuity Analyst | Check plot holes, validate consistency |
+| `STYLE` | StyleService + Style Enforcer | Check tone, voice, pacing |
+| `TRANSLATE` | TranslationService + Translator Agent | Translate with glossary |
+| `STORYBOARD` | StoryboardService + Prompt Composer | Generate panels, suggest layouts |
+| `PIPELINE` | PipelineService | Run/stop/resume workflow templates |
+| `BUCKET` | ContainerRepository | Create/edit/link any bucket type |
+| `SEARCH` | KnowledgeGraphService + ChromaIndexer | Semantic search across all buckets |
+| `NAVIGATE` | — (frontend-only) | Open pages, scenes, panels in main view |
+| `STATUS` | Multiple services | Project progress, session stats, pending items |
+| `MEMORY` | ProjectMemoryService | Save/recall project decisions and preferences |
+
+### 16.3 Agent-to-Agent Calling (Agent Composition)
+
+Agents can invoke other agents through the orchestrator, enabling complex multi-agent workflows:
+
+```mermaid
+graph TD
+    CO[ChatOrchestrator] -->|"depth 0"| WA[Writing Agent]
+    WA -->|"needs fact check"| CA[Continuity Analyst]
+    CA -->|"needs research"| RA[Research Agent]
+    RA -->|"result"| CA
+    CA -->|"result"| WA
+    WA -->|"final result"| CO
+
+    style CO fill:#4CAF50,color:#fff
+    style WA fill:#2196F3,color:#fff
+    style CA fill:#FF9800,color:#fff
+    style RA fill:#9C27B0,color:#fff
+```
+
+**Rules:**
+1. Agents invoke other agents **through the orchestrator** (never direct calls) — this ensures every sub-invocation is traced
+2. **Depth limit: 3 levels** — prevents infinite recursion (e.g., Agent A calls B calls A)
+3. **Circular detection** — the orchestrator tracks the call chain and rejects cycles
+4. Each sub-invocation produces its own `AgentInvocation` record, nested inside the parent's `ChatActionTrace`
+5. The writer sees the full chain in the Glass Box: "Writing Agent → called Continuity Analyst → called Research Agent"
+6. Sub-agents inherit the parent's context but can request additional context via @-mentions
+
+### 16.4 The Three-Layer Context Model
+
+Every chat message is processed with intelligently assembled context:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  LAYER 1: PROJECT MEMORY (Always Present)                       │
+│  ──────────────────────────────────────                         │
+│  Source: ProjectMemoryService → project_memory.yaml             │
+│  Contents: Story decisions, world rules, character DNA,         │
+│            style guide, glossary, tone preferences              │
+│  Injected: Automatically on every message (auto_inject=true)    │
+│  Token cost: ~500–2K tokens (compact by design)                 │
+│  Equivalent: CLAUDE.md for the story project                    │
+│  Update: Writer says "remember: always use present tense"       │
+│          → saved to project memory → injected in all future     │
+│            messages and sessions                                │
+├─────────────────────────────────────────────────────────────────┤
+│  LAYER 2: SESSION CONTEXT (Ephemeral, Compactable)              │
+│  ──────────────────────────────────────                         │
+│  Source: ChatSessionService → .antigravity/sessions/{id}/       │
+│  Contents: Conversation history, working drafts,                │
+│            agent results, approval decisions                    │
+│  Token budget: Configurable per session (default 100K)          │
+│  On /compact: LLM summarizes conversation → ~2K token digest    │
+│  On session end: Final digest persisted to session log          │
+│  Equivalent: Claude Code conversation context                   │
+├─────────────────────────────────────────────────────────────────┤
+│  LAYER 3: ON-DEMAND RETRIEVAL (Pulled by @-mention or agent)    │
+│  ──────────────────────────────────────                         │
+│  Source: ContextEngine + KnowledgeGraphService + ChromaIndexer   │
+│  Contents: Full bucket data for @-mentioned entities,           │
+│            semantic search results, KG relationship traversal,  │
+│            Research Library lookups, previous session digests    │
+│  Triggered: @character, @scene, @research mentions in message   │
+│             OR agent requests additional context during ReAct    │
+│  Equivalent: Cursor @file / @codebase, Windsurf RAG             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Token Budget Management:**
+- Each session tracks `token_usage` against `context_budget` (default 100K)
+- When usage exceeds 80% of budget, the chat suggests `/compact`
+- `/compact` triggers `ChatContextManager.compact()`: LLM summarizes the full conversation into a ~2K token digest, preserving story-critical decisions, entity states, and pending actions
+- Multiple compactions are supported (compaction count tracked) — each builds on the previous digest
+- The writer can also manually set the budget: "set my token budget to 50K for this session"
+
+### 16.5 Glass Box Chat Transparency
+
+Every agent action in the chat produces a `ChatActionTrace` — the chat equivalent of the Glass Box in the pipeline system:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  💬 Writer: "write a scene where Zara enters the market"        │
+│                                                                 │
+│  ▼ Actions (3) ─────────────────────────────────── [Collapse ▲] │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 🔍 SEARCH — Found relevant entities                       │  │
+│  │   Containers: @Zara, @The Market, @Cursed Blade           │  │
+│  │   Tokens: 1,847 | Duration: 120ms                         │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 🧠 CONTEXT — Assembled writing context                    │  │
+│  │   Layer 1: Project Memory (dark fantasy tone, present     │  │
+│  │            tense, close POV)                               │  │
+│  │   Layer 2: Session (2 prior messages about Ch.3)          │  │
+│  │   Layer 3: 3 containers (Zara DNA, Market location,       │  │
+│  │            Cursed Blade attributes)                        │  │
+│  │   Total: 4,231 tokens                                     │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ ✍️ WRITE — Generated prose via Writing Agent               │  │
+│  │   Model: anthropic/claude-3.5-sonnet (from agent config)  │  │
+│  │   Tokens in: 4,231 | Tokens out: 847 | Duration: 3.2s    │  │
+│  │   ⤷ Sub-call: 🔍 Continuity Analyst (depth 1)            │  │
+│  │     Checked 3 relationships — no issues found             │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  📄 [Artifact Preview] ──────────────────────────────────────── │
+│  │ The rain fell in sheets as Zara stepped into the          │  │
+│  │ Whispering Market. Her hand drifted to the blade          │  │
+│  │ at her hip — the obsidian surface warm despite the cold...│  │
+│  └──────────────────────────────────────────────────────────── │
+│                                                                 │
+│  [✅ Save to Ch.3]  [✏️ Revise]  [🔄 Regenerate]               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Trace structure:**
+- Each message can have 0+ `ChatActionTrace` entries
+- Each trace records: `tool_name`, `agent_id`, `context_summary`, `containers_used[]`, `model_used`, `duration_ms`, `token_usage`, `result_preview`
+- Sub-invocations (agent-to-agent) are nested as `sub_invocations[]` within the parent trace
+- The frontend renders traces as collapsible blocks — collapsed by default, expandable on click
+- Artifact previews (prose, outlines, schemas) render in a dedicated preview panel alongside the chat
+
+### 16.6 Session Lifecycle & Persistence
+
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE: Create session / Resume session
+
+    ACTIVE --> ACTIVE: Send messages, @-mentions, agent actions
+    ACTIVE --> COMPACTED: /compact (token budget management)
+    COMPACTED --> ACTIVE: Continue chatting (with summarized history)
+
+    ACTIVE --> ENDED: /end "summary"
+    COMPACTED --> ENDED: /end "summary"
+
+    ENDED --> ACTIVE: /resume (reload digest + project memory)
+    ENDED --> [*]: Archived
+
+    note right of ACTIVE
+        Token budget tracked
+        Messages persisted per-message
+        Action traces collected
+    end note
+
+    note right of COMPACTED
+        LLM summarizes to ~2K digest
+        Original messages preserved on disk
+        Compaction count incremented
+    end note
+
+    note right of ENDED
+        Final digest generated
+        Stats persisted (messages, tokens, entities)
+        "Next steps" suggested
+        Available in SessionPicker
+    end note
+```
+
+**Session persistence structure:**
+```
+.antigravity/sessions/{session_id}/
+├── manifest.yaml         # ChatSession metadata (name, state, stats)
+├── messages/             # Individual message YAML files
+│   ├── msg_001.yaml
+│   ├── msg_002.yaml
+│   └── ...
+├── digests/              # Compaction summaries
+│   ├── compact_001.yaml  # First compaction
+│   └── compact_002.yaml  # Second compaction
+└── artifacts/            # Generated content (prose, outlines)
+    ├── artifact_001.yaml
+    └── ...
+```
+
+**Multi-session support:** Writers can have multiple active sessions per project — e.g., "worldbuilding", "ch5-draft", "continuity-review". The `SessionPicker` component in the chat sidebar lets them switch between sessions. Each session maintains its own conversation history, token budget, and context state.
+
+### 16.7 Background Workflow Execution
+
+Long-running operations (pipeline execution, bulk bucket creation, research deep-dives) run in the background while the writer continues chatting:
+
+```
+┌──────────────────────────────────────────────────┐
+│  💬 Chat Sidebar                                  │
+│                                                  │
+│  Writer: "run Scene→Panels on Ch.3 Sc.1"        │
+│  Agent: "Starting pipeline (8 steps)..."         │
+│                                                  │
+│  ┌── 🔄 Background: Scene→Panels ──────────────┐ │
+│  │ Step 3/8: Outline into beats (running...)    │ │
+│  │ ████████░░░░ 37%                             │ │
+│  └──────────────────────────────────────────────┘ │
+│                                                  │
+│  Writer: "while that's running, tell me about    │
+│  Kael's relationship with the Iron Council"      │
+│                                                  │
+│  Agent: "Based on @Kael and @Iron Council:..."   │
+│                                                  │
+│  ┌── ⏸️ Background: Scene→Panels ──────────────┐ │
+│  │ Step 4/8: Review Outline — NEEDS APPROVAL    │ │
+│  │ [View Outline] [Approve] [Edit] [Skip]       │ │
+│  └──────────────────────────────────────────────┘ │
+│                                                  │
+│  Writer: "approve the outline"                   │
+│  Agent: "Outline approved. Continuing pipeline." │
+└──────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+- Pipeline SSE events are **multiplexed** into the chat session's SSE stream — the frontend demultiplexes by event type (`chat_token` vs `pipeline_step` vs `pipeline_state`)
+- Background tasks are tracked per-session: `session.background_tasks: List[BackgroundTask]`
+- When an approval gate fires in a background pipeline, the chat renders an inline approval prompt — the writer responds in natural language, and the `ChatOrchestrator` translates to `POST /runs/{id}/resume`
+- Multiple background tasks can run concurrently — each has its own progress indicator in the chat
+- If the writer ends a session while background tasks are running, they're warned and can choose to wait or let them complete asynchronously
+
+---
+
+## 17. Unified Data Access Layer (Phase K)
+
+The persistence layer has grown organically through Phases A–J, resulting in two incompatible data paths (CLI typed repos vs. Web container repos), no caching, O(n) ID lookups, non-atomic writes, and expensive startup crawls. Phase K introduces a **Unified Data Access Layer (DAL)** that fixes all of these while preserving YAML as the source of truth.
+
+### 17.1 Design Principles
+
+| Principle | Rule | Why |
+|-----------|------|-----|
+| **YAML is Truth** | YAML files are the canonical store. SQLite is a derived, rebuildable index. | Git-friendly, human-readable, directly editable by authors and Claude Code |
+| **SQLite is the Read Path** | All queries go through SQLite first; YAML only for full entity hydration | O(1) ID lookups vs O(n) directory scans. JSON1 for attribute filtering. |
+| **Atomic Writes** | Every mutation goes through `UnitOfWork` (YAML + index + event) | No partial writes, no stale indexes, no convention-based dual-write bugs |
+| **Mtime Caching** | Repos cache entities keyed on `(path, file_mtime)` | Avoid redundant disk reads. stat() is ~0.01ms — essentially free. |
+| **Batch First** | Context assembly loads all needed data in one pass via `ProjectSnapshot` | Eliminate N+1 patterns (currently 20+ individual file reads per prompt) |
+| **Incremental Sync** | On startup, only reindex files where disk mtime > last indexed time | 10–50x faster startup vs current `sync_all()` full directory crawl |
+
+### 17.2 CQRS Architecture
+
+The DAL implements **Command/Query Responsibility Segregation**: writes flow through `UnitOfWork` to YAML (truth) + SQLite (index), reads flow through SQLite (fast) + MtimeCache (memory) + YAML (hydration on cache miss).
+
+```mermaid
+sequenceDiagram
+    participant S as Service
+    participant UoW as UnitOfWork
+    participant YAML as YAML Files
+    participant SQL as SQLite Index
+    participant EVT as EventService
+    participant CHR as ChromaDB
+
+    Note over S,CHR: ── WRITE PATH ──
+    S->>UoW: save(entity, yaml_path)
+    UoW->>YAML: write to temp file (.tmp)
+    UoW->>SQL: BEGIN TRANSACTION
+    UoW->>SQL: upsert entity + sync_metadata
+    UoW->>EVT: append_event()
+    UoW->>YAML: atomic rename (.tmp → .yaml)
+    UoW->>SQL: COMMIT
+    UoW-->>CHR: async upsert_embedding()
+    UoW->>UoW: invalidate MtimeCache
+
+    Note over S,CHR: ── READ PATH ──
+    S->>SQL: query entities(type, filters)
+    SQL-->>S: entity IDs + yaml_paths
+    S->>S: MtimeCache.get(path)
+    alt Cache Hit (mtime matches)
+        S-->>S: return cached entity
+    else Cache Miss
+        S->>YAML: read + parse
+        S->>S: MtimeCache.put(path, entity)
+    end
+```
+
+**Key properties:**
+- YAML is never overwritten directly — writes go to temp files, then atomic `os.rename()`
+- SQLite transaction encompasses index upsert + event append — both commit or neither does
+- If process crashes after rename but before SQLite commit: incremental sync detects mtime mismatch at next startup and re-indexes
+- ChromaDB upsert is async and non-fatal — vector index is best-effort
+
+### 17.3 Universal SQLite Index
+
+The current `containers` table only indexes `GenericContainer` instances. Phase K extends this to a universal `entities` table that indexes **every entity type** — characters, scenes, world settings, story structures, style guides, and containers alike.
+
+```sql
+CREATE TABLE entities (
+    id TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL,       -- 'character', 'scene', 'world_settings', 'container', etc.
+    container_type TEXT,             -- For GenericContainers: sub-type ('fragment', 'research_topic')
+    name TEXT NOT NULL,
+    yaml_path TEXT NOT NULL UNIQUE,  -- O(1) path resolution — no directory scanning
+    content_hash TEXT NOT NULL,      -- SHA-256 for change detection
+    attributes_json TEXT,            -- JSON1 for attribute queries
+    parent_id TEXT,
+    sort_order INTEGER DEFAULT 0,
+    tags_json TEXT DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (parent_id) REFERENCES entities(id) ON DELETE SET NULL
+);
+
+CREATE TABLE sync_metadata (
+    yaml_path TEXT PRIMARY KEY,
+    entity_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    mtime REAL NOT NULL,             -- os.stat().st_mtime
+    indexed_at TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+);
+```
+
+**What this solves:**
+
+| Before (O(n)) | After (O(1)) |
+|---------------|-------------|
+| `ContainerRepository.get_by_id()` scans all subdirectories, loads every YAML | `SELECT yaml_path FROM entities WHERE id = ?` → direct file read |
+| `find_containers(type)` scans type directory | `SELECT * FROM entities WHERE entity_type = ?` |
+| No way to query across entity types | `SELECT * FROM entities WHERE name LIKE ? OR json_extract(attributes_json, '$.role') = ?` |
+
+**Migration:** The existing `containers` table is migrated to `entities` with `entity_type = 'container'`. Typed entities (characters, scenes, etc.) are indexed alongside via the same table — the `entity_type` column distinguishes them.
+
+### 17.4 Mtime Cache
+
+A **bounded LRU cache** at the repository layer that uses file modification time for invalidation. This eliminates redundant disk reads without TTL-based staleness.
+
+```
+class MtimeCache[T]:
+    max_size: 500 (configurable)
+
+    get(path) → Optional[T]:
+        1. stat(path) → current_mtime
+        2. if path in cache AND cache[path].mtime == current_mtime:
+             cache[path].accessed_at = now()  # LRU touch
+             return cache[path].entity
+        3. return None  # cache miss — caller reads from YAML
+
+    put(path, entity):
+        1. mtime = stat(path).st_mtime
+        2. cache[path] = CacheEntry(entity, mtime, now())
+        3. if len(cache) > max_size: evict LRU entry
+
+    invalidate(path):
+        del cache[path]  # called by UnitOfWork on write
+```
+
+**Performance:** stat() syscall is ~0.01ms. Cache hit avoids YAML parse (~1-5ms per file). For context compilation with 20+ entities, this saves ~40-100ms per compilation on cache-warm requests.
+
+**Integration:** Wired into `YAMLRepository._load_file()`:
+```python
+def _load_file(self, path: Path) -> T:
+    # Try cache first
+    cached = self._cache.get(path) if self._cache else None
+    if cached is not None:
+        return cached
+    # Cache miss — read from disk
+    data = read_yaml(path)
+    entity = self.model_class(**data)
+    if self._cache:
+        self._cache.put(path, entity)
+    return entity
+```
+
+### 17.5 Unit of Work
+
+The **Unit of Work** pattern replaces convention-based dual-writes with structurally enforced atomicity. Services buffer mutations, then commit them in a single transaction.
+
+```mermaid
+flowchart LR
+    subgraph Buffer["Buffer Phase"]
+        A["uow.save(entity1)"] --> BUF[("Internal Buffer")]
+        B["uow.save(entity2)"] --> BUF
+        C["uow.delete(entity3)"] --> BUF
+    end
+
+    subgraph Commit["Commit Phase (all-or-nothing)"]
+        BUF --> D["Write YAML temps"]
+        D --> E["BEGIN SQLite txn"]
+        E --> F["Upsert entities + sync_metadata"]
+        F --> G["Append events"]
+        G --> H["Atomic rename temps → final"]
+        H --> I["COMMIT SQLite txn"]
+        I --> J["Invalidate cache"]
+        J --> K["Async ChromaDB upsert"]
+    end
+```
+
+**Failure handling:**
+- Crash during temp write → temp files are orphans, cleaned up on next startup. Original YAML untouched.
+- Crash during SQLite transaction → auto-rollback, no partial index state. YAML still has old data since rename hasn't happened.
+- Crash after rename but before SQLite commit → incremental sync detects mtime > indexed_at at next startup and re-indexes from the (already correct) YAML.
+- ChromaDB failure → logged but non-fatal. Vector index is eventually consistent.
+
+**Usage by services:**
+```python
+# Before (Phase F — convention-based)
+container_repo.save_container(container)  # YAML write
+event_service.append_event(...)           # SQLite write — could be forgotten!
+
+# After (Phase K — structurally enforced)
+async with uow:
+    uow.save(container.id, "container", yaml_path, container.model_dump())
+    # event is auto-appended by UoW based on operation type
+```
+
+### 17.6 Incremental Sync
+
+Replaces the expensive `sync_all()` startup crawl with a mtime-comparison strategy.
+
+```
+                    ┌─────────────────────────┐
+                    │   App Startup            │
+                    └──────────┬──────────────┘
+                               │
+                    ┌──────────▼──────────────┐
+                    │  Load sync_metadata     │
+                    │  from SQLite            │
+                    └──────────┬──────────────┘
+                               │
+            ┌──────────────────┼──────────────────┐
+            │                  │                   │
+   ┌────────▼───────┐  ┌──────▼──────┐  ┌────────▼────────┐
+   │ Changed files   │  │ New files   │  │ Deleted files    │
+   │ mtime > indexed │  │ not in sync │  │ in sync but not  │
+   │ → re-read YAML  │  │ → read YAML │  │ on disk          │
+   │ → upsert index  │  │ → insert    │  │ → remove index   │
+   └────────┬───────┘  └──────┬──────┘  └────────┬────────┘
+            │                  │                   │
+            └──────────────────┼──────────────────┘
+                               │
+                    ┌──────────▼──────────────┐
+                    │  Update sync timestamps │
+                    │  Warm MtimeCache        │
+                    └─────────────────────────┘
+```
+
+**Performance:** For a project with 200 entities where 5 changed since last run:
+- **Current:** `rglob("*.yaml")` → 200 file reads + 200 YAML parses + 200 SQLite upserts = ~2-5s
+- **Phase K:** 200 stat() calls + 5 file reads + 5 upserts = ~50ms
+
+### 17.7 Unified Context Assembler
+
+Merges the CLI's `ContextCompiler` (Jinja2 templates, no token budget) and the Web's `ContextEngine` (token budget, Glass Box, no templates) into a single `ContextAssembler` that serves all consumer paths.
+
+```mermaid
+flowchart TD
+    CLI["CLI Command"] -->|"step + scope"| CA["ContextAssembler.compile()"]
+    WEB["Web Service"] -->|"step + scope"| CA
+    CHAT["Chat Orchestrator"] -->|"step + scope"| CA
+
+    CA --> PSF["ProjectSnapshotFactory.load(scope)"]
+    PSF -->|"batch query"| SQL[("SQLite Index")]
+    PSF -->|"cache check"| MC["MtimeCache"]
+    PSF -->|"hydrate miss"| YAML[("YAML Files")]
+    PSF -->|"ProjectSnapshot"| CA
+
+    CA --> ISO["Apply creative room isolation"]
+    CA --> DEC["Inject decisions (scoped)"]
+    CA --> TOK["Apply token budget"]
+    CA --> REN{"output_format?"}
+    REN -->|"template"| J2["Jinja2 render (CLI)"]
+    REN -->|"structured"| ST["Structured text (Chat)"]
+    REN -->|"raw"| RAW["Dict (API)"]
+    J2 --> CR["ContextResult"]
+    ST --> CR
+    RAW --> CR
+```
+
+**`ContextScope` model:**
+```python
+class ContextScope:
+    step: str              # "scene_writing", "evaluation", etc.
+    access_level: str      # "story" | "author" — controls creative room isolation
+    chapter: int | None    # Scope to specific chapter
+    scene: int | None      # Scope to specific scene
+    character: str | None  # Scope to specific character
+    token_budget: int      # Default 100K — enforced on all paths now
+    output_format: str     # "template" (CLI) | "structured" (Chat) | "raw" (API)
+```
+
+**What changes for each consumer:**
+| Consumer | Before | After |
+|----------|--------|-------|
+| **CLI** | ContextCompiler (typed repos, Jinja2, no budget) | ContextAssembler (batch load, Jinja2, budget, Glass Box) |
+| **Web** | ContextEngine (KG query, token budget, Glass Box) | ContextAssembler (batch load, structured text, budget, Glass Box) |
+| **Chat** | ChatContextManager → ContextEngine | ChatContextManager → ContextAssembler (3-layer + budget + Glass Box) |
+
+### 17.8 DB Maintenance
+
+New CLI command group and API endpoints for index health monitoring, consistency verification, and self-healing.
+
+**CLI Commands:**
+
+| Command | Purpose | When to Use |
+|---------|---------|-------------|
+| `antigravity db check` | Compare every YAML file against SQLite index. Report mismatches, orphaned indexes, un-indexed files. | After `git pull`, manual file edits, or suspected corruption |
+| `antigravity db reindex` | Full rebuild of SQLite `entities` + `sync_metadata` tables from YAML. Also rebuilds ChromaDB. | Nuclear option when incremental sync isn't enough |
+| `antigravity db compact` | Prune orphaned index entries, compress event log (remove tombstoned events), clean stale sync_metadata | Periodic maintenance for large projects |
+| `antigravity db stats` | Display entity counts by type, index health, disk usage, cache hit rates | Debugging and monitoring |
+
+**API Endpoints (for Web Studio):**
+
+| Endpoint | Method | Response |
+|----------|--------|----------|
+| `/api/v1/db/health` | GET | `DBHealthReport` — entity counts, orphans, stale entries, sizes |
+| `/api/v1/db/reindex` | POST | SSE stream of reindex progress (file-by-file) |
+| `/api/v1/db/check` | POST | Consistency report with actionable fixes |
+| `/api/v1/db/stats` | GET | Cache stats, query performance, index metrics |
+
+**Self-healing:** When `antigravity db check` detects a mismatch (e.g., YAML file exists but isn't indexed), it offers to auto-fix by re-indexing the affected files. This is the "pit of success" — the tool naturally guides toward consistency.

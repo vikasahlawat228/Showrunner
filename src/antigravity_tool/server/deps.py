@@ -245,3 +245,70 @@ def get_translation_service(
     return TranslationService(kg_service, context_engine, agent_dispatcher, container_repo)
 
 
+# ── Phase J / Phase K additions ──────────────────────────────────
+
+from antigravity_tool.repositories.chat_session_repo import ChatSessionRepository
+from antigravity_tool.services.chat_session_service import ChatSessionService
+from antigravity_tool.services.chat_orchestrator import ChatOrchestrator
+from antigravity_tool.services.project_memory_service import ProjectMemoryService
+from antigravity_tool.services.chat_context_manager import ChatContextManager
+from antigravity_tool.services.intent_classifier import IntentClassifier
+
+
+def get_chat_session_repo(request: Request) -> ChatSessionRepository:
+    """Return the singleton ChatSessionRepository created during lifespan."""
+    if hasattr(request.app.state, "chat_session_repo"):
+        return request.app.state.chat_session_repo
+    # Fallback for tests
+    project = get_project()
+    db_path = str(project.path / ".antigravity" / "chat.db")
+    return ChatSessionRepository(db_path)
+
+
+def get_chat_deps(request: Request = None) -> ChatSessionService:
+    """Return a ChatSessionService.
+
+    When called from route handlers with lazy import, request may be None.
+    Falls back to app.state singleton if available.
+    """
+    if request and hasattr(request.app.state, "chat_session_service"):
+        return request.app.state.chat_session_service
+    # Fallback: create on-the-fly
+    project = get_project()
+    db_path = str(project.path / ".antigravity" / "chat.db")
+    repo = ChatSessionRepository(db_path)
+    return ChatSessionService(repo)
+
+
+def get_chat_orchestrator_dep(request: Request = None) -> ChatOrchestrator:
+    """Return the ChatOrchestrator singleton."""
+    if request and hasattr(request.app.state, "chat_orchestrator"):
+        return request.app.state.chat_orchestrator
+    # Fallback: minimal orchestrator
+    project = get_project()
+    db_path = str(project.path / ".antigravity" / "chat.db")
+    repo = ChatSessionRepository(db_path)
+    svc = ChatSessionService(repo)
+    return ChatOrchestrator(session_service=svc)
+
+
+def get_project_memory_service(
+    project: Project = Depends(get_project),
+) -> ProjectMemoryService:
+    return ProjectMemoryService(project.path)
+
+
+def get_chat_context_manager(
+    request: Request,
+) -> ChatContextManager:
+    """Return the ChatContextManager singleton."""
+    if hasattr(request.app.state, "chat_context_manager"):
+        return request.app.state.chat_context_manager
+    # Fallback
+    project = get_project()
+    db_path = str(project.path / ".antigravity" / "chat.db")
+    repo = ChatSessionRepository(db_path)
+    svc = ChatSessionService(repo)
+    memory_svc = ProjectMemoryService(project.path)
+    return ChatContextManager(svc, memory_svc)
+

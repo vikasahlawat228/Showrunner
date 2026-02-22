@@ -349,6 +349,9 @@ export function ZenEditor() {
             setWordCount(words);
             setCharCount(text.length);
 
+            // Sync content to store for Chat Context Injection (CUJ 14)
+            useZenStore.getState().setEditorContent(text);
+
             // Debounced auto-save (3 seconds)
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {

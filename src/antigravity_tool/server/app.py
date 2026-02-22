@@ -33,6 +33,8 @@ from antigravity_tool.server.routers import export as export_router
 from antigravity_tool.server.routers import analysis as analysis_router
 from antigravity_tool.server.routers import preview as preview_router
 from antigravity_tool.server.routers import translation as translation_router
+from antigravity_tool.server.routers import chat as chat_router
+from antigravity_tool.server.routers import db as db_router
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +114,46 @@ async def lifespan(app: FastAPI):
     )
     watcher.start()
 
+    # ── Phase J / Phase K: Chat system singletons ──────────────────
+    from antigravity_tool.repositories.chat_session_repo import ChatSessionRepository
+    from antigravity_tool.services.chat_session_service import ChatSessionService
+    from antigravity_tool.services.chat_orchestrator import ChatOrchestrator
+    from antigravity_tool.services.project_memory_service import ProjectMemoryService
+    from antigravity_tool.services.chat_context_manager import ChatContextManager
+    from antigravity_tool.services.intent_classifier import IntentClassifier
+    from antigravity_tool.services.chat_tool_registry import build_tool_registry
+
+    chat_db_path = proj.path / ".antigravity" / "chat.db"
+    chat_db_path.parent.mkdir(parents=True, exist_ok=True)
+    chat_session_repo = ChatSessionRepository(str(chat_db_path))
+    chat_session_service = ChatSessionService(chat_session_repo)
+    project_memory_service = ProjectMemoryService(proj.path)
+    intent_classifier = IntentClassifier()
+    chat_context_manager = ChatContextManager(
+        session_service=chat_session_service,
+        memory_service=project_memory_service,
+    )
+
+    # Build tool registry from existing services
+    from antigravity_tool.repositories.event_sourcing_repo import EventService
+    event_service = EventService(proj.path / "event_log.db")
+    tool_registry = build_tool_registry(
+        kg_service=kg_service,
+        container_repo=container_repo,
+        project_memory_service=project_memory_service,
+        pipeline_service=PipelineService(container_repo, event_service),
+        project_path=proj.path,
+    )
+
+    chat_orchestrator = ChatOrchestrator(
+        session_service=chat_session_service,
+        intent_classifier=intent_classifier,
+        context_manager=chat_context_manager,
+        tool_registry=tool_registry,
+        model_config_registry=model_config_registry,
+    )
+    logger.info("Chat system initialized (db: %s, tools: %s)", chat_db_path, list(tool_registry.keys()))
+
     # Store on app.state so DI can access the singletons
     app.state.project = proj
     app.state.container_repo = container_repo
@@ -120,12 +162,18 @@ async def lifespan(app: FastAPI):
     app.state.kg_service = kg_service
     app.state.file_watcher = watcher
     app.state.model_config_registry = model_config_registry
+    app.state.chat_session_repo = chat_session_repo
+    app.state.chat_session_service = chat_session_service
+    app.state.chat_orchestrator = chat_orchestrator
+    app.state.project_memory_service = project_memory_service
+    app.state.chat_context_manager = chat_context_manager
 
     yield  # ---- application is running ----
 
     # Shutdown
     watcher.stop()
     indexer.close()
+    chat_session_repo.close()
     logger.info("Lifespan shutdown complete")
 
 
@@ -154,7 +202,7 @@ app.include_router(world.router)
 app.include_router(chapters.router)
 app.include_router(workflow.router)
 app.include_router(director.router)
-app.include_router(pipeline.router, prefix="/api")
+app.include_router(pipeline.router, prefix="/api/v1")
 app.include_router(schemas_router.router)
 app.include_router(graph.router)
 app.include_router(timeline.router)
@@ -180,6 +228,10 @@ app.include_router(analysis_router.router)
 
 # Phase Next-C
 app.include_router(preview_router.router)
+
+# Phase J (Agentic Chat) + Phase K (Unified DAL)
+app.include_router(chat_router.router)
+app.include_router(db_router.router)
 
 if __name__ == "__main__":
     import uvicorn

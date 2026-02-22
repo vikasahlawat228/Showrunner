@@ -121,6 +121,7 @@ Thumbs.db
 # App Data & Buckets
 *.db
 .chroma/
+.antigravity/
 characters/
 containers/
 creative_room/

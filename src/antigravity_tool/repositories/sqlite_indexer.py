@@ -1,9 +1,10 @@
-"""SQLite indexing layer for Showrunner containers."""
+"""SQLite indexing layer for Showrunner containers and DAL entities."""
 
 from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -57,6 +58,37 @@ class SQLiteIndexer:
                 )
             """)
 
+            # Phase K: Entities table — normalised DAL index
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS entities (
+                    id TEXT PRIMARY KEY,
+                    entity_type TEXT NOT NULL,
+                    container_type TEXT,
+                    name TEXT NOT NULL,
+                    yaml_path TEXT NOT NULL UNIQUE,
+                    content_hash TEXT NOT NULL,
+                    attributes_json TEXT,
+                    parent_id TEXT,
+                    sort_order INTEGER DEFAULT 0,
+                    tags_json TEXT DEFAULT '[]',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+
+            # Phase K: Sync metadata for incremental YAML→SQLite sync
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS sync_metadata (
+                    yaml_path TEXT PRIMARY KEY,
+                    entity_id TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    mtime REAL NOT NULL,
+                    indexed_at TEXT NOT NULL,
+                    file_size INTEGER NOT NULL
+                )
+            """)
+
         # Run migration for existing databases that lack Phase F columns before creating indexes
         self._migrate_phase_f_columns()
 
@@ -66,6 +98,13 @@ class SQLiteIndexer:
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_relationship_type ON relationships(rel_type)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_parent_id ON containers(parent_id)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_sort_order ON containers(sort_order)")
+
+            # Phase K: Entity indexes
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type ON entities(entity_type)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_container_type ON entities(container_type)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_parent ON entities(parent_id)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_yaml_path ON entities(yaml_path)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_sync_mtime ON sync_metadata(mtime)")
 
     def _migrate_phase_f_columns(self) -> None:
         """Add Phase F columns to existing databases via ALTER TABLE."""
@@ -222,6 +261,203 @@ class SQLiteIndexer:
             return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as e:
             raise PersistenceError(f"Database error during get_all_relationships query: {e}")
+
+    # ── Phase K: Entity CRUD ──────────────────────────────────────
+
+    def upsert_entity(
+        self,
+        entity_id: str,
+        entity_type: str,
+        name: str,
+        yaml_path: str,
+        content_hash: str,
+        attributes_json: str,
+        created_at: str,
+        updated_at: str,
+        container_type: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        sort_order: int = 0,
+        tags: Optional[List[str]] = None,
+    ) -> None:
+        """Add or update an entity in the entities index."""
+        try:
+            with self.conn:
+                self.conn.execute("""
+                    INSERT OR REPLACE INTO entities
+                    (id, entity_type, container_type, name, yaml_path, content_hash,
+                     attributes_json, parent_id, sort_order, tags_json,
+                     created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    entity_id,
+                    entity_type,
+                    container_type,
+                    name,
+                    str(yaml_path),
+                    content_hash,
+                    attributes_json,
+                    parent_id,
+                    sort_order,
+                    json.dumps(tags or []),
+                    created_at,
+                    updated_at,
+                ))
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during entity upsert: {e}")
+
+    def delete_entity(self, entity_id: str) -> None:
+        """Remove an entity from the entities index."""
+        try:
+            with self.conn:
+                self.conn.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during entity deletion: {e}")
+
+    def query_entities(
+        self,
+        entity_type: Optional[str] = None,
+        container_type: Optional[str] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Query entities with optional type filters and JSON attribute filters."""
+        query = "SELECT * FROM entities WHERE 1=1"
+        params: list = []
+
+        if entity_type:
+            query += " AND entity_type = ?"
+            params.append(entity_type)
+
+        if container_type:
+            query += " AND container_type = ?"
+            params.append(container_type)
+
+        if filters:
+            for key, value in filters.items():
+                if key in ("id", "parent_id", "yaml_path", "content_hash"):
+                    query += f" AND {key} = ?"
+                    params.append(value)
+                else:
+                    # JSON attribute match
+                    query += f" AND json_extract(attributes_json, '$.{key}') = ?"
+                    params.append(value)
+
+        try:
+            cursor = self.conn.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during entity query: {e}")
+
+    def get_entity_by_path(self, yaml_path: str) -> Optional[Dict[str, Any]]:
+        """O(1) lookup of an entity by its YAML file path (UNIQUE index)."""
+        try:
+            cursor = self.conn.execute(
+                "SELECT * FROM entities WHERE yaml_path = ?", (str(yaml_path),)
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during entity path lookup: {e}")
+
+    # ── Phase K: Sync Metadata CRUD ────────────────────────────────
+
+    def upsert_sync_metadata(
+        self,
+        yaml_path: str,
+        entity_id: str,
+        entity_type: str,
+        content_hash: str,
+        mtime: float,
+        file_size: int,
+    ) -> None:
+        """Add or update sync metadata for a YAML file."""
+        try:
+            with self.conn:
+                self.conn.execute("""
+                    INSERT OR REPLACE INTO sync_metadata
+                    (yaml_path, entity_id, entity_type, content_hash, mtime, indexed_at, file_size)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    str(yaml_path),
+                    entity_id,
+                    entity_type,
+                    content_hash,
+                    mtime,
+                    datetime.now(timezone.utc).isoformat(),
+                    file_size,
+                ))
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during sync metadata upsert: {e}")
+
+    def get_sync_metadata(self, yaml_path: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get sync metadata. Returns one entry if yaml_path given, all if None."""
+        try:
+            if yaml_path:
+                cursor = self.conn.execute(
+                    "SELECT * FROM sync_metadata WHERE yaml_path = ?",
+                    (str(yaml_path),),
+                )
+            else:
+                cursor = self.conn.execute("SELECT * FROM sync_metadata")
+            return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during sync metadata query: {e}")
+
+    def delete_sync_metadata(self, yaml_path: str) -> None:
+        """Remove sync metadata for a YAML file."""
+        try:
+            with self.conn:
+                self.conn.execute(
+                    "DELETE FROM sync_metadata WHERE yaml_path = ?",
+                    (str(yaml_path),),
+                )
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during sync metadata deletion: {e}")
+
+    # ── Phase K: Aggregation & Migration ───────────────────────────
+
+    def get_entity_count_by_type(self) -> Dict[str, int]:
+        """Return a mapping of entity_type → count from the entities table."""
+        try:
+            cursor = self.conn.execute(
+                "SELECT entity_type, COUNT(*) as cnt FROM entities GROUP BY entity_type"
+            )
+            return {row["entity_type"]: row["cnt"] for row in cursor.fetchall()}
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during entity count: {e}")
+
+    def migrate_containers_to_entities(self) -> int:
+        """Copy data from the containers table into the entities table.
+
+        This is a one-time migration helper for moving from the legacy
+        containers index to the normalised entities index.  Existing
+        entities with the same id are overwritten (INSERT OR REPLACE).
+
+        Returns the number of rows migrated.
+        """
+        try:
+            cursor = self.conn.execute("SELECT * FROM containers")
+            rows = cursor.fetchall()
+            count = 0
+            for row in rows:
+                row_dict = dict(row)
+                self.upsert_entity(
+                    entity_id=row_dict["id"],
+                    entity_type=row_dict["container_type"],
+                    name=row_dict["name"],
+                    yaml_path=row_dict["yaml_path"],
+                    content_hash="migrated",  # No hash in legacy table
+                    attributes_json=row_dict.get("attributes_json", "{}"),
+                    created_at=row_dict["created_at"],
+                    updated_at=row_dict["updated_at"],
+                    container_type=row_dict["container_type"],
+                    parent_id=row_dict.get("parent_id"),
+                    sort_order=row_dict.get("sort_order", 0),
+                    tags=json.loads(row_dict.get("tags_json", "[]")),
+                )
+                count += 1
+            return count
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during container→entity migration: {e}")
 
     def close(self) -> None:
         """Close the database connection."""

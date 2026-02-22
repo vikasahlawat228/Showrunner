@@ -3,18 +3,20 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  PenTool, 
-  Workflow, 
-  Film, 
-  Clock, 
-  Lightbulb, 
-  BookOpen, 
-  Globe, 
+import {
+  LayoutDashboard,
+  PenTool,
+  Workflow,
+  Film,
+  Clock,
+  Lightbulb,
+  BookOpen,
+  Globe,
   Smartphone,
-  Command
+  Command,
+  MessageSquare
 } from "lucide-react";
+import { useStudioStore } from "@/lib/store";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -30,6 +32,7 @@ const navItems = [
 
 export function Navbar() {
   const pathname = usePathname();
+  const { isChatSidebarOpen, setChatSidebarOpen } = useStudioStore();
 
   const handleCommandPaletteClick = () => {
     // Trigger custom event to open the command palette
@@ -37,6 +40,17 @@ export function Navbar() {
     // As a fallback for different OS/browsers, also dispatch a custom event
     window.dispatchEvent(new CustomEvent('open:command-palette'));
   };
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        setChatSidebarOpen(!isChatSidebarOpen);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isChatSidebarOpen, setChatSidebarOpen]);
 
   return (
     <nav className="fixed top-0 left-0 right-0 h-12 bg-gray-950/95 backdrop-blur-sm border-b border-gray-800 z-50 flex items-center justify-between px-4">
@@ -52,16 +66,15 @@ export function Navbar() {
         {navItems.map((item) => {
           const isActive = pathname?.startsWith(item.href);
           const Icon = item.icon;
-          
+
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
-                isActive
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${isActive
                   ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
                   : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 border border-transparent"
-              }`}
+                }`}
             >
               <Icon className={`w-3.5 h-3.5 ${isActive ? "text-indigo-400" : "text-gray-500"}`} />
               <span className="hidden sm:inline">{item.name}</span>
@@ -72,6 +85,17 @@ export function Navbar() {
 
       {/* Right: Actions */}
       <div className="flex items-center gap-3">
+        <button
+          onClick={() => setChatSidebarOpen(!isChatSidebarOpen)}
+          className={`flex items-center justify-center p-1.5 border hover:border-gray-600 rounded-md transition-colors ${isChatSidebarOpen
+              ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/30"
+              : "bg-gray-900 border-gray-700 text-gray-400"
+            }`}
+          title="Toggle Agentic Chat (Cmd+Shift+C)"
+        >
+          <MessageSquare className="w-4 h-4" />
+        </button>
+
         <button
           onClick={handleCommandPaletteClick}
           className="flex items-center gap-1.5 px-2 py-1 bg-gray-900 hover:bg-gray-800 border border-gray-700 hover:border-gray-600 rounded-md text-gray-400 transition-colors"

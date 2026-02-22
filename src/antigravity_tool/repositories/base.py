@@ -8,6 +8,7 @@ from typing import Generic, TypeVar, Type, Callable, List, Dict, Any, Optional
 from pydantic import BaseModel
 
 from antigravity_tool.errors import EntityNotFoundError, PersistenceError
+from antigravity_tool.repositories.mtime_cache import MtimeCache
 from antigravity_tool.utils.io import read_yaml, write_yaml
 
 T = TypeVar("T", bound=BaseModel)
@@ -18,11 +19,20 @@ class YAMLRepository(Generic[T]):
 
     Provides common load/save/list operations with proper error handling.
     Entity-specific repositories inherit from this and add domain logic.
+
+    An optional ``MtimeCache`` can be provided to avoid redundant YAML
+    parsing when the underlying file has not changed on disk.
     """
 
-    def __init__(self, base_dir: Path, model_class: Type[T]):
+    def __init__(
+        self,
+        base_dir: Path,
+        model_class: Type[T],
+        cache: Optional[MtimeCache[T]] = None,
+    ):
         self.base_dir = base_dir
         self.model_class = model_class
+        self._cache = cache
         self._save_callbacks: List[Callable[[Path, T], None]] = []
         self._delete_callbacks: List[Callable[[Path, str], None]] = []
 
@@ -44,9 +54,16 @@ class YAMLRepository(Generic[T]):
             raise EntityNotFoundError(
                 self.model_class.__name__, path.stem
             )
+
+        # Check cache first
+        if self._cache is not None:
+            cached = self._cache.get(path)
+            if cached is not None:
+                return cached
+
         try:
             data = read_yaml(path)
-            return self.model_class(**data)
+            entity = self.model_class(**data)
         except EntityNotFoundError:
             raise
         except Exception as e:
@@ -55,24 +72,46 @@ class YAMLRepository(Generic[T]):
                 context={"path": str(path), "model": self.model_class.__name__},
             )
 
+        # Store in cache after successful parse
+        if self._cache is not None:
+            self._cache.put(path, entity)
+
+        return entity
+
     def _load_file_optional(self, path: Path) -> T | None:
         """Load a YAML file, returning None if it doesn't exist."""
         if not path.exists():
             return None
+
+        # Check cache first
+        if self._cache is not None:
+            cached = self._cache.get(path)
+            if cached is not None:
+                return cached
+
         try:
             data = read_yaml(path)
-            return self.model_class(**data)
+            entity = self.model_class(**data)
         except Exception as e:
             raise PersistenceError(
                 f"Failed to load {path}: {e}",
                 context={"path": str(path), "model": self.model_class.__name__},
             )
 
+        # Store in cache after successful parse
+        if self._cache is not None:
+            self._cache.put(path, entity)
+
+        return entity
+
     def _save_file(self, path: Path, entity: T) -> Path:
         """Serialize a model instance to a YAML file."""
         self._ensure_dir()
         try:
             write_yaml(path, entity.model_dump(mode="json"))
+            # Invalidate cache — next read will re-cache with new mtime
+            if self._cache is not None:
+                self._cache.invalidate(path)
             # Trigger callbacks
             for cb in self._save_callbacks:
                 try:
@@ -92,9 +131,12 @@ class YAMLRepository(Generic[T]):
         path = self.base_dir / f"{identifier}.yaml"
         if not path.exists():
             return
-            
+
         try:
             path.unlink()
+            # Invalidate cache entry for deleted file
+            if self._cache is not None:
+                self._cache.invalidate(path)
             # Trigger callbacks
             for cb in self._delete_callbacks:
                 try:

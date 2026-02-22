@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class ModelConfig(BaseModel):
     """Configuration for a single model slot."""
 
-    model: str = Field(description="LiteLLM model string, e.g. 'gemini/gemini-2.0-flash'.")
+    model: str = Field(description="LiteLLM model string, e.g. 'gemini/gemini-2.5-flash'.")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2048, ge=1)
     fallback_model: Optional[str] = Field(
@@ -23,7 +23,7 @@ class ProjectModelConfig(BaseModel):
     """Project-level model configuration stored in antigravity.yaml."""
 
     default_model: str = Field(
-        default="gemini/gemini-2.0-flash",
+        default="gemini/gemini-2.5-flash",
         description="Default model for all AI calls in this project.",
     )
     model_overrides: Dict[str, ModelConfig] = Field(

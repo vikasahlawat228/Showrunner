@@ -27,7 +27,7 @@ export function usePipelineStream(runId: string | undefined) {
         if (!runId) return;
 
         setIsConnecting(true);
-        const eventSource = new EventSource(`/api/pipeline/${runId}/stream`);
+        const eventSource = new EventSource(`/api/v1/pipeline/${runId}/stream`);
 
         eventSource.onmessage = (event) => {
             try {

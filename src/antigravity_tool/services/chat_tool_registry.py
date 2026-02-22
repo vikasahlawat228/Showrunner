@@ -1,0 +1,460 @@
+"""Chat Tool Registry — wires classified intents to existing services.
+
+Each tool function has the signature:
+    (content: str, entity_ids: List[str]) -> str
+
+These are registered in the ChatOrchestrator's tool_registry dict,
+keyed by lowercase intent name (e.g. "search", "create", "navigate").
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any, Callable, Dict, List
+
+logger = logging.getLogger(__name__)
+
+
+def build_tool_registry(
+    kg_service=None,
+    container_repo=None,
+    project_memory_service=None,
+    pipeline_service=None,
+    writing_service=None,
+    project_path=None,
+) -> Dict[str, Callable]:
+    """Build the intent → tool function mapping.
+
+    Each tool takes (content: str, entity_ids: List[str]) -> str.
+    Services are optional — if None, that tool won't be registered.
+    """
+    registry: Dict[str, Callable] = {}
+
+    # ── SEARCH: query the knowledge graph ────────────────────────
+    if kg_service:
+        def search_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            # Try entity search first, then semantic search
+            results = kg_service.find_containers(filters=None)
+            query = content.lower()
+
+            # Filter by content match
+            matched = []
+            for r in results:
+                name = str(r.get("name", "")).lower()
+                ctype = str(r.get("container_type", "")).lower()
+                if any(word in name for word in query.split() if len(word) > 2):
+                    matched.append(r)
+
+            if not matched:
+                # Fallback to semantic search if available
+                try:
+                    matched = kg_service.semantic_search(content, limit=5)
+                except Exception:
+                    pass
+
+            if not matched:
+                return f"No results found for: {content}"
+
+            lines = [f"Found {len(matched)} result(s):\n"]
+            for i, r in enumerate(matched[:10], 1):
+                name = r.get("name", r.get("id", "?"))
+                ctype = r.get("container_type", "unknown")
+                lines.append(f"  {i}. [{ctype}] {name}")
+            return "\n".join(lines)
+
+        registry["search"] = search_tool
+
+    # ── CREATE: scaffold a new entity ────────────────────────────
+    if container_repo and project_path:
+        def create_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            try:
+                import litellm
+                import yaml
+                import uuid
+                from antigravity_tool.schemas.container import GenericContainer
+
+                session_id = kwargs.get("session_id")
+                context_manager = kwargs.get("context_manager")
+
+                history = ""
+                if session_id and context_manager:
+                    context = context_manager.build_context(session_id)
+                    msgs = context.get("messages", [])
+                    history_lines = []
+                    for m in msgs[-6:]:  # include up to 6 recent messages
+                        history_lines.append(f"{m['role'].upper()}: {m['content']}")
+                    history = "\n".join(history_lines)
+                
+                system_prompt = (
+                    "You are an expert at extracting structured entities from creative writing brainstorms.\n"
+                    "Extract any new characters, scenes, settings, or other story elements the user describes.\n"
+                    "Format the output as a clean YAML array of objects. Do not include markdown codeblocks or any other text.\n"
+                    "Each object MUST have 'type' (e.g., character, scene, location, item) and 'name'.\n"
+                    "Include any other relevant attributes the user mentioned or established in the history (e.g., description, age, role, traits).\n"
+                    "Example:\n"
+                    "- type: character\n"
+                    "  name: Zara\n"
+                    "  role: Protagonist\n"
+                    "  traits: [brave, curious]"
+                )
+
+                user_prompt = content
+                if history:
+                    user_prompt = f"Recent Conversation History:\n{history}\n\nCurrent Request:\n{content}"
+
+                response = litellm.completion(
+                    model="gemini/gemini-2.5-flash",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    max_tokens=1024,
+                )
+                
+                yaml_result = response.choices[0].message.content.strip()
+                # Clean up markdown code blocks if the LLM ignores instructions
+                if yaml_result.startswith("```"):
+                    lines = yaml_result.split("\n")
+                    if lines[0].startswith("```yaml"):
+                        yaml_result = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+                    else:
+                        yaml_result = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+
+                parsed = yaml.safe_load(yaml_result)
+                created_items = []
+
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    for item in parsed:
+                        if not isinstance(item, dict):
+                            continue
+                        etype = item.get("type", "character")
+                        name = item.get("name", "Unknown")
+                        attrs = {k: v for k, v in item.items() if k not in ["type", "name"]}
+                        
+                        c = GenericContainer(
+                            id=str(uuid.uuid4()),
+                            name=name,
+                            container_type=etype,
+                            attributes=attrs,
+                            project_path=project_path,
+                        )
+                        container_repo.save_container(c)
+                        created_items.append(f"- **{name}** ({etype})")
+
+                if created_items:
+                    # Update knowledge graph immediately if possible
+                    kg_service = kwargs.get("kg_service")
+                    if kg_service and hasattr(kg_service, "update_container"):
+                        pass # File watcher typically handles it
+                    return f"Successfully scaffolded {len(created_items)} entities:\n" + "\n".join(created_items)
+
+                return (
+                    f"Here is what I extracted, but I couldn't automatically scaffold them. "
+                    f"Please refine your request:\n\n"
+                    f"```yaml\n{yaml_result}\n```"
+                )
+            except Exception as e:
+                logger.error("Error extracting entities: %s", e)
+                
+                # Fallback to simple heuristic
+                entity_type = None
+                for etype in ["character", "scene", "chapter", "world", "panel"]:
+                    if etype in content.lower():
+                        entity_type = etype
+                        break
+
+                if not entity_type:
+                    return (
+                        "I can create characters, scenes, chapters, worlds, or panels. "
+                        "Please specify what you'd like to create."
+                    )
+
+                import re
+                name_match = re.search(r'"([^"]+)"', content) or re.search(
+                    r"(?:called|named|titled)\s+(\w[\w\s]*\w)", content, re.I
+                )
+                name = name_match.group(1) if name_match else f"New {entity_type.title()}"
+
+                return (
+                    f"Ready to create {entity_type}: **{name}**.\n"
+                    f"However, automatic scaffolding failed. This requires manual implementation."
+                )
+
+        registry["create"] = create_tool
+
+    # ── UPDATE: describe what will change ────────────────────────
+    if kg_service:
+        def update_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            if entity_ids:
+                targets = ", ".join(entity_ids[:5])
+                return (
+                    f"Update targets: {targets}\n"
+                    f"Request: {content}\n\n"
+                    f"Approval required. Use `/approve` to proceed."
+                )
+            return (
+                f"Update request received: {content}\n\n"
+                "Please @mention the entities you want to update, "
+                "or I'll search for matching items."
+            )
+
+        registry["update"] = update_tool
+
+    # ── DELETE: confirm what will be removed ──────────────────────
+    if kg_service:
+        def delete_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            if entity_ids:
+                targets = ", ".join(entity_ids[:5])
+                return (
+                    f"Delete targets: {targets}\n\n"
+                    f"This is destructive and cannot be undone. "
+                    f"Use `/approve` to confirm deletion."
+                )
+            return (
+                f"Delete request: {content}\n\n"
+                "Please @mention the entities you want to delete."
+            )
+
+        registry["delete"] = delete_tool
+
+    # ── NAVIGATE: return the target route ────────────────────────
+    def navigate_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+        target_routes = {
+            "storyboard": "/storyboard",
+            "characters": "/dashboard",
+            "timeline": "/timeline",
+            "pipeline": "/pipelines",
+            "pipelines": "/pipelines",
+            "scenes": "/storyboard",
+            "panels": "/storyboard",
+            "world": "/dashboard",
+            "story": "/dashboard",
+            "zen": "/zen",
+            "brainstorm": "/brainstorm",
+            "research": "/research",
+            "translation": "/translation",
+            "preview": "/preview",
+            "dashboard": "/dashboard",
+        }
+
+        for keyword, route in target_routes.items():
+            if keyword in content.lower():
+                return (
+                    f"Navigate to **{keyword.title()}** → `{route}`\n\n"
+                    f"The frontend will switch to this view."
+                )
+
+        available = ", ".join(target_routes.keys())
+        return f"Available views: {available}"
+
+    registry["navigate"] = navigate_tool
+
+    # ── EVALUATE: run quality checks ─────────────────────────────
+    if kg_service:
+        def evaluate_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            # List what can be evaluated
+            checks = [
+                "Scene quality (pacing, dialogue, tension)",
+                "Character consistency (across scenes)",
+                "Panel composition (visual storytelling)",
+                "Dramatic irony (reader vs character knowledge)",
+                "Continuity (timeline, facts, details)",
+            ]
+            lines = ["Available evaluations:\n"]
+            for i, check in enumerate(checks, 1):
+                lines.append(f"  {i}. {check}")
+            lines.append(
+                "\nSpecify what to evaluate and @mention the target entity, "
+                "or use `/plan evaluate all` for a comprehensive review."
+            )
+            return "\n".join(lines)
+
+        registry["evaluate"] = evaluate_tool
+
+    # ── RESEARCH: look up reference material ─────────────────────
+    if kg_service:
+        def research_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            return (
+                f"Research request noted: {content}\n\n"
+                "I can research topics using the knowledge base and project context. "
+                "Results will include relevant world-building details, "
+                "character backgrounds, and narrative references."
+            )
+
+        registry["research"] = research_tool
+
+    # ── RELATIONSHIP: analyze relationships ──────────────────────
+    if kg_service:
+        def relationship_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            if not entity_ids:
+                return "Please @mention at least one character or entity to analyze relationships."
+                
+            results = []
+            for eid in entity_ids:
+                # Look up the central entity to get its name
+                center_nodes = kg_service.find_containers(filters={"id": eid})
+                center_name = center_nodes[0].get("name", eid) if center_nodes else eid
+                
+                neighbors = kg_service.get_neighbors(eid)
+                results.append(f"**Relationships for {center_name}:**")
+                
+                if not neighbors:
+                    results.append("  (No recorded relationships found in the knowledge graph)")
+                else:
+                    for n in neighbors:
+                        rel_type = n.get("_edge_type", "related to")
+                        target = n.get("name", n.get("id", "Unknown"))
+                        results.append(f"  - **{rel_type.replace('_', ' ').title()}**: {target}")
+                results.append("")
+                
+            return "\n".join(results)
+            
+        registry["relationship"] = relationship_tool
+
+    # ── WORLD_SUMMARY: compile world state ───────────────────────
+    if kg_service:
+        def world_summary_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            chars = kg_service.find_containers(container_type="character")
+            locs = kg_service.find_containers(container_type="location")
+            scenes = kg_service.find_containers(container_type="scene")
+            factions = kg_service.find_containers(container_type="faction")
+            
+            summary = [
+                "🌍 **World Summary**",
+                f"**Characters:** {len(chars)} | **Locations:** {len(locs)} | **Factions:** {len(factions)} | **Scenes:** {len(scenes)}",
+                "",
+                "**Key Characters:**",
+            ]
+            
+            for c in chars[:5]:
+                summary.append(f"  - {c.get('name')}")
+            if len(chars) > 5:
+                summary.append(f"  - *...and {len(chars) - 5} more*")
+                
+            summary.append("\n**Key Locations:**")
+            for l in locs[:5]:
+                summary.append(f"  - {l.get('name')}")
+            if len(locs) > 5:
+                summary.append(f"  - *...and {len(locs) - 5} more*")
+                
+            summary.append("\n**Factions / Groups:**")
+            if factions:
+                for f in factions[:3]:
+                    summary.append(f"  - {f.get('name')}")
+            else:
+                summary.append("  - (None defined yet)")
+                
+            return "\n".join(summary)
+            
+        registry["world_summary"] = world_summary_tool
+
+    # ── PIPELINE: list or trigger pipelines ──────────────────────
+    if pipeline_service:
+        from antigravity_tool.schemas.chat import ChatEvent, ChatArtifact
+        import json
+
+        async def pipeline_tool(content: str, entity_ids: List[str], **kwargs):
+            try:
+                definitions = pipeline_service.list_definitions()
+                
+                content_lower = content.lower()
+                run_trigger = False
+                target_name = ""
+                extra_text = ""
+                
+                for prefix in ["run pipeline ", "start pipeline ", "execute pipeline ", "run ", "start ", "execute "]:
+                    if content_lower.startswith(prefix):
+                        run_trigger = True
+                        remainder = content_lower[len(prefix):].strip()
+                        # Try to match a definition name at the start of the remainder
+                        for d in definitions:
+                            dname = getattr(d, "name", "").lower()
+                            if remainder.startswith(dname):
+                                target_name = dname
+                                extra_text = remainder[len(dname):].strip()
+                                # Handle optional "with" or "for" connectors
+                                if extra_text.startswith("with "):
+                                    extra_text = extra_text[5:]
+                                elif extra_text.startswith("for "):
+                                    extra_text = extra_text[4:]
+                                break
+                        
+                        # If no direct match, assume the whole remainder is the target name
+                        if not target_name:
+                            target_name = remainder
+                        break
+                
+                if run_trigger and target_name:
+                    target_def = next((d for d in definitions if getattr(d, "name", "").lower() == target_name or getattr(d, "id", "") == target_name), None)
+                    
+                    if target_def:
+                        yield f"Starting pipeline: **{target_def.name}**...\n\n"
+                        payload = {"prompt_text": extra_text or content, "text": extra_text or content}
+                        
+                        # Add any specified entities to payload pinned context
+                        if entity_ids:
+                            payload["pinned_context_ids"] = entity_ids
+
+                        run_id = await pipeline_service.start_pipeline(payload, definition_id=target_def.id)
+                        
+                        # Emit a special artifact that the frontend will render as an interactive pipeline viewer
+                        yield ChatEvent(
+                            event_type="artifact",
+                            data=ChatArtifact(
+                                artifact_type="pipeline_run",
+                                title=f"Pipeline: {target_def.name}",
+                                content=json.dumps({"run_id": run_id}),
+                            ).model_dump()
+                        )
+                        return
+                    else:
+                        yield f"Could not find a pipeline named '{target_name}'.\n\n"
+
+                # List pipelines
+                if not definitions:
+                    yield "No pipeline definitions found. Create one in the Pipeline Builder."
+                    return
+
+                lines = ["Available pipelines:\n"]
+                for d in definitions[:10]:
+                    name = getattr(d, "name", None) or getattr(d, "id", "?")
+                    steps = len(getattr(d, "steps", []))
+                    lines.append(f"  - **{name}** ({steps} steps)")
+                lines.append("\nTo run one, say: `run pipeline <name>`")
+                yield "\n".join(lines)
+            except Exception as e:
+                yield f"Pipeline service error: {e}"
+
+        registry["pipeline"] = pipeline_tool
+
+    # ── DECIDE: store a project decision/preference ──────────────
+    if project_memory_service:
+        def decide_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            # Extract the decision from the message
+            import re
+            # Try patterns like "always use X", "never use Y", "remember that Z"
+            decision = content
+            for prefix in ["decide ", "decision ", "remember that ", "always ", "never "]:
+                if content.lower().startswith(prefix):
+                    decision = content[len(prefix):]
+                    break
+
+            # Generate a key from the first few words
+            key = "_".join(decision.split()[:4]).lower()
+            key = re.sub(r"[^a-z0-9_]", "", key)
+
+            entry = project_memory_service.add_entry(
+                key=key,
+                value=decision.strip(),
+                source="chat_decision",
+            )
+            return (
+                f"Decision recorded: **{entry.key}**\n"
+                f"> {entry.value}\n\n"
+                "This will be auto-injected into future chat context."
+            )
+
+        registry["decide"] = decide_tool
+
+    return registry
