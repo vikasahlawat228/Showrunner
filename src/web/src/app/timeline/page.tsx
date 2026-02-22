@@ -5,8 +5,10 @@ import { StoryStructureTree } from "@/components/timeline/StoryStructureTree";
 import { TimelineView } from "@/components/timeline/TimelineView";
 import { BranchList } from "@/components/timeline/BranchList";
 import { BranchComparison } from "@/components/timeline/BranchComparison";
+import { GitBranchPlus, X, Loader2, Minimize2 } from "lucide-react";
+import { useZenStore } from "@/lib/store/zenSlice";
+import { ZenEditor } from "@/components/zen/ZenEditor";
 import { api } from "@/lib/api";
-import { GitBranchPlus, X, Loader2 } from "lucide-react";
 
 export default function TimelinePage() {
     const [activeEventId, setActiveEventId] = useState<string | null>(null);
@@ -16,6 +18,7 @@ export default function TimelinePage() {
     const [branchError, setBranchError] = useState<string | null>(null);
     const [compareBranchA, setCompareBranchA] = useState<string | null>(null);
     const [compareBranchB, setCompareBranchB] = useState<string | null>(null);
+    const [isZoomed, setIsZoomed] = useState(false);
 
     const handleCreateBranch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -47,7 +50,10 @@ export default function TimelinePage() {
                 <div className="flex-1 overflow-hidden">
                     <StoryStructureTree />
                 </div>
-                <BranchList onCompare={(a, b) => { setCompareBranchA(a); setCompareBranchB(b); }} />
+                <BranchList
+                    onCompare={(a, b) => { setCompareBranchA(a); setCompareBranchB(b); }}
+                    onSelectBranch={(branchId) => useZenStore.getState().setActiveBranch(branchId)}
+                />
             </div>
 
             <div className="flex-1 flex flex-col min-w-0 bg-slate-100 dark:bg-slate-950">
@@ -70,15 +76,49 @@ export default function TimelinePage() {
                 </div>
 
                 {/* Timeline Canvas */}
-                <div className="flex-1 relative overflow-hidden">
-                    <TimelineView onActiveEventChange={setActiveEventId} />
-                    {compareBranchA && compareBranchB && (
+                <div className="flex-1 relative overflow-hidden bg-slate-100 dark:bg-slate-950">
+                    <div
+                        className={`absolute inset-0 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col ${isZoomed ? "scale-105 opacity-0 pointer-events-none" : "scale-100 opacity-100"
+                            }`}
+                    >
+                        <TimelineView
+                            onActiveEventChange={setActiveEventId}
+                            onZoom={(eventId) => {
+                                setActiveEventId(eventId);
+                                setIsZoomed(true);
+                            }}
+                        />
+                    </div>
+                    {compareBranchA && compareBranchB && !isZoomed && (
                         <BranchComparison
                             branchA={compareBranchA}
                             branchB={compareBranchB}
                             onClose={() => { setCompareBranchA(null); setCompareBranchB(null); }}
                         />
                     )}
+
+                    {/* Semantic Zoom Overlay: Zen Editor */}
+                    <div
+                        className={`absolute inset-0 z-30 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] bg-gray-950 flex flex-col ${isZoomed ? "scale-100 opacity-100" : "scale-95 opacity-0 pointer-events-none"
+                            }`}
+                    >
+                        <div className="flex items-center justify-between px-6 py-2 border-b border-gray-800/60 bg-gray-950/90 backdrop-blur-sm shrink-0">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-gray-200">Focused Scene Edit</span>
+                                <span className="text-xs text-gray-500 font-mono ml-2">{activeEventId}</span>
+                            </div>
+                            <button
+                                onClick={() => setIsZoomed(false)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors text-xs font-medium"
+                            >
+                                <Minimize2 className="w-3.5 h-3.5" />
+                                Zoom Out
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            <ZenEditor />
+                        </div>
+                    </div>
                 </div>
             </div>
 

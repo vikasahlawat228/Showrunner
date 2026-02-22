@@ -4588,3 +4588,100 @@ When CI/CD is added, the chat test suite should include:
 - **PR gate:** Unit + integration tests with mocked LLM
 - **Nightly:** Full evaluation suite with real LLM calls (uses test project fixtures)
 - **Weekly:** E2E Playwright suite against running dev server
+
+---
+
+## 17. Phase L: Cloud Sync & Remote History — Detailed Design
+
+### 17.1 Sync Data Models
+
+**`schemas/sync.py`**
+```python
+from enum import Enum
+from typing import Optional, List, Dict
+from pydantic import BaseModel
+from antigravity_tool.schemas.base import AntigravityBase
+
+class SyncStatus(str, Enum):
+    IDLE = "idle"
+    SYNCING = "syncing"
+    ERROR = "error"
+    OFFLINE = "offline"
+
+class DriveConfig(BaseModel):
+    """Google Drive Sync Configuration."""
+    enabled: bool = False
+    folder_id: Optional[str] = None           # Root folder ID in Google Drive
+    last_sync: Optional[str] = None           # ISO Timestamp
+
+class RevisionHistory(BaseModel):
+    """A Google Drive File Revision."""
+    revision_id: str
+    modified_time: str
+    size: int
+    user_name: str
+    keep_forever: bool = False
+
+class ProjectSnapshot(BaseModel):
+    """Point-in-time manifest for aggregate rollback."""
+    snapshot_id: str
+    timestamp: str
+    manifest: Dict[str, str]                  # yaml_path -> drive_revision_id
+```
+
+### 17.2 Backend Services
+
+**`services/cloud_sync_service.py`**
+Manages upload queues, tracking, and orchestrates syncs. Features exponential backoff, dead-letter recovery, and soft-deletes.
+```python
+class CloudSyncService:
+    def __init__(self, drive_adapter: 'GoogleDriveAdapter', db_path: str):
+        self.adapter = drive_adapter
+        self.db = Database(db_path) # Tracks local yaml_path -> drive_file_id
+
+    async def enqueue_upload(self, yaml_path: str, raw_content: bytes):
+        """Called by UoW after a local save to queue file for sync."""
+        pass
+
+    async def enqueue_delete(self, yaml_path: str):
+        """Moves remote file to Drive Trash for 30-day recovery."""
+        pass
+
+    async def process_queue(self):
+        """Background worker loop uploading queued files via adapter."""
+        pass
+        
+    async def revert_file(self, yaml_path: str, revision_id: str, uow_factory):
+        """Downloads revision, processes via UnitOfWork to maintain KG and Event Log."""
+        pass
+```
+
+**`services/google_drive_adapter.py`**
+Wrapper around Google Drive API v3. Handles structured folders and quota-aware ratelimiting.
+```python
+class GoogleDriveAdapter:
+    async def upload_file(self, content: bytes, filename: str, folder_id: Optional[str], drive_file_id: Optional[str] = None, keep_forever: bool = False) -> str:
+        """Creates or updates a file (creating a new revision), returns drive_file_id."""
+        pass
+        
+    async def trash_file(self, drive_file_id: str) -> None:
+        """Marks file as trashed rather than permanent deletion."""
+        pass
+
+    async def list_revisions(self, drive_file_id: str) -> List[RevisionHistory]:
+        """Calls drive.revisions().list()"""
+        pass
+        
+    async def download_revision(self, drive_file_id: str, revision_id: str) -> bytes:
+        """Downloads the file content for a specific revision."""
+        pass
+```
+
+### 17.3 API Endpoints (FastAPI Router)
+
+**`routers/sync.py`**
+*   `GET /api/v1/sync/status` -> Returns current `SyncStatus`.
+*   `POST /api/v1/sync/auth` -> Handles OAuth2 code exchange for Google Drive.
+*   `GET /api/v1/sync/revisions?yaml_path=...` -> Returns `List[RevisionHistory]`.
+*   `POST /api/v1/sync/revert` -> Payload `{yaml_path: str, revision_id: str}`, triggers revert via explicit UoW routing.
+*   `POST /api/v1/sync/restore-project` -> Point-in-time full rollback utilizing a `ProjectSnapshot`.

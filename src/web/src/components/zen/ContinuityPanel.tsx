@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { api, ContinuityCheckResponse } from '@/lib/api';
-import { AlertCircle, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import { api, ContinuityCheckResponse, ResolutionOption } from '@/lib/api';
+import { AlertCircle, AlertTriangle, CheckCircle, RefreshCw, Wand2, ArrowRight } from 'lucide-react';
 import { useZenStore } from '@/lib/store/zenSlice';
 
 export function ContinuityPanel() {
     const [issues, setIssues] = useState<ContinuityCheckResponse[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [resolutions, setResolutions] = useState<Record<number, ResolutionOption[]>>({});
+    const [loadingResolutions, setLoadingResolutions] = useState<Record<number, boolean>>({});
 
     const currentFragmentId = useZenStore(state => state.currentFragmentId);
 
     const fetchIssues = async () => {
         setLoading(true);
         setError(null);
+        setResolutions({});
         try {
             // For a real scene, we would pass the container ID.
             // If we don't have a specific container, we fetch general issues.
@@ -24,6 +27,36 @@ export function ContinuityPanel() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSuggestFixes = async (issue: ContinuityCheckResponse, index: number) => {
+        setLoadingResolutions(prev => ({ ...prev, [index]: true }));
+        try {
+            const data = await api.suggestContinuityResolutions(issue);
+            setResolutions(prev => ({ ...prev, [index]: data }));
+        } catch (err) {
+            console.error("Failed to suggest resolutions:", err);
+        } finally {
+            setLoadingResolutions(prev => ({ ...prev, [index]: false }));
+        }
+    };
+
+    const applyResolution = (issue: ContinuityCheckResponse, option: ResolutionOption) => {
+        // Find the original text that caused the issue. The Continuity Analyst doesn't strictly provide
+        // the exact matching snippet by default in its response, so we'll use the reasoning as context
+        // or just insert the replacement text. Since we want to show a diff, let's assume `option.edits` 
+        // string represents the "newText" and we'll attempt to Diff it against the selected or current context.
+        // For accurate diffs, we would ideally change the backend to return `original_text` as well.
+        // For now, we simulate originalText being a generic chunk or empty if unknown, and let the user see the new text.
+
+        window.dispatchEvent(
+            new CustomEvent("zen:applyDiff", {
+                detail: {
+                    originalText: `(Replace this with original text related to: ${issue.reasoning})`,
+                    newText: option.edits
+                }
+            })
+        );
     };
 
     useEffect(() => {
@@ -104,6 +137,43 @@ export function ContinuityPanel() {
                                             <span key={ent} className="px-1.5 py-0.5 text-[10px] bg-white/10 text-gray-300 rounded">
                                                 {ent}
                                             </span>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {issue.severity !== 'low' && !resolutions[i] && (
+                                    <button
+                                        onClick={() => handleSuggestFixes(issue, i)}
+                                        disabled={loadingResolutions[i]}
+                                        className="mt-3 flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-black/30 hover:bg-black/50 text-indigo-300 rounded border border-indigo-500/30 transition-colors"
+                                    >
+                                        <Wand2 className={`w-3.5 h-3.5 ${loadingResolutions[i] ? 'animate-spin' : ''}`} />
+                                        {loadingResolutions[i] ? 'Thinking...' : 'Suggest Fixes'}
+                                    </button>
+                                )}
+
+                                {resolutions[i] && (
+                                    <div className="mt-4 space-y-2">
+                                        <p className="text-xs font-semibold text-indigo-400 mb-2 border-b border-white/10 pb-1">Resolution Options</p>
+                                        {resolutions[i].map((res, rIdx) => (
+                                            <div key={rIdx} className="p-2.5 bg-black/40 rounded-lg border border-white/10 text-xs">
+                                                <div className="flex justify-between items-start mb-1.5">
+                                                    <span className="font-medium text-gray-200">{res.description}</span>
+                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider ${res.risk === 'low' ? 'bg-emerald-500/20 text-emerald-300' : res.risk === 'medium' ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                                                        {res.risk} Risk
+                                                    </span>
+                                                </div>
+                                                <p className="text-gray-400 mb-2">{res.edits}</p>
+                                                {res.trade_off && (
+                                                    <p className="text-[10px] text-gray-500 italic mb-2">Trade-off: {res.trade_off}</p>
+                                                )}
+                                                <button
+                                                    onClick={() => applyResolution(issue, res)}
+                                                    className="w-full flex justify-center items-center gap-1 px-2 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 rounded transition-colors"
+                                                >
+                                                    Apply Fix (Diff) <ArrowRight className="w-3 h-3" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}

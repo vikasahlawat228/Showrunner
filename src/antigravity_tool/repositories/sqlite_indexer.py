@@ -23,6 +23,9 @@ class SQLiteIndexer:
         self.db_path = str(db_path)
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        # WAL mode: readers don't block writers, prevents SQLITE_BUSY
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self._create_tables()
 
     def _create_tables(self) -> None:
@@ -72,11 +75,25 @@ class SQLiteIndexer:
                     sort_order INTEGER DEFAULT 0,
                     tags_json TEXT DEFAULT '[]',
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    is_deleted INTEGER DEFAULT 0,
+                    deleted_at TEXT
                 )
             """)
 
-            # Phase K: Sync metadata for incremental YAML→SQLite sync
+            # Phase L: Sync failures dead-letter queue
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS sync_failures (
+                    yaml_path TEXT PRIMARY KEY,
+                    operation TEXT NOT NULL,
+                    error_message TEXT NOT NULL,
+                    attempt_count INTEGER DEFAULT 0,
+                    first_failed_at TEXT NOT NULL,
+                    last_failed_at TEXT NOT NULL
+                )
+            """)
+
+            # Phase K/L: Sync metadata for incremental sync + cloud mapping
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS sync_metadata (
                     yaml_path TEXT PRIMARY KEY,
@@ -85,7 +102,9 @@ class SQLiteIndexer:
                     content_hash TEXT NOT NULL,
                     mtime REAL NOT NULL,
                     indexed_at TEXT NOT NULL,
-                    file_size INTEGER NOT NULL
+                    file_size INTEGER NOT NULL,
+                    drive_file_id TEXT,
+                    sync_status TEXT DEFAULT 'idle'
                 )
             """)
 
@@ -120,7 +139,24 @@ class SQLiteIndexer:
                     f"ALTER TABLE containers ADD COLUMN {col_name} {col_type}"
                 )
             except sqlite3.OperationalError:
-                # Column already exists — safe to ignore
+                pass
+        
+        # Add Cloud Sync columns to sync_metadata if missing
+        for col_name, col_type in [("drive_file_id", "TEXT"), ("sync_status", "TEXT DEFAULT 'idle'")]:
+            try:
+                self.conn.execute(
+                    f"ALTER TABLE sync_metadata ADD COLUMN {col_name} {col_type}"
+                )
+            except sqlite3.OperationalError:
+                pass
+
+        # Add soft-delete columns to entities if missing
+        for col_name, col_type in [("is_deleted", "INTEGER DEFAULT 0"), ("deleted_at", "TEXT")]:
+            try:
+                self.conn.execute(
+                    f"ALTER TABLE entities ADD COLUMN {col_name} {col_type}"
+                )
+            except sqlite3.OperationalError:
                 pass
 
     def upsert_container(
@@ -306,12 +342,75 @@ class SQLiteIndexer:
             raise PersistenceError(f"Database error during entity upsert: {e}")
 
     def delete_entity(self, entity_id: str) -> None:
-        """Remove an entity from the entities index."""
+        """Soft-delete: mark entity as deleted instead of removing it."""
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            with self.conn:
+                self.conn.execute(
+                    "UPDATE entities SET is_deleted = 1, deleted_at = ? WHERE id = ?",
+                    (now, entity_id),
+                )
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during entity soft-delete: {e}")
+
+    def restore_entity(self, entity_id: str) -> None:
+        """Restore a soft-deleted entity."""
+        try:
+            with self.conn:
+                self.conn.execute(
+                    "UPDATE entities SET is_deleted = 0, deleted_at = NULL WHERE id = ?",
+                    (entity_id,),
+                )
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during entity restore: {e}")
+
+    def purge_entity(self, entity_id: str) -> None:
+        """Permanently delete an entity (no recovery)."""
         try:
             with self.conn:
                 self.conn.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
         except sqlite3.Error as e:
-            raise PersistenceError(f"Database error during entity deletion: {e}")
+            raise PersistenceError(f"Database error during entity purge: {e}")
+
+    def query_deleted_entities(self) -> List[Dict[str, Any]]:
+        """Return all soft-deleted entities for the Trash Manager UI."""
+        try:
+            cursor = self.conn.execute(
+                "SELECT * FROM entities WHERE is_deleted = 1 ORDER BY deleted_at DESC"
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error querying deleted entities: {e}")
+
+    def get_content_hash(self, entity_id: str) -> Optional[str]:
+        """Return the current content_hash for an entity, used for OCC checks."""
+        try:
+            cursor = self.conn.execute(
+                "SELECT content_hash FROM entities WHERE id = ?", (entity_id,)
+            )
+            row = cursor.fetchone()
+            return row["content_hash"] if row else None
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error fetching content hash: {e}")
+
+    def record_sync_failure(
+        self, yaml_path: str, operation: str, error_message: str, attempt_count: int
+    ) -> None:
+        """Record a sync failure in the dead-letter queue."""
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            with self.conn:
+                self.conn.execute("""
+                    INSERT INTO sync_failures (yaml_path, operation, error_message,
+                                              attempt_count, first_failed_at, last_failed_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(yaml_path) DO UPDATE SET
+                        error_message = excluded.error_message,
+                        attempt_count = excluded.attempt_count,
+                        last_failed_at = excluded.last_failed_at
+                """, (yaml_path, operation, error_message, attempt_count, now, now))
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error recording sync failure: {e}")
 
     def query_entities(
         self,
@@ -320,7 +419,7 @@ class SQLiteIndexer:
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Query entities with optional type filters and JSON attribute filters."""
-        query = "SELECT * FROM entities WHERE 1=1"
+        query = "SELECT * FROM entities WHERE is_deleted = 0"
         params: list = []
 
         if entity_type:
@@ -374,8 +473,8 @@ class SQLiteIndexer:
             with self.conn:
                 self.conn.execute("""
                     INSERT OR REPLACE INTO sync_metadata
-                    (yaml_path, entity_id, entity_type, content_hash, mtime, indexed_at, file_size)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (yaml_path, entity_id, entity_type, content_hash, mtime, indexed_at, file_size, drive_file_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     str(yaml_path),
                     entity_id,
@@ -384,6 +483,7 @@ class SQLiteIndexer:
                     mtime,
                     datetime.now(timezone.utc).isoformat(),
                     file_size,
+                    None, # Initial upsert from UoW doesn't have Drive ID yet
                 ))
         except sqlite3.Error as e:
             raise PersistenceError(f"Database error during sync metadata upsert: {e}")
@@ -412,6 +512,17 @@ class SQLiteIndexer:
                 )
         except sqlite3.Error as e:
             raise PersistenceError(f"Database error during sync metadata deletion: {e}")
+
+    def update_sync_drive_id(self, yaml_path: str, drive_file_id: str) -> None:
+        """Update the cloud mapping for a YAML file."""
+        try:
+            with self.conn:
+                self.conn.execute(
+                    "UPDATE sync_metadata SET drive_file_id = ?, sync_status = 'idle' WHERE yaml_path = ?",
+                    (drive_file_id, str(yaml_path)),
+                )
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during sync metadata update: {e}")
 
     # ── Phase K: Aggregation & Migration ───────────────────────────
 

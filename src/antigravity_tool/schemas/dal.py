@@ -21,6 +21,10 @@ class SyncMetadata(BaseModel):
     mtime: float
     indexed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     file_size: int
+    
+    # Cloud Sync fields
+    drive_file_id: Optional[str] = None
+    sync_status: str = "idle" # "idle", "syncing", "error"
 
 
 # ── Caching ────────────────────────────────────────────────────
@@ -91,6 +95,7 @@ class UnitOfWorkEntry(BaseModel):
     event_type: Optional[Literal["CREATE", "UPDATE", "DELETE"]] = None
     event_payload: Optional[Dict[str, Any]] = None
     branch_id: str = "main"
+    expected_hash: Optional[str] = None  # OCC: hash from read-time for conflict detection
 
 
 # ── DB Maintenance ──────────────────────────────────────────────

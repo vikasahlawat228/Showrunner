@@ -17,6 +17,7 @@ export interface TimelineEvent {
 export interface TimelinePanelProps {
     events: TimelineEvent[];
     onCheckout: (eventId: string) => void;
+    onZoom?: (eventId: string) => void;
     activeEventId?: string | null;
     newEventIds?: Set<string>;
 }
@@ -36,7 +37,7 @@ const ROW_HEIGHT = 80;
 const COL_WIDTH = 28;
 const PADDING_X = 24;
 
-export function TimelinePanel({ events, onCheckout, activeEventId, newEventIds }: TimelinePanelProps) {
+export function TimelinePanel({ events, onCheckout, onZoom, activeEventId, newEventIds }: TimelinePanelProps) {
     const { branchColumns, eventPositions, connections, totalColumns } = useMemo(() => {
         const columns: Record<string, number> = {};
         const positions: Record<string, { x: number; y: number; col: number; row: number }> = {};
@@ -152,6 +153,7 @@ export function TimelinePanel({ events, onCheckout, activeEventId, newEventIds }
                                 totalColumnsWidth={totalColumns * COL_WIDTH}
                                 paddingX={PADDING_X}
                                 onCheckout={onCheckout}
+                                onZoom={onZoom}
                             />
                         );
                     })}

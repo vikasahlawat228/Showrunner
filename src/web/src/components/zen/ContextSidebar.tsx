@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useZenStore, type ContextEntry } from "@/lib/store/zenSlice";
 import { ContextInspector } from "@/components/ui/ContextInspector";
 import { ContinuityPanel } from "./ContinuityPanel";
 import { StyleScorecard } from "./StyleScorecard";
+import { api } from "@/lib/api";
 import {
     PanelRightClose,
     PanelRightOpen,
@@ -15,6 +16,8 @@ import {
     Link2,
     Loader2,
     X,
+    ChevronDown,
+    Clock,
 } from "lucide-react";
 import { InlineTranslation } from "./InlineTranslation";
 
@@ -76,6 +79,59 @@ function ContextCard({ entry }: { entry: ContextEntry }) {
                 <div className="flex items-center gap-1 mt-2 text-[11px] text-gray-500">
                     <Link2 className="w-3 h-3" />
                     <span>{entry.relatedCount} related</span>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function PreviouslySection() {
+    const [open, setOpen] = useState(true);
+    const [sessions, setSessions] = useState<Array<{ id: string; name: string; updated_at: string; message_count: number }>>([]);
+    const [show, setShow] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        api.getChatSessions().then((data) => {
+            if (cancelled) return;
+            if (!data || data.length === 0) return;
+            // Check if most recent session is > 4h old
+            const latest = data[0];
+            const hoursAgo = (Date.now() - new Date(latest.updated_at).getTime()) / (1000 * 60 * 60);
+            if (hoursAgo > 4) {
+                setSessions(data.slice(0, 3));
+                setShow(true);
+            }
+        }).catch(() => { /* ignore */ });
+        return () => { cancelled = true; };
+    }, []);
+
+    if (!show || sessions.length === 0) return null;
+
+    return (
+        <div className="px-4 py-2 border-b border-gray-800/60 shrink-0">
+            <button
+                onClick={() => setOpen(!open)}
+                className="flex items-center gap-1.5 w-full text-left group"
+            >
+                <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform duration-200 ${open ? "" : "-rotate-90"}`} />
+                <span className="text-[10px] uppercase text-gray-500 font-semibold tracking-wider group-hover:text-gray-300 transition-colors">
+                    Previously…
+                </span>
+            </button>
+            {open && (
+                <div className="mt-2 space-y-1.5 animate-in fade-in duration-200">
+                    {sessions.map((s) => {
+                        const h = Math.floor((Date.now() - new Date(s.updated_at).getTime()) / (1000 * 60 * 60));
+                        const ago = h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+                        return (
+                            <div key={s.id} className="flex items-center gap-2 rounded-md bg-gray-900/50 px-2.5 py-1.5 border border-gray-800/50">
+                                <Clock className="w-3 h-3 text-indigo-400 shrink-0" />
+                                <span className="text-xs text-gray-300 truncate flex-1">{s.name}</span>
+                                <span className="text-[10px] text-gray-600 shrink-0">{ago}</span>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>
@@ -179,6 +235,9 @@ export function ContextSidebar() {
 
             {activeSidebarTab === "context" && (
                 <>
+                    {/* "Previously…" section for returning users */}
+                    <PreviouslySection />
+
                     {/* Entity tags */}
                     {detectedEntities.length > 0 && (
                         <div className="px-4 py-2 border-b border-gray-800/60 shrink-0">

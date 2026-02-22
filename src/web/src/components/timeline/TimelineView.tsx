@@ -5,12 +5,14 @@ import { useStudioStore } from "@/lib/store";
 import { useInterval } from "./useInterval";
 import { EmotionalArcChart } from "./EmotionalArcChart";
 import { StoryRibbons } from "./StoryRibbons";
+import { OpenPlotThreads } from "./OpenPlotThreads";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 const POLL_INTERVAL_MS = 2000;
 
 export interface TimelineViewProps {
     onActiveEventChange?: (eventId: string | null) => void;
+    onZoom?: (eventId: string) => void;
 }
 
 function CollapsibleSection({ title, defaultOpen = false, children }: { title: string, defaultOpen?: boolean, children: React.ReactNode }) {
@@ -29,7 +31,7 @@ function CollapsibleSection({ title, defaultOpen = false, children }: { title: s
     );
 }
 
-export function TimelineView({ onActiveEventChange }: TimelineViewProps) {
+export function TimelineView({ onActiveEventChange, onZoom }: TimelineViewProps) {
     const [events, setEvents] = useState<TimelineEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -182,6 +184,7 @@ export function TimelineView({ onActiveEventChange }: TimelineViewProps) {
                 <TimelinePanel
                     events={events}
                     onCheckout={handleCheckout}
+                    onZoom={onZoom}
                     activeEventId={activeEventId}
                     newEventIds={newEventIds}
                 />
@@ -193,6 +196,10 @@ export function TimelineView({ onActiveEventChange }: TimelineViewProps) {
 
             <CollapsibleSection title="Character Presence Ribbons" defaultOpen={true}>
                 <StoryRibbons />
+            </CollapsibleSection>
+
+            <CollapsibleSection title="Open Plot Threads" defaultOpen={true}>
+                <OpenPlotThreads />
             </CollapsibleSection>
         </div>
     );

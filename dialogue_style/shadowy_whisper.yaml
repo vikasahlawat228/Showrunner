@@ -1,0 +1,18 @@
+id: 3c01a8ef-36c0-4d75-a216-6735fe663f1f
+schema_version: 1.0.0
+created_at: '2026-02-22T16:16:18.933110Z'
+updated_at: '2026-02-22T16:16:18.933119Z'
+notes: null
+container_type: dialogue_style
+name: Shadowy Whisper
+attributes:
+  description: for flashbacks
+  parent: Chandler Noir
+relationships: []
+context_window: null
+timeline_positions: []
+tags: []
+model_preference: null
+parent_id: null
+sort_order: 0
+project_path: /Users/vikasahlawat/Documents/writing_tool

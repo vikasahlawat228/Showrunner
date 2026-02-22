@@ -1,0 +1,17 @@
+id: 5d560372-0a1e-4e7f-b0d9-c9cacaaf836b
+schema_version: 1.0.0
+created_at: '2026-02-22T16:16:01.313846Z'
+updated_at: '2026-02-22T16:16:01.313862Z'
+notes: null
+container_type: meta
+name: No extractable story elements found.
+attributes:
+  reason: The user is asking for advice on a dialogue style, not describing story elements.
+relationships: []
+context_window: null
+timeline_positions: []
+tags: []
+model_preference: null
+parent_id: null
+sort_order: 0
+project_path: /Users/vikasahlawat/Documents/writing_tool

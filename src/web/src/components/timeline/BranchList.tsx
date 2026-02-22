@@ -18,9 +18,10 @@ const BRANCH_COLORS = [
 
 interface BranchListProps {
     onCompare: (branchA: string, branchB: string) => void;
+    onSelectBranch?: (branchId: string) => void;
 }
 
-export function BranchList({ onCompare }: BranchListProps) {
+export function BranchList({ onCompare, onSelectBranch }: BranchListProps) {
     const [branches, setBranches] = useState<BranchInfo[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeBranch, setActiveBranch] = useState("main");
@@ -63,7 +64,10 @@ export function BranchList({ onCompare }: BranchListProps) {
                         <div
                             key={b.id}
                             className={`flex items-center justify-between p-2 rounded-md mb-1 cursor-pointer transition-colors group ${isActive ? 'bg-slate-200 dark:bg-slate-800' : 'hover:bg-slate-100 dark:hover:bg-slate-800/50'}`}
-                            onClick={() => setActiveBranch(b.id)}
+                            onClick={() => {
+                                setActiveBranch(b.id);
+                                if (onSelectBranch) onSelectBranch(b.id);
+                            }}
                         >
                             <div className="flex items-center gap-2">
                                 <span className={`w-2.5 h-2.5 rounded-full ${colorClass} ${isActive ? 'ring-2 ring-offset-1 ring-slate-400 dark:ring-offset-slate-900' : ''}`} />

@@ -17,6 +17,7 @@ import {
   MessageSquare
 } from "lucide-react";
 import { useStudioStore } from "@/lib/store";
+import { CloudSyncIndicator } from "@/components/shared/CloudSyncIndicator";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -55,10 +56,11 @@ export function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 h-12 bg-gray-950/95 backdrop-blur-sm border-b border-gray-800 z-50 flex items-center justify-between px-4">
       {/* Left: Brand */}
-      <div className="flex items-center">
+      <div className="flex items-center gap-4">
         <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
           Showrunner
         </span>
+        <CloudSyncIndicator />
       </div>
 
       {/* Center: Tabs */}
@@ -72,8 +74,8 @@ export function Navbar() {
               key={item.href}
               href={item.href}
               className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${isActive
-                  ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
-                  : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 border border-transparent"
+                ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
+                : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 border border-transparent"
                 }`}
             >
               <Icon className={`w-3.5 h-3.5 ${isActive ? "text-indigo-400" : "text-gray-500"}`} />
@@ -88,8 +90,8 @@ export function Navbar() {
         <button
           onClick={() => setChatSidebarOpen(!isChatSidebarOpen)}
           className={`flex items-center justify-center p-1.5 border hover:border-gray-600 rounded-md transition-colors ${isChatSidebarOpen
-              ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/30"
-              : "bg-gray-900 border-gray-700 text-gray-400"
+            ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/30"
+            : "bg-gray-900 border-gray-700 text-gray-400"
             }`}
           title="Toggle Agentic Chat (Cmd+Shift+C)"
         >

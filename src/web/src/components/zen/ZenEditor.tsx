@@ -14,12 +14,15 @@ import {
     type SlashCommand,
     type SlashCommandListRef,
 } from "./SlashCommandList";
+import { DiffExtension } from "./extensions/DiffExtension";
+import { AltTakeExtension } from "./extensions/AltTakeExtension";
 import { toast } from "sonner";
 import { useZenStore } from "@/lib/store/zenSlice";
 import { useStudioStore } from "@/lib/store";
+import { useRecorderStore } from "@/lib/store/recorderSlice";
 import { api } from "@/lib/api";
 import { type AIOperationContext } from "@/components/ui/ContextInspector";
-import { Save, Clock, Loader2, Focus } from "lucide-react";
+import { Save, Clock, Loader2, Focus, GitBranch } from "lucide-react";
 
 // ── Suggestion utilities ────────────────────────────────────
 
@@ -190,38 +193,86 @@ function createSlashSuggestion() {
             // Delete the slash command text
             editor.chain().focus().deleteRange(range).run();
 
+            const selection = editor.state.selection;
+            let selectedText = "";
+            if (!selection.empty) {
+                selectedText = editor.state.doc.textBetween(selection.from, selection.to, "\n");
+            }
+            const fullText = editor.getText();
+
+            // Record the action if recording is active
+            const { isRecording, recordAction } = useRecorderStore.getState();
+            if (isRecording) {
+                recordAction({
+                    type: "slash_command",
+                    description: `Invoked /${cmd.action} on selected text`,
+                    payload: {
+                        command: cmd.action,
+                        selected_text: selectedText || "No text selected",
+                        context_length: fullText.length
+                    }
+                });
+            }
+
             if (cmd.action === "translate") {
-                const selection = editor.state.selection;
-                // If it's just a cursor, textBetween might just be empty. Better to grab it like this:
-                let text = "";
-                if (!selection.empty) {
-                    text = editor.state.doc.textBetween(selection.from, selection.to, "\n");
-                }
                 const store = useZenStore.getState();
-                store.setTranslationSource(text || editor.getText() || "");
+                store.setTranslationSource(selectedText || fullText || "");
                 store.setShowTranslation(true);
                 return;
             }
 
-            if (cmd.action === "check-style") {
-                const selection = editor.state.selection;
-                let text = "";
-                if (!selection.empty) {
-                    text = editor.state.doc.textBetween(selection.from, selection.to, "\n");
-                }
-                const textToAnalyze = text || editor.getText();
+            if (cmd.action === "alttake") {
+                editor.chain().focus().insertAltTake({ initialText: selectedText }).run();
+                return;
+            }
+
+            if (cmd.action === "brainstorm") {
                 const store = useZenStore.getState();
-                store.setStyleCheckText(textToAnalyze);
-                store.setActiveSidebarTab("style");
-                if (!store.sidebarVisible) {
-                    store.toggleSidebar();
-                }
+                const sceneId = store.activeSceneId;
+                const chapterId = store.activeChapterId;
+                const currentText = fullText;
+
+                toast.info(`Brainstorming...`);
+
+                api.brainstorm(selectedText || "Provide ideas for this scene", {
+                    scene_id: sceneId,
+                    chapter_id: chapterId,
+                    current_text: currentText.slice(0, 2000),
+                    source: "zen"
+                })
+                    .then((result) => {
+                        if (result.response) {
+                            editor
+                                .chain()
+                                .focus()
+                                .insertContent(`\n\n> **Brainstorming Result:**\n${result.response}\n\n`)
+                                .run();
+                            toast.success(`Brainstorm complete`);
+
+                            const glassBox: AIOperationContext = {
+                                agentName: result.skill_used,
+                                agentId: result.skill_used,
+                                modelUsed: result.model_used || "default",
+                                contextBuckets: result.context_used.map((key) => ({
+                                    id: key,
+                                    name: key,
+                                    type: "context",
+                                    summary: "",
+                                })),
+                            };
+                            store.setLastAIOperation(glassBox);
+                        }
+                    })
+                    .catch((err) => {
+                        toast.error(`Brainstorm failed`, {
+                            description: err instanceof Error ? err.message : String(err),
+                        });
+                    });
                 return;
             }
 
             // Dispatch to backend agent
-            const text = editor.getText();
-            const intent = `${cmd.action}: ${text.slice(0, 500)}`;
+            const intent = `${cmd.action}: ${fullText.slice(0, 500)}`;
             toast.info(`Running ${cmd.label}...`);
 
             api.directorDispatch(intent, { source: "zen", action: cmd.action })
@@ -267,7 +318,7 @@ export function ZenEditor() {
     const {
         saveFragment, detectEntities, isSaving, lastSavedAt, isDetecting,
         sessionWordsWritten, updateSessionWords, setSessionStartWordCount, sessionStartTime, startSession,
-        focusMode, setFocusMode, setIsFocusTyping
+        focusMode, setFocusMode, setIsFocusTyping, activeBranch
     } = useZenStore();
     const [wordCount, setWordCount] = useState(0);
     const [charCount, setCharCount] = useState(0);
@@ -325,6 +376,8 @@ export function ZenEditor() {
                 },
                 suggestion: createSlashSuggestion(),
             }),
+            DiffExtension,
+            AltTakeExtension,
         ],
         editorProps: {
             attributes: {
@@ -433,11 +486,33 @@ export function ZenEditor() {
                 editor.chain().focus().insertContentAt(to, `\n\n${e.detail}`).run();
             }
         };
+        const handleApplyDiff = (e: CustomEvent<{ originalText: string, newText: string }>) => {
+            if (editor) {
+                // Find occurrences of originalText to replace with the Diff node
+                // For a robust implementation we might search the document, but for now we append it where the cursor is
+                // or where the text matches. Since Tiptap search is complex without extensions, we just insert at cursor
+                // or if we have a selection, we replace the selection.
+
+                // For MVPs: we just append the diff node at the current cursor
+                const { to } = editor.state.selection;
+
+                editor.chain().focus().insertContentAt(to, "\n\n").insertContentAt(to + 2, {
+                    type: "diffNode",
+                    attrs: {
+                        originalText: e.detail.originalText,
+                        newText: e.detail.newText
+                    }
+                }).run();
+            }
+        };
+
         window.addEventListener("zen:replace", handleReplace as any);
         window.addEventListener("zen:insertBelow", handleInsertBelow as any);
+        window.addEventListener("zen:applyDiff", handleApplyDiff as any);
         return () => {
             window.removeEventListener("zen:replace", handleReplace as any);
             window.removeEventListener("zen:insertBelow", handleInsertBelow as any);
+            window.removeEventListener("zen:applyDiff", handleApplyDiff as any);
         };
     }, [editor]);
 
@@ -450,6 +525,12 @@ export function ZenEditor() {
                         <EditorToolbar editor={editor} />
                     </div>
                     <div className="flex items-center gap-3 text-xs text-gray-500">
+                        {activeBranch && activeBranch !== "main" && (
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 mr-2">
+                                <GitBranch className="w-3 h-3" />
+                                {activeBranch}
+                            </span>
+                        )}
                         {isDetecting && (
                             <span className="flex items-center gap-1 text-indigo-400">
                                 <Loader2 className="w-3 h-3 animate-spin" />

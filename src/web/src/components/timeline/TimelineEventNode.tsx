@@ -10,6 +10,7 @@ import {
     Clock,
     CopyCheck,
     CircleDot,
+    ZoomIn,
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -76,6 +77,7 @@ export interface TimelineEventNodeProps {
     totalColumnsWidth: number; // left margin for the card
     paddingX: number;
     onCheckout: (eventId: string) => void;
+    onZoom?: (eventId: string) => void;
 }
 
 /* ── Component ────────────────────────────────────────────── */
@@ -91,6 +93,7 @@ export function TimelineEventNode({
     totalColumnsWidth,
     paddingX,
     onCheckout,
+    onZoom,
 }: TimelineEventNodeProps) {
     const style = getEventStyle(event.event_type);
 
@@ -185,10 +188,22 @@ export function TimelineEventNode({
                 {/* Checkout / Active button */}
                 <div
                     className={cn(
-                        "transition-opacity duration-200 flex-shrink-0",
+                        "transition-opacity duration-200 flex-shrink-0 flex items-center gap-2",
                         isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                     )}
                 >
+                    {onZoom && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onZoom(event.id);
+                            }}
+                            className="flex items-center text-xs font-semibold px-2 py-1.5 rounded-lg shadow-sm transition-colors text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 dark:hover:bg-indigo-900/50"
+                            title="Semantic Zoom into Scene"
+                        >
+                            <ZoomIn className="w-4 h-4" />
+                        </button>
+                    )}
                     <button
                         onClick={(e) => {
                             e.stopPropagation();

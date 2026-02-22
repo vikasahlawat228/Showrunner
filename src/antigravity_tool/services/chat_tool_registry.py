@@ -130,13 +130,21 @@ def build_tool_registry(
                             continue
                         etype = item.get("type", "character")
                         name = item.get("name", "Unknown")
-                        attrs = {k: v for k, v in item.items() if k not in ["type", "name"]}
+                        # Extract reserved fields from the LLM response
+                        p_id = item.get("parent_id")
+                        s_order = item.get("sort_order", 0)
+                        
+                        # All other fields go into dynamic attributes
+                        reserved = ["type", "name", "parent_id", "sort_order"]
+                        attrs = {k: v for k, v in item.items() if k not in reserved}
                         
                         c = GenericContainer(
                             id=str(uuid.uuid4()),
                             name=name,
                             container_type=etype,
                             attributes=attrs,
+                            parent_id=p_id,
+                            sort_order=s_order,
                             project_path=project_path,
                         )
                         container_repo.save_container(c)

@@ -1,0 +1,18 @@
+id: cba4205a-2cdb-414d-9bad-af7cb64d20f9
+schema_version: 1.0.0
+created_at: '2026-02-22T16:16:19.468745Z'
+updated_at: '2026-02-22T16:16:19.468757Z'
+notes: null
+container_type: dialogue_style
+name: Neon Gritty
+attributes:
+  description: for street scenes
+  parent: Chandler Noir
+relationships: []
+context_window: null
+timeline_positions: []
+tags: []
+model_preference: null
+parent_id: null
+sort_order: 0
+project_path: /Users/vikasahlawat/Documents/writing_tool

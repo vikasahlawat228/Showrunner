@@ -16,6 +16,7 @@ import {
     BookOpen,
     Expand,
     Globe,
+    Layers,
 } from "lucide-react";
 
 export interface SlashCommand {
@@ -106,6 +107,13 @@ export const SLASH_COMMANDS: SlashCommand[] = [
         icon: <Globe className="w-4 h-4 text-emerald-400" />,
         action: "translate",
     },
+    {
+        id: "alttake",
+        label: "Alt-Take",
+        description: "Create interactive variations for the selected text",
+        icon: <Layers className="w-4 h-4 text-pink-400" />,
+        action: "alttake",
+    }
 ];
 
 export const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(

@@ -5,6 +5,12 @@ Phase F adds ModelConfigRegistry singleton and new routers (projects, models).
 
 from contextlib import asynccontextmanager
 import logging
+import os
+from dotenv import load_dotenv
+
+# Load environment variables early so litellm and other services can find API keys
+load_dotenv()
+
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -145,6 +151,19 @@ async def lifespan(app: FastAPI):
         project_path=proj.path,
     )
 
+    # ── Phase L: Cloud Sync System ──────────────────
+    from antigravity_tool.services.google_drive_adapter import GoogleDriveAdapter
+    from antigravity_tool.services.cloud_sync_service import CloudSyncService
+    
+    token_path = proj.path / ".antigravity" / "token.json"
+    drive_adapter = GoogleDriveAdapter(
+        credentials_path=str(proj.path / "credentials.json"),
+        token_path=str(token_path)
+    )
+    cloud_sync_service = CloudSyncService(drive_adapter, indexer)
+    cloud_sync_service.start_worker()
+    logger.info("Cloud Sync system initialized.")
+
     chat_orchestrator = ChatOrchestrator(
         session_service=chat_session_service,
         intent_classifier=intent_classifier,
@@ -167,6 +186,7 @@ async def lifespan(app: FastAPI):
     app.state.chat_orchestrator = chat_orchestrator
     app.state.project_memory_service = project_memory_service
     app.state.chat_context_manager = chat_context_manager
+    app.state.cloud_sync_service = cloud_sync_service
 
     yield  # ---- application is running ----
 
@@ -232,6 +252,10 @@ app.include_router(preview_router.router)
 # Phase J (Agentic Chat) + Phase K (Unified DAL)
 app.include_router(chat_router.router)
 app.include_router(db_router.router)
+
+# Phase L (Cloud Sync)
+from antigravity_tool.server.routers import sync as sync_router
+app.include_router(sync_router.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -523,7 +523,7 @@ class ChatOrchestrator:
         messages = context.get("messages", [])
         messages.append({"role": "user", "content": user_content})
 
-        model_name = "gemini/gemini-2.5-flash"
+        model_name = "gemini/gemini-2.0-flash"
         if self._model_config_registry:
             config = self._model_config_registry.resolve(agent_id="chat")
             if config and hasattr(config, "model"):

@@ -1910,3 +1910,47 @@ New CLI command group and API endpoints for index health monitoring, consistency
 | `/api/v1/db/stats` | GET | Cache stats, query performance, index metrics |
 
 **Self-healing:** When `antigravity db check` detects a mismatch (e.g., YAML file exists but isn't indexed), it offers to auto-fix by re-indexing the affected files. This is the "pit of success" — the tool naturally guides toward consistency.
+
+---
+
+## 18. Cloud Sync & Remote History (Phase L)
+
+### 18.1 Architecture & Google Drive Integration
+Showrunner ensures multi-project data safety and cross-device availability by integrating Google Drive as a first-class Cloud Sync Provider. Rather than relying solely on local YAML files, mutations are asynchronously mirrored to the cloud, taking advantage of Google Drive's native File Versioning.
+
+```mermaid
+flowchart TD
+    UoW[UnitOfWork] -->|"1. Atomic Write + fsync + flock"| YAML[Local YAML Files]
+    UoW -->|"2. Enqueue Sync Event"| CSS[CloudSyncService]
+    CSS -->|"3. Exponential Backoff Upload"| GDA[GoogleDriveAdapter]
+    GDA -->|"4. REST API (v3) + Checksum"| GDrive[(Google Drive)]
+    
+    UI[Time Machine UI] -->|"Query History"| GDA
+    GDA -->|"Fetch Revisions"| GDrive
+```
+
+### 18.2 Local-First Data Safety & Concurrency
+Data preservation against multi-session editing and crashes relies on rigorous guarantees:
+*   **Optimistic Concurrency Control (OCC):** Every save to `UnitOfWork` requires an `expected_hash`. The write is rejected with `409 Conflict` if the current `content_hash` differs, preventing silent overwrites.
+*   **Advisory File Locking:** `fcntl.flock` ensures exclusive write access to a YAML file during the `UnitOfWork` commit phase.
+*   **Crash Resilience:** Writers commit via temp files that are `fsync`'d before an atomic `os.rename`, ensuring power failures do not truncate files.
+*   **Write-Ahead Log (WAL) mode:** `PRAGMA journal_mode=WAL` is active on all SQLite databases (Knowledge Graph and Event Sourcing) to prevent `SQLITE_BUSY` contention between concurrent threads.
+
+### 18.3 Sync Strategy (Background/Async)
+*   **Async Propagation:** Immediately after a local save, the **raw YAML bytes** are placed in the `CloudSyncService` queue, mirroring the exact local state.
+*   **Retry & Dead-Letter Queues:** Failed API calls use exponential backoff and `429` quota tracking. Poison-pill events go to a SQLite `sync_failures` tracking table.
+*   **Data Integrity Checksums:** API responses are matched against the local `content_hash` to ensure no payload alteration occurred over the wire.
+*   **Complete Cloud Portability:** The `event_log.db` backing CQRS state is recursively synced to Drive alongside the raw YAML to guarantee full timeline restorability.
+*   **Structured Drive Output:** Folders match the local nested file structure `Showrunner/{project_name}/...` rather than polluting the Drive root.
+
+### 18.4 History, Trash & Revert Mechanics (Time Machine)
+*   **Revisions API:** Every change auto-generates a Drive version. Milestone variants are pinned via `keepRevisionForever` (up to 200).
+*   **Project-Level Snapshots:** The event log generates Point-in-Time manifests matching each `yaml_path` to specific `drive_file_id` revision hashes to allow full-project rollback.
+*   **Full UoW Revert Pipe:** UI-driven reverts download the revision, re-compile `content_hash`, and push the changes backwards through `UnitOfWork` via `REVERT_EVENT` to update indices.
+*   **Accidental Deletion Insurance:** Deletion maps to **Soft-Deletes** internally (`is_deleted=1`, moved to `.trash/`) and Google API `{"trashed": True}` calls, maintaining a 30-day "Undo" buffer.
+
+### 18.5 UI Integration
+*   **OAuth2 Flow:** Project setup includes an OAuth authentication flow to link the user's specific Google Drive account.
+*   **Activity Status Bar:** A real-time icon indicates sync state ("Syncing...", "All changes saved to Drive", "Sync Error" with actionable retry UI).
+*   **History Panel:** An interactive "Time Machine" sidebar accessible on any bucket to inspect diffs, pin versions, and trigger reverts.
+*   **Trash Manager:** Dedicated dashboard view to resurrect soft-deleted projects or fully purge them.

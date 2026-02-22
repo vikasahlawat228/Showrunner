@@ -122,6 +122,10 @@ Thumbs.db
 *.db
 .chroma/
 .antigravity/
+
+# Google Drive OAuth secrets
+credentials.json
+token.json
 characters/
 containers/
 creative_room/

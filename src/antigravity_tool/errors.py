@@ -57,6 +57,31 @@ class PersistenceError(AntigravityError):
     """File I/O failure during load or save."""
 
 
+class ConflictError(AntigravityError):
+    """Optimistic concurrency conflict — data changed since last read.
+
+    Raised when a UnitOfWork commit detects that another session modified
+    the entity between the time it was read and the time the save was
+    attempted (content_hash mismatch).
+    """
+
+    def __init__(self, entity_id: str, yaml_path: str, expected: str, actual: str):
+        super().__init__(
+            f"Conflict on '{yaml_path}': expected hash {expected[:8]}… "
+            f"but found {actual[:8]}…",
+            context={
+                "entity_id": entity_id,
+                "yaml_path": yaml_path,
+                "expected_hash": expected,
+                "actual_hash": actual,
+            },
+        )
+        self.entity_id = entity_id
+        self.yaml_path = yaml_path
+        self.expected_hash = expected
+        self.actual_hash = actual
+
+
 class LLMError(AntigravityError):
     """LLM generation or parsing failure."""
 

@@ -22,6 +22,9 @@ class EventService:
         self.db_path = str(db_path)
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        # WAL mode: readers don't block writers, prevents SQLITE_BUSY
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.setup()
 
     def setup(self) -> None:

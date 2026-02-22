@@ -313,3 +313,12 @@ class ContainerUpdateRequest(BaseModel):
 
 class ReorderRequest(BaseModel):
     items: list[dict]
+
+# ── Sync ────────────────────────────────────────────────────────
+
+class SyncAuthRequest(BaseModel):
+    auth_code: str
+
+class SyncRevertRequest(BaseModel):
+    yaml_path: str
+    revision_id: str

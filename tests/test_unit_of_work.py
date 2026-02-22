@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from antigravity_tool.errors import ConflictError
 from antigravity_tool.repositories.event_sourcing_repo import EventService
 from antigravity_tool.repositories.mtime_cache import MtimeCache
 from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
@@ -199,12 +200,18 @@ class TestDeleteAndCommit:
         count = uow2.commit()
         assert count == 1
 
-        # File is gone
-        assert not Path(yaml_path).exists(), "YAML file should be deleted"
+        # File is moved to .trash/ (soft-delete)
+        assert not Path(yaml_path).exists(), "YAML file should not be at original path"
+        trash_path = Path(yaml_path).parent / ".trash" / Path(yaml_path).name
+        assert trash_path.exists(), "YAML file should be in .trash/ directory"
 
-        # Entity is gone from SQLite
+        # Entity is soft-deleted (filtered from default queries)
         entities = indexer.query_entities(filters={"id": "ent-doomed"})
         assert len(entities) == 0
+
+        # But still exists in deleted entities
+        deleted = indexer.query_deleted_entities()
+        assert any(d["id"] == "ent-doomed" for d in deleted)
 
         # Sync metadata is gone
         sync = indexer.get_sync_metadata(yaml_path)
@@ -491,3 +498,195 @@ class TestEmptyCommit:
 
         second = uow.commit()
         assert second == 0
+
+
+# ===================================================================
+# test_occ_conflict_detection
+# ===================================================================
+
+
+class TestOCCConflictDetection:
+    """Verify Optimistic Concurrency Control via expected_hash."""
+
+    def test_save_with_correct_hash_succeeds(self, indexer, event_service, tmp_path):
+        """Save with matching expected_hash should succeed."""
+        yaml_path = _make_yaml_path(tmp_path, "occ_ok")
+        data = _sample_data("OccOk")
+
+        # First save (no expected_hash, creates entity)
+        uow1 = UnitOfWork(indexer, event_service)
+        uow1.save(
+            entity_id="ent-occ",
+            entity_type="character",
+            name="OccOk",
+            yaml_path=yaml_path,
+            data=data,
+            event_type="CREATE",
+        )
+        uow1.commit()
+
+        # Read the current hash
+        current_hash = indexer.get_content_hash("ent-occ")
+        assert current_hash is not None
+
+        # Second save with matching hash should succeed
+        uow2 = UnitOfWork(indexer, event_service)
+        uow2.save(
+            entity_id="ent-occ",
+            entity_type="character",
+            name="OccOk Updated",
+            yaml_path=yaml_path,
+            data={**data, "level": 2},
+            event_type="UPDATE",
+            expected_hash=current_hash,
+        )
+        count = uow2.commit()
+        assert count == 1
+
+    def test_save_with_wrong_hash_raises_conflict(self, indexer, event_service, tmp_path):
+        """Save with mismatched expected_hash should raise ConflictError."""
+        yaml_path = _make_yaml_path(tmp_path, "occ_fail")
+        data = _sample_data("OccFail")
+
+        # First save
+        uow1 = UnitOfWork(indexer, event_service)
+        uow1.save(
+            entity_id="ent-occ-fail",
+            entity_type="character",
+            name="OccFail",
+            yaml_path=yaml_path,
+            data=data,
+            event_type="CREATE",
+        )
+        uow1.commit()
+
+        # Second save with WRONG expected_hash → ConflictError
+        uow2 = UnitOfWork(indexer, event_service)
+        uow2.save(
+            entity_id="ent-occ-fail",
+            entity_type="character",
+            name="OccFail Changed",
+            yaml_path=yaml_path,
+            data={**data, "level": 99},
+            event_type="UPDATE",
+            expected_hash="wrong_hash_value",
+        )
+        with pytest.raises(ConflictError) as exc_info:
+            uow2.commit()
+
+        assert exc_info.value.entity_id == "ent-occ-fail"
+        assert exc_info.value.expected_hash == "wrong_hash_value"
+
+    def test_save_without_hash_always_succeeds(self, indexer, event_service, tmp_path):
+        """Save without expected_hash (None) always succeeds (backward compat)."""
+        yaml_path = _make_yaml_path(tmp_path, "no_occ")
+
+        uow = UnitOfWork(indexer, event_service)
+        uow.save(
+            entity_id="ent-noocc",
+            entity_type="character",
+            name="NoOcc",
+            yaml_path=yaml_path,
+            data=_sample_data("NoOcc"),
+            event_type="CREATE",
+        )
+        count = uow.commit()
+        assert count == 1
+
+
+# ===================================================================
+# test_soft_delete_round_trip
+# ===================================================================
+
+
+class TestSoftDeleteRoundTrip:
+    """Verify soft-delete → restore → visible again."""
+
+    def test_delete_then_restore(self, indexer, event_service, tmp_path):
+        """Delete an entity, restore it, verify it reappears in queries."""
+        yaml_path = _make_yaml_path(tmp_path, "restorable")
+        data = _sample_data("Restorable")
+
+        # Create
+        uow1 = UnitOfWork(indexer, event_service)
+        uow1.save(
+            entity_id="ent-restore",
+            entity_type="character",
+            name="Restorable",
+            yaml_path=yaml_path,
+            data=data,
+            event_type="CREATE",
+        )
+        uow1.commit()
+        assert len(indexer.query_entities(filters={"id": "ent-restore"})) == 1
+
+        # Delete (soft-delete)
+        uow2 = UnitOfWork(indexer, event_service)
+        uow2.delete(
+            entity_id="ent-restore",
+            entity_type="character",
+            yaml_path=yaml_path,
+        )
+        uow2.commit()
+
+        # Should be hidden from default queries
+        assert len(indexer.query_entities(filters={"id": "ent-restore"})) == 0
+
+        # Should appear in deleted list
+        deleted = indexer.query_deleted_entities()
+        assert any(d["id"] == "ent-restore" for d in deleted)
+
+        # Restore
+        indexer.restore_entity("ent-restore")
+
+        # Should reappear in default queries
+        restored = indexer.query_entities(filters={"id": "ent-restore"})
+        assert len(restored) == 1
+        assert restored[0]["name"] == "Restorable"
+
+
+# ===================================================================
+# test_lock_file_cleanup
+# ===================================================================
+
+
+class TestLockFileCleanup:
+    """Verify lock files are released after commit or rollback."""
+
+    def test_locks_released_after_commit(self, uow, tmp_path):
+        """Lock FDs should be empty after successful commit."""
+        yaml_path = _make_yaml_path(tmp_path, "locked")
+        uow.save(
+            entity_id="ent-lock",
+            entity_type="character",
+            name="Locked",
+            yaml_path=yaml_path,
+            data=_sample_data("Locked"),
+            event_type="CREATE",
+        )
+        uow.commit()
+        assert len(uow._lock_fds) == 0
+
+    def test_locks_released_after_rollback(self, indexer, event_service, tmp_path):
+        """Lock FDs should be empty after rollback."""
+        uow = UnitOfWork(indexer, event_service)
+        yaml_path = _make_yaml_path(tmp_path, "lock_rollback")
+        uow.save(
+            entity_id="ent-lr",
+            entity_type="character",
+            name="LockRollback",
+            yaml_path=yaml_path,
+            data=_sample_data("LockRollback"),
+            event_type="CREATE",
+        )
+
+        # Force a failure during commit
+        original_upsert = indexer.upsert_entity
+        indexer.upsert_entity = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("Boom"))
+
+        with pytest.raises(RuntimeError):
+            uow.commit()
+
+        indexer.upsert_entity = original_upsert
+        assert len(uow._lock_fds) == 0
+
