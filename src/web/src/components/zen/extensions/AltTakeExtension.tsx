@@ -1,7 +1,10 @@
 import { mergeAttributes, Node } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import React from "react";
-import { ChevronLeft, ChevronRight, CopyPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, CopyPlus, Sparkles, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
+import { useZenStore } from "@/lib/store/zenSlice";
+import { toast } from "sonner";
 
 export interface AltTakeOptions {
     HTMLAttributes: Record<string, any>;
@@ -46,9 +49,41 @@ const AltTakeComponent = (props: NodeViewProps) => {
         }
     };
 
+    const [isGenerating, setIsGenerating] = React.useState(false);
+
     const addNewTake = () => {
         const newTakes = [...takes, ""]; // Empty new take
         updateTakes(newTakes, newTakes.length - 1);
+    };
+
+    const handleAIAction = async () => {
+        const fragmentId = useZenStore.getState().currentFragmentId;
+        if (!fragmentId) {
+            toast.error("No active fragment found to generate take.");
+            return;
+        }
+
+        const prompt = window.prompt("Shift the tone or rewrite this take:", "More dramatic");
+        if (!prompt) return;
+
+        setIsGenerating(true);
+        try {
+            const result = await api.createAltTake({
+                fragment_id: fragmentId,
+                highlighted_text: currentText || "...",
+                prompt: prompt,
+            });
+
+            if (result.alt_text) {
+                const newTakes = [...takes, result.alt_text];
+                updateTakes(newTakes, newTakes.length - 1);
+                toast.success("AI variation generated!");
+            }
+        } catch (err: any) {
+            toast.error(err.message || "Failed to generate AI variation");
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     return (
@@ -85,6 +120,19 @@ const AltTakeComponent = (props: NodeViewProps) => {
                         title="Add Empty Take"
                     >
                         <CopyPlus className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                        onClick={handleAIAction}
+                        disabled={isGenerating}
+                        className="p-1 text-amber-400 hover:text-amber-300 flex items-center gap-1 border-l border-slate-700 pl-2 ml-1"
+                        title="Generate AI Variation"
+                    >
+                        {isGenerating ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                            <Sparkles className="w-3.5 h-3.5" />
+                        )}
                     </button>
                 </div>
 

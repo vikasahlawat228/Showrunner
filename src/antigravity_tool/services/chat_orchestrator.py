@@ -775,6 +775,12 @@ class ChatOrchestrator:
                 {"agent": "Story Architect", "task": "Analyze request"},
                 {"agent": "Writing Agent", "task": "Draft content"}
             ]
+            trace_planner_finish = ChatActionTrace(
+                id=planner_trace_id,
+                tool_name="Planner Agent",
+                context_summary=f"Planning failed, using fallback steps.",
+                duration_ms=int((time.monotonic() - start) * 1000)
+            ).model_dump()
 
         # 2. Execute Subagents
         all_traces = [trace_planner_finish]
@@ -833,7 +839,7 @@ class ChatOrchestrator:
         elapsed_ms = int((time.monotonic() - start) * 1000)
         final_answer = "\n\n".join(final_response_parts)
         
-        for word in re.findall(r'\\S+\\s*|\n', final_answer):
+        for word in re.findall(r'\S+\s*|\n', final_answer):
             yield ChatEvent(event_type="token", data={"text": word})
             
         msg = self._session_service.add_message(

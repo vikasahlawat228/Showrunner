@@ -147,3 +147,26 @@ body {
 .animate-pulse-new {
   animation: pulse-new 1s ease-in-out 3;
 }
+
+/* ── Semantic Zoom Transitions ──────────────────────────── */
+
+.zoom-vignette {
+  box-shadow: inset 0 0 150px 50px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.zoom-enter {
+  transform: translateZ(100px);
+  opacity: 0;
+  filter: blur(10px);
+}
+
+.zoom-exit {
+  transform: translateZ(-100px);
+  opacity: 0;
+  filter: blur(10px);
+}

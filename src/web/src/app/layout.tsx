@@ -8,6 +8,7 @@ import { CommandPalette } from "@/components/ui/CommandPalette";
 import { QuickAddModal } from "@/components/ui/QuickAddModal";
 import { ForkEraModal } from "@/components/ui/ForkEraModal";
 import { GlobalActivityBar } from "@/components/ui/GlobalActivityBar";
+import { BackgroundJobsWidget } from "@/components/ui/BackgroundJobsWidget";
 import { ChatSidebarWrapper } from "@/components/chat/ChatSidebarWrapper";
 import { ArtifactPreviewOverlay } from "@/components/chat/ArtifactPreviewOverlay";
 
@@ -53,6 +54,7 @@ export default function RootLayout({
         <QuickAddModal />
         <ForkEraModal />
         <GlobalActivityBar />
+        <BackgroundJobsWidget />
         <Toaster
           theme="dark"
           position="bottom-right"

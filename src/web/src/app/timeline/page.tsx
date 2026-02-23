@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { StoryStructureTree } from "@/components/timeline/StoryStructureTree";
 import { TimelineView } from "@/components/timeline/TimelineView";
+import { EmotionalArcChart } from "@/components/timeline/EmotionalArcChart";
 import { BranchList } from "@/components/timeline/BranchList";
 import { BranchComparison } from "@/components/timeline/BranchComparison";
 import { GitBranchPlus, X, Loader2, Minimize2 } from "lucide-react";
@@ -18,34 +19,44 @@ export default function TimelinePage() {
     const [branchError, setBranchError] = useState<string | null>(null);
     const [compareBranchA, setCompareBranchA] = useState<string | null>(null);
     const [compareBranchB, setCompareBranchB] = useState<string | null>(null);
-    const [isZoomed, setIsZoomed] = useState(false);
+    type ZoomLevel = "arc" | "chapter" | "scene" | "zen";
+    const [zoomLevel, setZoomLevel] = useState<ZoomLevel>("scene");
     const zoomAccumulator = React.useRef(0);
 
     const handleWheel = (e: React.WheelEvent) => {
-        // If the user uses a trackpad or mouse wheel, accumulate deltaY.
+        // Accumulate scroll for semantic zooming
+        zoomAccumulator.current += e.deltaY;
 
-        // 1. If not zoomed, active event exists, and scrolling DOWN (deltaY > 0)
-        if (!isZoomed && activeEventId && e.deltaY > 0) {
-            zoomAccumulator.current += e.deltaY;
-            if (zoomAccumulator.current > 400) {
-                setIsZoomed(true);
+        // Zoom In (Scroll Down)
+        if (e.deltaY > 0) {
+            if (zoomLevel === "arc" && zoomAccumulator.current > 300) {
+                setZoomLevel("chapter");
+                zoomAccumulator.current = 0;
+            } else if (zoomLevel === "chapter" && zoomAccumulator.current > 300) {
+                setZoomLevel("scene");
+                zoomAccumulator.current = 0;
+            } else if (zoomLevel === "scene" && zoomAccumulator.current > 400 && activeEventId) {
+                setZoomLevel("zen");
                 zoomAccumulator.current = 0;
             }
         }
-        // 2. If zoomed and scrolling UP (deltaY < 0)
-        else if (isZoomed && e.deltaY < 0) {
-            // Check if the scroll target allows scrolling up. If it's the editor and scrolled down, we shouldn't zoom out.
-            // A simple heuristic: if we get a pure up-scroll, we accumulate.
-            // To prevent accidental zoom-outs while reading, we require a larger threshold.
-            zoomAccumulator.current += e.deltaY;
-            if (zoomAccumulator.current < -600) {
-                setIsZoomed(false);
+        // Zoom Out (Scroll Up)
+        else if (e.deltaY < 0) {
+            if (zoomLevel === "zen" && zoomAccumulator.current < -600) {
+                setZoomLevel("scene");
+                zoomAccumulator.current = 0;
+            } else if (zoomLevel === "scene" && zoomAccumulator.current < -400) {
+                setZoomLevel("chapter");
+                zoomAccumulator.current = 0;
+            } else if (zoomLevel === "chapter" && zoomAccumulator.current < -300) {
+                setZoomLevel("arc");
                 zoomAccumulator.current = 0;
             }
-        } else {
-            // Reset if scrolling in the opposite direction
-            if (!isZoomed && e.deltaY < 0) zoomAccumulator.current = 0;
-            if (isZoomed && e.deltaY > 0) zoomAccumulator.current = 0;
+        }
+
+        // Cap accumulator to prevent massive jumps
+        if (Math.abs(zoomAccumulator.current) > 1000) {
+            zoomAccumulator.current = Math.sign(zoomAccumulator.current) * 1000;
         }
     };
 
@@ -106,22 +117,53 @@ export default function TimelinePage() {
 
                 {/* Timeline Canvas */}
                 <div
-                    className="flex-1 relative overflow-hidden bg-slate-100 dark:bg-slate-950"
+                    className="flex-1 relative overflow-hidden bg-slate-100 dark:bg-slate-950 perspective-1000"
                     onWheel={handleWheel}
                 >
-                    <div
-                        className={`absolute inset-0 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col ${isZoomed ? "scale-105 opacity-0 pointer-events-none" : "scale-100 opacity-100"
-                            }`}
-                    >
-                        <TimelineView
-                            onActiveEventChange={setActiveEventId}
-                            onZoom={(eventId) => {
-                                setActiveEventId(eventId);
-                                setIsZoomed(true);
-                            }}
-                        />
+                    {/* Vignette effect during zoom */}
+                    <div className={`absolute inset-0 z-50 transition-opacity duration-700 pointer-events-none zoom-vignette ${zoomLevel === "zen" ? "opacity-100" : "opacity-0"}`} />
+
+                    {/* Level Label Overlay */}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-3 py-1 bg-gray-900/60 backdrop-blur-md border border-white/10 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 pointer-events-none transition-all duration-300">
+                        {zoomLevel === "arc" && "World Arc View"}
+                        {zoomLevel === "chapter" && "Chapter Structure"}
+                        {zoomLevel === "scene" && "Event Stream"}
+                        {zoomLevel === "zen" && "Zen Editor"}
                     </div>
-                    {compareBranchA && compareBranchB && !isZoomed && (
+
+                    <div
+                        className={`absolute inset-0 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col ${zoomLevel === "zen" ? "scale-110 opacity-0 pointer-events-none blur-sm translate-z-[100px]" : "scale-100 opacity-100 translate-z-0"
+                            } ${zoomLevel === "arc" ? "bg-slate-50 dark:bg-slate-950" : ""}`}
+                    >
+                        <div className={`transition-all duration-500 transform ${zoomLevel === "arc" ? "flex-1 overflow-hidden translate-z-0" : zoomLevel === "chapter" ? "opacity-30 blur-sm scale-95 pointer-events-none -translate-z-[100px]" : "hidden"}`}>
+                            <div className="p-8 h-full">
+                                <EmotionalArcChart />
+                                <div className="mt-8 grid grid-cols-3 gap-6 opacity-60">
+                                    <div className="h-40 bg-gray-800/20 rounded-xl border border-white/5" />
+                                    <div className="h-40 bg-gray-800/20 rounded-xl border border-white/5" />
+                                    <div className="h-40 bg-gray-800/20 rounded-xl border border-white/5" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={`transition-all duration-500 transform ${zoomLevel === "chapter" ? "flex-1 overflow-hidden translate-z-0" : (zoomLevel === "arc" || zoomLevel === "scene") ? "opacity-30 blur-sm scale-95 pointer-events-none" : "hidden"}`}>
+                            <div className="max-w-2xl mx-auto py-12">
+                                <StoryStructureTree />
+                            </div>
+                        </div>
+
+                        <div className={`transition-all duration-500 transform ${zoomLevel === "scene" ? "flex-1 translate-z-0" : zoomLevel === "chapter" ? "opacity-30 blur-sm scale-110 pointer-events-none translate-z-[100px]" : "hidden"}`}>
+                            <TimelineView
+                                onActiveEventChange={setActiveEventId}
+                                onZoom={(eventId) => {
+                                    setActiveEventId(eventId);
+                                    setZoomLevel("zen");
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    {compareBranchA && compareBranchB && zoomLevel !== "zen" && (
                         <BranchComparison
                             branchA={compareBranchA}
                             branchB={compareBranchB}
@@ -129,9 +171,9 @@ export default function TimelinePage() {
                         />
                     )}
 
-                    {/* Semantic Zoom Overlay: Zen Editor */}
+                    {/* Zen Editor Overlay */}
                     <div
-                        className={`absolute inset-0 z-30 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] bg-gray-950 flex flex-col ${isZoomed ? "scale-100 opacity-100" : "scale-95 opacity-0 pointer-events-none"
+                        className={`absolute inset-0 z-30 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] bg-gray-950 flex flex-col ${zoomLevel === "zen" ? "scale-100 opacity-100 translate-z-0" : "scale-90 opacity-0 pointer-events-none -translate-z-[100px]"
                             }`}
                     >
                         <div className="flex items-center justify-between px-6 py-2 border-b border-gray-800/60 bg-gray-950/90 backdrop-blur-sm shrink-0">
@@ -140,7 +182,7 @@ export default function TimelinePage() {
                                 <span className="text-xs text-gray-500 font-mono ml-2">{activeEventId}</span>
                             </div>
                             <button
-                                onClick={() => setIsZoomed(false)}
+                                onClick={() => setZoomLevel("scene")}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors text-xs font-medium"
                             >
                                 <Minimize2 className="w-3.5 h-3.5" />

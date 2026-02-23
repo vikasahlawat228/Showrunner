@@ -1,137 +1,149 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Loader2, CheckCircle2, XCircle, ChevronDown, ChevronUp } from "lucide-react";
-import { Job } from "@/lib/api";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { Loader2, CheckCircle2, XCircle, ChevronDown, ChevronUp, Briefcase } from "lucide-react";
+import type { Job } from "@/lib/api";
+import { api } from "@/lib/api";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 export function BackgroundJobsWidget() {
     const [jobs, setJobs] = useState<Job[]>([]);
     const [expanded, setExpanded] = useState(false);
-    const [isConnected, setIsConnected] = useState(false);
+    const sseRef = useRef<EventSource | null>(null);
 
+    // Poll for initial state + SSE for real-time updates
     useEffect(() => {
-        let evtSource: EventSource | null = null;
-        let retryCount = 0;
+        // Initial fetch
+        api.getJobs(true)
+            .then(setJobs)
+            .catch(() => { });
 
-        const connectSSE = () => {
-            evtSource = new EventSource(
-                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/jobs/stream`
-            );
+        // SSE stream
+        const sse = new EventSource(`${API_BASE}/api/v1/jobs/stream`);
+        sseRef.current = sse;
 
-            evtSource.addEventListener("jobs_update", (event) => {
-                try {
-                    const updatedJobs = JSON.parse(event.data);
-                    setJobs(updatedJobs);
-                } catch (e) {
-                    console.error("Error parsing jobs", e);
-                }
-            });
+        sse.addEventListener("jobs_update", (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                setJobs(data);
+            } catch { }
+        });
 
-            evtSource.onopen = () => {
-                setIsConnected(true);
-                retryCount = 0;
-            };
-
-            evtSource.onerror = (err) => {
-                console.error("Job SSE error:", err);
-                setIsConnected(false);
-                evtSource?.close();
-                // Basic backoff
-                const timeout = Math.min(10000, 1000 * Math.pow(2, retryCount));
-                retryCount++;
-                setTimeout(connectSSE, timeout);
-            };
+        sse.onerror = () => {
+            // SSE reconnection is automatic, but clear stale state
+            setTimeout(() => {
+                api.getJobs(true)
+                    .then(setJobs)
+                    .catch(() => { });
+            }, 3000);
         };
 
-        connectSSE();
-
         return () => {
-            evtSource?.close();
+            sse.close();
+            sseRef.current = null;
         };
     }, []);
 
-    const runningJobs = jobs.filter((j) => j.status === "running" || j.status === "pending");
-    const hasJobs = jobs.length > 0;
+    const activeJobs = jobs.filter(j => j.status === "running" || j.status === "pending");
+    const recentDone = jobs.filter(j => j.status === "completed" || j.status === "failed");
 
-    if (!hasJobs) return null;
+    if (activeJobs.length === 0 && recentDone.length === 0) return null;
+
+    const statusIcon = (status: string) => {
+        switch (status) {
+            case "running":
+            case "pending":
+                return <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />;
+            case "completed":
+                return <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />;
+            case "failed":
+                return <XCircle className="w-3.5 h-3.5 text-red-400" />;
+            default:
+                return <Briefcase className="w-3.5 h-3.5 text-gray-400" />;
+        }
+    };
 
     return (
-        <div className="relative z-50">
-            <button
-                onClick={() => setExpanded(!expanded)}
-                className={`flex items-center gap-2 px-2 py-1.5 border rounded-md transition-colors text-xs font-medium ${runningJobs.length > 0
-                        ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20"
-                        : "border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-500 hover:text-gray-200"
-                    }`}
-            >
-                {runningJobs.length > 0 ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                ) : (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                )}
-                <span className="hidden sm:inline">
-                    {runningJobs.length > 0 ? `${runningJobs.length} Active` : "Done"}
-                </span>
-            </button>
-
-            {expanded && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2">
-                    <div className="px-3 py-2 border-b border-gray-800 bg-gray-950 flex items-center justify-between">
-                        <span className="font-semibold text-xs text-gray-200">Background Tasks</span>
-                        <span className="text-[10px] text-gray-500">Global Queue</span>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto">
-                        {jobs.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-gray-500 italic">No recent tasks.</div>
-                        ) : (
-                            <div className="divide-y divide-gray-800">
-                                {jobs.slice(0, 10).map((job) => (
-                                    <div key={job.id} className="p-3 hover:bg-gray-800/50 transition-colors">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center gap-2 overflow-hidden">
-                                                {job.status === "pending" || job.status === "running" ? (
-                                                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-indigo-400" />
-                                                ) : job.status === "failed" ? (
-                                                    <XCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                                                ) : (
-                                                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
-                                                )}
-                                                <span className="text-xs font-medium text-gray-200 truncate">
-                                                    {job.job_type === "pipeline" ? "Pipeline Execution" : job.job_type}
-                                                </span>
-                                            </div>
-                                            <span className="text-[10px] text-gray-500 shrink-0 uppercase tracking-wider">
-                                                {job.status}
-                                            </span>
-                                        </div>
-
-                                        <div className="ml-5">
-                                            <div className="text-[11px] text-gray-400 mb-1 line-clamp-2">
-                                                {job.message || "Working..."}
-                                            </div>
-
-                                            {job.status === "failed" && job.error && (
-                                                <div className="text-[10px] text-red-400 mt-1 mb-2 bg-red-950/30 p-1.5 rounded line-clamp-2">
-                                                    {job.error}
-                                                </div>
-                                            )}
-
-                                            {(job.status === "running" || job.status === "pending") && (
-                                                <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-indigo-500 transition-all duration-300 ease-out"
-                                                        style={{ width: `${job.progress || 10}%` }}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+        <div className="fixed bottom-16 right-4 z-50 w-80 animate-in slide-in-from-bottom-4 fade-in duration-300">
+            <div className="bg-gray-900/95 backdrop-blur-md border border-gray-700/60 rounded-xl shadow-2xl shadow-black/30 overflow-hidden">
+                {/* Header */}
+                <button
+                    onClick={() => setExpanded(!expanded)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-800/50 transition-colors"
+                >
+                    <div className="flex items-center gap-2.5">
+                        {activeJobs.length > 0 ? (
+                            <div className="relative">
+                                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
                             </div>
+                        ) : (
+                            <CheckCircle2 className="w-4 h-4 text-green-400" />
+                        )}
+                        <span className="text-xs font-medium text-gray-200">
+                            {activeJobs.length > 0
+                                ? `${activeJobs.length} background task${activeJobs.length > 1 ? "s" : ""} running`
+                                : "All tasks complete"
+                            }
+                        </span>
+                    </div>
+                    {expanded ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                    ) : (
+                        <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
+                    )}
+                </button>
+
+                {/* Compact active job preview (always visible) */}
+                {!expanded && activeJobs.length > 0 && (
+                    <div className="px-4 pb-2.5 space-y-1.5">
+                        {activeJobs.slice(0, 2).map(job => (
+                            <div key={job.id} className="flex items-center gap-2">
+                                {statusIcon(job.status)}
+                                <span className="text-[11px] text-gray-400 truncate flex-1">{job.message}</span>
+                                {job.progress > 0 && (
+                                    <span className="text-[10px] text-indigo-300 font-mono">{job.progress}%</span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Expanded view */}
+                {expanded && (
+                    <div className="border-t border-gray-800 max-h-60 overflow-y-auto">
+                        {[...activeJobs, ...recentDone].map(job => (
+                            <div
+                                key={job.id}
+                                className="flex items-start gap-2.5 px-4 py-2 border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30 transition-colors"
+                            >
+                                <div className="mt-0.5">{statusIcon(job.status)}</div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-xs text-gray-200 font-medium truncate">
+                                        {job.job_type}
+                                    </div>
+                                    <div className="text-[11px] text-gray-500 truncate">{job.message}</div>
+                                    {job.progress > 0 && job.progress < 100 && (
+                                        <div className="mt-1 w-full bg-gray-800 rounded-full h-1 overflow-hidden">
+                                            <div
+                                                className="bg-indigo-500 h-full rounded-full transition-all duration-500"
+                                                style={{ width: `${job.progress}%` }}
+                                            />
+                                        </div>
+                                    )}
+                                    {job.error && (
+                                        <div className="text-[10px] text-red-400 mt-0.5 truncate">{job.error}</div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        {activeJobs.length === 0 && recentDone.length === 0 && (
+                            <div className="px-4 py-3 text-xs text-gray-500 text-center">No background tasks</div>
                         )}
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }
