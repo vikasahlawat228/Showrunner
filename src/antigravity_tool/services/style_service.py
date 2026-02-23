@@ -1,6 +1,7 @@
 import logging
 import json
 from typing import Optional, List, Dict, Any
+import os
 from dataclasses import dataclass
 
 from antigravity_tool.services.knowledge_graph_service import KnowledgeGraphService
@@ -141,5 +142,107 @@ class StyleService:
             overall_score=overall_score,
             issues=issues,
             strengths=strengths,
-            summary=summary
-        )
+             summary=summary
+         )
+
+    async def extract_dialogue_by_speaker(self, text: str, speaker_name: str) -> list:
+        """Use LLM to identify lines of dialogue attributed to a specific character.
+        Returns list of {"line_number": int, "original_text": str, "speaker": str}"""
+        try:
+            from litellm import completion
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                logger.warning("GEMINI_API_KEY not set for extract_dialogue")
+                return []
+                
+            # Split text into lines for reference
+            lines = text.split('\n')
+            lines_with_numbers = "\n".join([f"[{i}] {line}" for i, line in enumerate(lines)])
+            
+            prompt = f"""You are a dialogue extraction assistant.
+Given this text with line numbers, find all spoken dialogue attributed to the character: {speaker_name}
+
+Return a JSON array of objects with these keys for each spoken line:
+- "line_number": the integer line number (from the brackets)
+- "original_text": the exact string of dialogue spoken
+- "speaker": "{speaker_name}"
+
+Text:
+{lines_with_numbers}
+
+Return ONLY the JSON array, no other text.
+"""
+            response = completion(
+                model="gemini/gemini-2.0-flash",
+                messages=[{"role": "user", "content": prompt}],
+                api_key=api_key
+            )
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith("```json"):
+                raw = raw[7:]
+            if raw.startswith("```"):
+                raw = raw[3:]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+                
+            data = json.loads(raw.strip())
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            logger.error(f"Failed to extract dialogue: {e}")
+            return []
+
+    async def enforce_style_on_dialogue(self, text: str, speaker_name: str, voice_profile: dict) -> str:
+        """Restyle only the specified character's dialogue while preserving surrounding prose."""
+        try:
+            dialogue_lines = await self.extract_dialogue_by_speaker(text, speaker_name)
+            if not dialogue_lines:
+                return text
+                
+            from litellm import completion
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                return text
+                
+            lines = text.split('\n')
+            
+            # For each line, rewrite it according to the voice profile
+            for item in dialogue_lines:
+                line_idx = item.get("line_number")
+                original = item.get("original_text", "")
+                
+                if line_idx is None or line_idx >= len(lines) or not original:
+                    continue
+                    
+                full_context_line = lines[line_idx]
+                
+                prompt = f"""Rewrite the following dialogue for {speaker_name} to match their voice profile.
+Voice Profile:
+- Tone/Style: {voice_profile.get('tone', 'neutral')}
+- Vocabulary: {voice_profile.get('vocabulary_level', 'average')}
+- Speech Patterns: {voice_profile.get('speech_patterns', 'normal')}
+- Forbidden Words: {voice_profile.get('forbidden_words', [])}
+
+Original line in context:
+"{full_context_line}"
+
+Specifically rewrite ONLY the spoken portion: "{original}"
+
+Return ONLY the completely revised full line (including surrounding action tags), nothing else.
+"""
+                response = completion(
+                    model="gemini/gemini-2.0-flash",
+                    messages=[{"role": "user", "content": prompt}],
+                    api_key=api_key
+                )
+                
+                revised_line = response.choices[0].message.content.strip()
+                # Remove quotes if the LLM added them unnecessarily around the whole line
+                if revised_line.startswith('"') and revised_line.endswith('"') and not full_context_line.startswith('"'):
+                     revised_line = revised_line[1:-1]
+                     
+                lines[line_idx] = revised_line
+                
+            return "\n".join(lines)
+        except Exception as e:
+            logger.error(f"Failed to enforce dialogue style: {e}")
+            return text

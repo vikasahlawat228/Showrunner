@@ -109,3 +109,13 @@ class GenericContainer(AntigravityBase):
         default=0,
         description="Position among sibling containers under the same parent.",
     )
+
+    # ── Phase J additions (Entity Versioning) ─────────────────────
+    era_id: Optional[str] = Field(
+        default=None,
+        description="Version identifier for eras (e.g., 'season_1', 'season_2'). None means global.",
+    )
+    parent_version_id: Optional[str] = Field(
+        default=None,
+        description="ID of the entity version this was forked from.",
+    )

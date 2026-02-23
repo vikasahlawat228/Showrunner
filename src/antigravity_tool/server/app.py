@@ -229,6 +229,8 @@ app.include_router(timeline.router)
 app.include_router(writing.router)
 app.include_router(storyboard.router)
 app.include_router(containers_router.router)
+from antigravity_tool.server.routers import jobs as jobs_router
+app.include_router(jobs_router.router, prefix="/api/v1")
 
 # Phase F additions
 app.include_router(projects_router.router)

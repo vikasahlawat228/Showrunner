@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 from antigravity_tool.schemas.chat import (
@@ -76,6 +77,11 @@ class ChatOrchestrator:
         start = time.monotonic()
 
         try:
+            # ── Welcome-back detection ────────────────────────────
+            # Check BEFORE persisting user message so updated_at is still the original value
+            gap = await self._check_session_gap(session_id)
+            is_first_message = gap is not None and self._session_service.get_message_count(session_id) == 0
+
             # Persist user message
             self._session_service.add_message(
                 session_id=session_id,
@@ -83,6 +89,28 @@ class ChatOrchestrator:
                 content=content,
                 mentioned_entity_ids=mentioned_entity_ids,
             )
+
+            # Yield welcome-back tokens if returning after 24 h+
+            if is_first_message:
+                days = gap.days
+                hours = gap.seconds // 3600
+                time_label = f"{days} day{'s' if days != 1 else ''}" if days > 0 else f"{hours} hours"
+                welcome = f"👋 **Welcome back!** It's been {time_label}. "
+                # Try to build a brief from context
+                if self._context_manager:
+                    try:
+                        ctx = self._context_manager.build_context(session_id)
+                        summary = ctx.get("system_context", "")
+                        if summary:
+                            welcome += f"Here's where you left off:\n\n{summary[:500]}\n\n---\n\n"
+                        else:
+                            welcome += "Let me know what you'd like to pick up on.\n\n---\n\n"
+                    except Exception:
+                        welcome += "Let me know what you'd like to pick up on.\n\n---\n\n"
+                else:
+                    welcome += "Let me know what you'd like to pick up on.\n\n---\n\n"
+                for word in re.findall(r'\S+\s*', welcome):
+                    yield ChatEvent(event_type="token", data={"text": word})
 
             # Check for /commands
             if content.strip().startswith("/"):
@@ -121,13 +149,41 @@ class ChatOrchestrator:
                     yield event
                 return
 
+            # Check for Complexity / Multi-Agent Orchestration
+            if intent == "CHAT" and await self._is_complex_query(content):
+                async for event in self._execute_planner_agent(session_id, content, start, context_payload):
+                    yield event
+                return
+
             # Default chat response via LLM
             response_text = ""
             try:
                 # Pass context payload to the LLM generation explicitly
                 async for chunk in self._generate_llm_response(session_id, content, intent, context_payload):
                     response_text += chunk
-                    yield ChatEvent(event_type="token", data={"text": chunk})
+                    # If the AI emitted a TOOL_CALL, don't show it to the user yet
+                    if not response_text.startswith("TOOL_CALL:"):
+                        yield ChatEvent(event_type="token", data={"text": chunk})
+                
+                # Intercept Auto-Memory / Subagent triggers
+                if response_text.startswith("TOOL_CALL:"):
+                    tool_name = response_text.replace("TOOL_CALL:", "").strip()
+                    if tool_name in self._tools:
+                        yield ChatEvent(
+                            event_type="action_trace",
+                            data=ChatActionTrace(
+                                tool_name="auto_orchestrator",
+                                context_summary=f"Agent Autonomous Decision: {tool_name}",
+                            ).model_dump()
+                        )
+                        async for event in self._execute_tool(
+                            session_id, tool_name, content, mentioned_entity_ids, start, context_payload
+                        ):
+                            yield event
+                        return
+                    else:
+                        response_text = f"Agent attempted to call unknown tool: {tool_name}"
+
             except Exception as e:
                 logger.warning(f"LLM generation failed, falling back to shell response: {e}", exc_info=True)
                 response_text = self._generate_shell_response(content, intent)
@@ -190,6 +246,9 @@ class ChatOrchestrator:
                 yield event
         elif command == "/compact":
             async for event in self._handle_compact(session_id, start):
+                yield event
+        elif command == "/replan":
+            async for event in self._handle_replan(session_id, args, start):
                 yield event
         else:
             response = f"Unknown command: {command}. Available: /plan, /approve, /execute, /compact"
@@ -363,8 +422,9 @@ class ChatOrchestrator:
         for word in response.split():
             yield ChatEvent(event_type="token", data={"text": word + " "})
 
-        # Clean up plan
-        del self._plans[session_id]
+        # Clean up plan if all completed
+        if all(s["status"] in ("completed", "done") for s in plan):
+            del self._plans[session_id]
 
         msg = self._session_service.add_message(session_id, "assistant", response, action_traces=action_traces)
         self._session_service.update_token_usage(session_id, len(response.split()) + len(approved) * 50)
@@ -393,6 +453,97 @@ class ChatOrchestrator:
         yield ChatEvent(
             event_type="complete",
             data={"message_id": msg.id, "session_id": session_id},
+        )
+
+    async def _handle_replan(
+        self, session_id: str, new_instructions: str, start: float
+    ) -> AsyncGenerator[ChatEvent, None]:
+        """Modify the current plan based on new instructions."""
+        plan = self._plans.get(session_id, [])
+        if not plan:
+            response = "No active plan. Use /plan <goal> first."
+            yield ChatEvent(event_type="token", data={"text": response})
+            msg = self._session_service.add_message(session_id, "assistant", response)
+            self._session_service.update_token_usage(session_id, len(new_instructions.split()) + len(response.split()))
+            yield ChatEvent(event_type="complete", data={"message_id": msg.id, "session_id": session_id})
+            return
+
+        trace = ChatActionTrace(
+            tool_name="replan_generator",
+            context_summary=f"Re-planning: {new_instructions}",
+        ).model_dump()
+        yield ChatEvent(event_type="action_trace", data=trace)
+
+        import litellm
+        import json
+
+        completed = [s for s in plan if s.get('status') in ('completed', 'done')]
+        completed_context = json.dumps(completed) if completed else "None"
+        
+        system_prompt = (
+            "You are an expert project manager. The user wants to modify an existing plan. "
+            f"Here are the originally completed steps:\n{completed_context}\n\n"
+            "Given the new instructions, generate the updated REMAINING steps. "
+            "Return ONLY a JSON array of objects. Each object must have: "
+            "'step' (integer, strictly continuing from the last completed step or starting at 1), "
+            "'action' (string, max 10 words), and 'status' (always 'pending')."
+        )
+        
+        try:
+            model_name = "gemini/gemini-2.0-flash"
+            if self._model_config_registry:
+                config = self._model_config_registry.resolve(agent_id="chat")
+                if config and hasattr(config, "model"):
+                    model_name = config.model
+
+            response = await litellm.acompletion(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"New instructions: {new_instructions}"}
+                ],
+                temperature=0.3,
+            )
+            content = response.choices[0].message.content.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            new_steps = json.loads(content)
+        except Exception as e:
+            logger.warning("Replan generation failed: %s", e)
+            last_step = completed[-1]["step"] if completed else 0
+            new_steps = [
+                {"step": last_step + 1, "action": f"Incorporate: {new_instructions}", "status": "pending"},
+                {"step": last_step + 2, "action": "Review updated plan", "status": "pending"}
+            ]
+
+        # Merge completed + new steps
+        updated_plan = completed + new_steps
+        self._plans[session_id] = updated_plan
+        # Also store on session just in case
+        session = self._session_service.get_session(session_id)
+        if session:
+            session._plan_steps = updated_plan
+
+        lines = [f"## Plan Updated\n"]
+        for s in updated_plan:
+            status_mark = " (Done)" if s['status'] in ('completed', 'done') else ""
+            lines.append(f"  {s['step']}. {s['action']}{status_mark}")
+        lines.append("\nUse `/approve <steps>` to approve pending steps, then `/execute` to run.")
+        response = "\n".join(lines)
+
+        for word in response.split():
+            yield ChatEvent(event_type="token", data={"text": word + " "})
+
+        msg = self._session_service.add_message(session_id, "assistant", response, action_traces=[trace])
+        self._session_service.update_token_usage(session_id, len(new_instructions.split()) + len(response.split()) + 50)
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        yield ChatEvent(
+            event_type="complete",
+            data={"message_id": msg.id, "session_id": session_id, "duration_ms": elapsed_ms},
         )
 
     # ── Tool execution ────────────────────────────────────────────
@@ -503,6 +654,206 @@ class ChatOrchestrator:
             },
         )
 
+    # ── Multi-Agent Orchestration ───────────────────────────────────
+
+    async def _is_complex_query(self, content: str) -> bool:
+        """Use a fast LLM to determine if the query is a complex writing task."""
+        try:
+            import litellm
+            import json
+        except ImportError:
+            return False
+
+        system_prompt = (
+            "You are a routing agent. Determine if the user's request is a 'complex writing task' "
+            "that requires multi-step planning (e.g., 'Build Chapter 5', 'Write a story about X', "
+            "'Outline a new arc') or just a simple conversational/informational query.\n"
+            "Respond ONLY with a JSON object: {\"is_complex\": true/false}"
+        )
+
+        try:
+            model_name = "gemini/gemini-2.0-flash"
+            if self._model_config_registry:
+                config = self._model_config_registry.resolve(agent_id="chat")
+                if config and hasattr(config, "model"):
+                    model_name = config.model
+
+            response = await litellm.acompletion(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": content}
+                ],
+                temperature=0.1,
+            )
+            result = response.choices[0].message.content.strip()
+            if result.startswith("```json"):
+                result = result[7:]
+            if result.startswith("```"):
+                result = result[3:]
+            if result.endswith("```"):
+                result = result[:-3]
+            data = json.loads(result)
+            return data.get("is_complex", False)
+        except Exception as e:
+            logger.warning("Complexity routing failed: %s", e)
+            return False
+
+    async def _execute_planner_agent(
+        self,
+        session_id: str,
+        content: str,
+        start: float,
+        context_payload: Optional[dict] = None
+    ) -> AsyncGenerator[ChatEvent, None]:
+        """Execute a Planner Agent to break down the query and delegate to subagents."""
+        import litellm
+        import json
+        import uuid
+        import asyncio
+
+        # 1. Create Planner trace
+        planner_trace_id = uuid.uuid4().hex
+        trace_planner = ChatActionTrace(
+            id=planner_trace_id,
+            tool_name="Planner Agent",
+            context_summary=f"Planning execution for complex query.",
+            prompt=f"Break down the query into steps: {content}"
+        ).model_dump()
+        
+        yield ChatEvent(
+            event_type="action_trace",
+            data=trace_planner,
+        )
+
+        system_prompt = (
+            "You are a Planner Agent. Break down the user's complex writing request into 2-3 logical sub-tasks. "
+            "Assign each task to a specialized subagent (e.g., 'Story Architect', 'Writing Agent', 'Continuity Analyst'). "
+            "Return ONLY a JSON array of objects: [{\"agent\": \"Agent Name\", \"task\": \"Task description\"}]"
+        )
+
+        try:
+            model_name = "gemini/gemini-2.0-flash"
+            if self._model_config_registry:
+                config = self._model_config_registry.resolve(agent_id="chat")
+                if config and hasattr(config, "model"):
+                    model_name = config.model
+
+            response = await litellm.acompletion(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": content}
+                ],
+                temperature=0.3,
+            )
+            result_str = response.choices[0].message.content.strip()
+            if result_str.startswith("```json"):
+                result_str = result_str[7:]
+            if result_str.startswith("```"):
+                result_str = result_str[3:]
+            if result_str.endswith("```"):
+                result_str = result_str[:-3]
+            
+            steps = json.loads(result_str)
+            
+            trace_planner_finish = ChatActionTrace(
+                id=planner_trace_id,
+                tool_name="Planner Agent",
+                context_summary=f"Planned {len(steps)} steps.",
+                raw_json=json.dumps(steps, indent=2),
+                duration_ms=int((time.monotonic() - start) * 1000)
+            ).model_dump()
+            yield ChatEvent(
+                event_type="action_trace",
+                data=trace_planner_finish,
+            )
+
+        except Exception as e:
+            logger.warning(f"Planner Agent failed: {e}")
+            steps = [
+                {"agent": "Story Architect", "task": "Analyze request"},
+                {"agent": "Writing Agent", "task": "Draft content"}
+            ]
+
+        # 2. Execute Subagents
+        all_traces = [trace_planner_finish]
+        final_response_parts = []
+        
+        for step in steps:
+            agent_name = step.get("agent", "Subagent")
+            task = step.get("task", "Execute task")
+            
+            subagent_trace_id = uuid.uuid4().hex
+            trace_subagent = ChatActionTrace(
+                id=subagent_trace_id,
+                parent_id=planner_trace_id,
+                tool_name=agent_name,
+                context_summary=f"Executing: {task}",
+                prompt=f"Task: {task}\nOriginal Request: {content}"
+            ).model_dump()
+            
+            yield ChatEvent(
+                event_type="action_trace",
+                data=trace_subagent,
+            )
+            
+            sub_start = time.monotonic()
+            
+            sub_system_prompt = f"You are the {agent_name}. Complete the following task: {task}. Original request: {content}. Keep it concise."
+            try:
+                sub_response = await litellm.acompletion(
+                    model=model_name,
+                    messages=[{"role": "system", "content": sub_system_prompt}],
+                    temperature=0.5,
+                )
+                sub_result = sub_response.choices[0].message.content.strip()
+            except Exception as e:
+                sub_result = f"Failed to execute task: {e}"
+
+            sub_duration = int((time.monotonic() - sub_start) * 1000)
+            
+            trace_subagent_finish = ChatActionTrace(
+                id=subagent_trace_id,
+                parent_id=planner_trace_id,
+                tool_name=agent_name,
+                context_summary=f"Completed: {task}",
+                raw_json=sub_result,
+                duration_ms=sub_duration
+            ).model_dump()
+            
+            yield ChatEvent(
+                event_type="action_trace",
+                data=trace_subagent_finish,
+            )
+            all_traces.append(trace_subagent_finish)
+            final_response_parts.append(f"**{agent_name}**:\n{sub_result}")
+        
+        # 3. Finalize
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        final_answer = "\n\n".join(final_response_parts)
+        
+        for word in re.findall(r'\\S+\\s*|\n', final_answer):
+            yield ChatEvent(event_type="token", data={"text": word})
+            
+        msg = self._session_service.add_message(
+            session_id=session_id,
+            role="assistant",
+            content=final_answer,
+            action_traces=all_traces
+        )
+        self._session_service.update_token_usage(session_id, len(content.split()) + len(final_answer.split()) + 100)
+
+        yield ChatEvent(
+            event_type="complete",
+            data={
+                "message_id": msg.id,
+                "session_id": session_id,
+                "duration_ms": elapsed_ms,
+                "trace": trace_planner_finish,
+            },
+        )
+
     # ── Response generation ───────────────────────────────────────
 
     async def _generate_llm_response(
@@ -543,15 +894,28 @@ class ChatOrchestrator:
 
     def _build_system_prompt(self, system_context: str, intent: str) -> str:
         """Assemble the system prompt."""
-        base_prompt = "You are the Showrunner story co-pilot for a manga/manhwa creation tool."
+        base_prompt = (
+            "You are the Showrunner story co-pilot for a manga/manhwa creation tool. "
+            "You have access to a massive context engine and a suite of agentic tools.\n"
+            "If the user makes a statement that establishes a permanent rule, fact, or lore "
+            "decision for the project, you must ONLY respond with the exact text: `TOOL_CALL: save_to_memory` "
+            "and nothing else. The orchestrator will intercept this and save the fact to Tier 1 Memory."
+        )
         
+        # Extract Zen Context if present in system_context (CUJ 14)
+        zen_instructions = ""
+        if "zen_context" in system_context:
+            # The system_context usually contains the formatted payload from context_manager.py
+            # We can also explicitly look for it if it was passed through
+            zen_instructions = "The user is currently writing in Zen Mode. Reference the provided scene context and text buffer to give highly relevant advice."
+
         intent_instructions = ""
         if intent == "CHAT":
             intent_instructions = "The user is engaging in general conversation. Be helpful, brainstorm and respond to their queries."
         else:
             intent_instructions = f"The intent was classified as {intent}, but fell through to the chat handler. Explain your capabilities if needed."
 
-        parts = filter(None, [base_prompt, intent_instructions, system_context])
+        parts = filter(None, [base_prompt, zen_instructions, intent_instructions, system_context])
         return "\n\n".join(parts)
 
     def _intent_to_artifact_type(self, intent: str) -> str:
@@ -577,3 +941,20 @@ class ChatOrchestrator:
                 "context assembly will be available in subsequent phases."
             )
         return f"Intent '{intent}' is not yet implemented."
+
+    # ── Session-gap detection ─────────────────────────────────────
+
+    async def _check_session_gap(self, session_id: str) -> "timedelta | None":
+        """Return the time gap if the session has been inactive > 24 hours."""
+        session = self._session_service.get_session(session_id)
+        if not session:
+            return None
+        now = datetime.now(timezone.utc)
+        updated = session.updated_at
+        # Handle naive datetimes by assuming UTC
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        gap = now - updated
+        if gap.total_seconds() > 24 * 3600:
+            return gap
+        return None

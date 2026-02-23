@@ -64,6 +64,8 @@ class KnowledgeGraphService:
             sort_order=getattr(container, "sort_order", 0),
             tags=getattr(container, "tags", None),
             model_preference=getattr(container, "model_preference", None),
+            era_id=getattr(container, "era_id", None),
+            parent_version_id=getattr(container, "parent_version_id", None),
         )
 
         # Handle relationships if they are embedded in the container
@@ -146,6 +148,107 @@ class KnowledgeGraphService:
     def get_all_relationships(self) -> List[Dict[str, Any]]:
         """Get all relationships in the Knowledge Graph."""
         return self.indexer.get_all_relationships()
+
+    # ------------------------------------------------------------------
+    # Era Versioning (Phase J)
+    # ------------------------------------------------------------------
+
+    def get_entity_at_era(self, entity_id: str, era_id: str) -> Optional[Dict[str, Any]]:
+        """Get the version of an entity for a specific era.
+        
+        If a version with the specific era_id exists, return it.
+        Otherwise, fall back to the global version (era_id=None).
+        """
+        # Search for a fork where parent_version_id == entity_id AND era_id == era_id
+        forks = self.find_containers(filters={"parent_version_id": entity_id, "era_id": era_id})
+        if forks:
+            return forks[0]
+            
+        # Also check if the requested era_id is the base entity's era
+        bases = self.find_containers(filters={"id": entity_id})
+        if not bases:
+            return None
+            
+        base_entity = bases[0]
+        if base_entity.get("era_id") == era_id:
+            return base_entity
+            
+        # Fall back to base entity
+        return base_entity
+
+    def create_era_fork(self, entity_id: str, new_era_id: str) -> GenericContainer:
+        """Clone an existing container to a new era."""
+        base_container = self.container_repo.get_by_id(entity_id)
+        if not base_container:
+            raise ValueError(f"Container {entity_id} not found")
+            
+        import uuid
+        import copy
+        
+        # Clone it
+        fork = copy.deepcopy(base_container)
+        fork.id = str(uuid.uuid4())
+        fork.era_id = new_era_id
+        fork.parent_version_id = entity_id
+        
+        self.container_repo.save_container(fork)
+        return fork
+
+    def get_unresolved_threads(self, era_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Query unresolved relationships."""
+        all_rels = self.get_all_relationships()
+        unresolved = []
+        for r in all_rels:
+            metadata = {}
+            if r.get("metadata_json"):
+                metadata = json.loads(r["metadata_json"])
+                
+            is_resolved = metadata.get("resolved", False)
+            if is_resolved:
+                continue
+                
+            created_in = metadata.get("created_in_era")
+            
+            source = self.find_containers(filters={"id": r["source_id"]})
+            target = self.find_containers(filters={"id": r["target_id"]})
+            source_name = source[0].get("name", r["source_id"]) if source else r["source_id"]
+            target_name = target[0].get("name", r["target_id"]) if target else r["target_id"]
+            
+            edge_id = f"{r['source_id']}::::{r['target_id']}::::{r['rel_type']}"
+            
+            unresolved.append({
+                "edge_id": edge_id,
+                "source": source_name,
+                "target": target_name,
+                "relationship": r["rel_type"],
+                "created_in": created_in,
+                "description": metadata.get("description", "")
+            })
+            
+        return unresolved
+
+    def resolve_thread(self, edge_id: str, resolved_in_era: str) -> None:
+        """Mark a thread as resolved by extracting source, target, type from edge_id."""
+        parts = edge_id.split("::::")
+        if len(parts) != 3:
+            return
+            
+        source_id, target_id, rel_type = parts
+        container = self.container_repo.get_by_id(source_id)
+        if not container:
+            return
+            
+        changed = False
+        for rel in container.relationships:
+            if rel.get("target_id") == target_id and rel.get("type") == rel_type:
+                if "metadata" not in rel or not isinstance(rel["metadata"], dict):
+                    rel["metadata"] = {}
+                rel["metadata"]["resolved"] = True
+                rel["metadata"]["resolved_in_era"] = resolved_in_era
+                changed = True
+        
+        if changed:
+            self.container_repo.save_container(container)
 
     # ------------------------------------------------------------------
     # Hierarchical queries (Phase F)

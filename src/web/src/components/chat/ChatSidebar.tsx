@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import { useStudioStore } from "../../lib/store";
-import { ChatMessage } from "./ChatMessage";
+import { ChatMessage, ActionTraceBlock, ArtifactCard } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { TokenIndicator } from "./TokenIndicator";
 import { ApprovalBanner, ApprovalData } from "./ApprovalBanner";
+import { WelcomeBackBanner } from "./WelcomeBackBanner";
 import { useChatStream } from "../../hooks/useChatStream";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useZenStore } from "../../lib/store/zenSlice";
+import { useRecorderStore } from "../../lib/store/recorderSlice";
 import { PlanViewer } from "./PlanViewer";
 
 interface ChatSidebarProps {
@@ -26,6 +28,8 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
         chatMessages,
         isStreaming,
         streamingContent,
+        streamingTraces,
+        streamingArtifacts,
         chatError,
         fetchChatSessions,
         createChatSession,
@@ -44,6 +48,29 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
         backgroundStatus,
         setBackgroundStatus,
     } = useStudioStore();
+
+    // Welcome-back banner state
+    const [welcomeBack, setWelcomeBack] = useState<{ daysSince: number; summary: string } | null>(null);
+
+    // Detect stale sessions when switching active session
+    useEffect(() => {
+        if (!activeSessionId) {
+            setWelcomeBack(null);
+            return;
+        }
+        const session = chatSessions.find((s) => s.id === activeSessionId);
+        if (!session) return;
+        const updatedAt = new Date(session.updated_at).getTime();
+        const hoursSince = (Date.now() - updatedAt) / (1000 * 60 * 60);
+        if (hoursSince > 24) {
+            setWelcomeBack({
+                daysSince: Math.floor(hoursSince / 24),
+                summary: session.last_message_preview || "",
+            });
+        } else {
+            setWelcomeBack(null);
+        }
+    }, [activeSessionId, chatSessions]);
 
     // Fetch sessions on mount
     useEffect(() => {
@@ -110,9 +137,18 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
     const handleSend = useCallback(
         async (content: string, mentionedEntityIds: string[]) => {
             // Build context payload if in Zen Mode
-            const { editorContent } = useZenStore.getState();
-            const contextPayload = window.location.pathname.startsWith('/zen') && editorContent
-                ? { current_text_buffer: editorContent }
+            const { editorContent, activeSceneId, activeChapterId, detectedEntities } = useZenStore.getState();
+            const isZen = window.location.pathname.startsWith('/zen');
+
+            const contextPayload = isZen
+                ? {
+                    zen_context: {
+                        scene_id: activeSceneId,
+                        chapter_id: activeChapterId,
+                        current_text: editorContent?.slice(0, 2000),
+                        entities: detectedEntities.map(e => e.container_name)
+                    }
+                }
                 : undefined;
 
             if (!activeSessionId) {
@@ -133,6 +169,17 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
                 completeMessage(userMsg);
                 setStreaming(true);
                 clearStreamingContent();
+
+                // Record chat message if recording is active
+                const { isRecording: recOn, recordAction: recAct } = useRecorderStore.getState();
+                if (recOn) {
+                    recAct({
+                        type: "chat_message",
+                        description: content.slice(0, 100),
+                        payload: { message: content, mentioned_entity_ids: mentionedEntityIds },
+                    });
+                }
+
                 sendMessage(newId, content, mentionedEntityIds, contextPayload);
                 return;
             }
@@ -151,6 +198,18 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
             completeMessage(userMsg);
             setStreaming(true);
             clearStreamingContent();
+            setWelcomeBack(null); // dismiss banner on send
+
+            // Record chat message if recording is active
+            const { isRecording: recOn2, recordAction: recAct2 } = useRecorderStore.getState();
+            if (recOn2) {
+                recAct2({
+                    type: "chat_message",
+                    description: content.slice(0, 100),
+                    payload: { message: content, mentioned_entity_ids: mentionedEntityIds },
+                });
+            }
+
             sendMessage(activeSessionId, content, mentionedEntityIds, contextPayload);
         },
         [activeSessionId, createChatSession, completeMessage, setStreaming, clearStreamingContent, sendMessage]
@@ -159,7 +218,7 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed right-0 top-0 h-full w-96 bg-gray-900 border-l border-gray-700 flex flex-col z-50 shadow-xl">
+        <div className="w-[400px] flex-shrink-0 bg-gray-900 border-l border-gray-700 flex flex-col z-40 shadow-xl h-full">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
                 <div className="flex flex-col gap-1 w-2/3">
@@ -220,7 +279,20 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
             {(activeSessionId || chatSessions.length === 0) && (
                 <>
                     <div className="flex-1 overflow-y-auto p-3">
-                        {chatMessages.length === 0 && !isStreaming && (
+                        {/* Welcome-back banner */}
+                        {welcomeBack && (
+                            <WelcomeBackBanner
+                                daysSince={welcomeBack.daysSince}
+                                summary={welcomeBack.summary}
+                                onDismiss={() => setWelcomeBack(null)}
+                                onCatchUp={() => {
+                                    setWelcomeBack(null);
+                                    handleSend("/plan catch-up", []);
+                                }}
+                            />
+                        )}
+
+                        {chatMessages.length === 0 && !isStreaming && !welcomeBack && (
                             <div className="text-center text-gray-500 text-sm mt-8">
                                 Start a conversation about your project.
                                 <br />
@@ -233,16 +305,36 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
                         ))}
 
                         {/* Streaming content */}
-                        {isStreaming && streamingContent && (
+                        {isStreaming && (streamingContent || streamingTraces.length > 0 || streamingArtifacts.length > 0) && (
                             <div className="flex justify-start mb-3">
-                                <div className="max-w-[80%] rounded-lg px-4 py-2 bg-gray-800 text-gray-100">
+                                <div className="max-w-[80%] rounded-lg px-4 py-2 bg-gray-800 text-gray-100 w-full">
                                     {streamingContent.includes("## Plan:") ? (
                                         <PlanViewer content={streamingContent} onSend={(text) => handleSend(text, [])} />
-                                    ) : (
+                                    ) : streamingContent ? (
                                         <div className="prose prose-invert prose-sm max-w-none">
                                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                                 {streamingContent + " ▊"}
                                             </ReactMarkdown>
+                                        </div>
+                                    ) : (
+                                        <div className="text-gray-500 text-sm italic mb-2">Thinking... ▊</div>
+                                    )}
+
+                                    {/* Action traces (Glass Box) */}
+                                    {streamingTraces.length > 0 && (
+                                        <div className="mt-2 border-t border-gray-600 pt-2 space-y-1">
+                                            {streamingTraces.map((trace: any, i: number) => (
+                                                <ActionTraceBlock key={i} trace={trace} />
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Artifacts */}
+                                    {streamingArtifacts.length > 0 && (
+                                        <div className="mt-2 space-y-1 w-full">
+                                            {streamingArtifacts.map((artifact: any, i: number) => (
+                                                <ArtifactCard key={i} artifact={artifact} />
+                                            ))}
                                         </div>
                                     )}
                                 </div>
@@ -271,10 +363,26 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
                             <ApprovalBanner
                                 data={pendingApproval}
                                 onApprove={() => {
+                                    const { isRecording: ra, recordAction: rec } = useRecorderStore.getState();
+                                    if (ra) {
+                                        rec({
+                                            type: "approval",
+                                            description: `Approved: ${pendingApproval.intent}`,
+                                            payload: { decision: "approve", intent: pendingApproval.intent },
+                                        });
+                                    }
                                     setPendingApproval(null);
                                     handleSend(`Approve action ${pendingApproval.intent}`, []);
                                 }}
                                 onReject={() => {
+                                    const { isRecording: ra2, recordAction: rec2 } = useRecorderStore.getState();
+                                    if (ra2) {
+                                        rec2({
+                                            type: "approval",
+                                            description: `Rejected: ${pendingApproval.intent}`,
+                                            payload: { decision: "reject", intent: pendingApproval.intent },
+                                        });
+                                    }
                                     setPendingApproval(null);
                                     handleSend("Reject action", []);
                                 }}
@@ -293,6 +401,43 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
                                 <span className="text-xs font-mono text-indigo-300 truncate">
                                     {backgroundStatus}
                                 </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Ambient AI Settings (Zen Mode Only Context) */}
+                    {window.location.pathname.startsWith('/zen') && (
+                        <div className="px-3 pb-2 flex-shrink-0">
+                            <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3">
+                                <h3 className="text-xs font-semibold text-gray-300 mb-2 flex items-center justify-between">
+                                    <span>Ambient AI Orchestration</span>
+                                </h3>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-[10px] text-gray-400 block mb-1">Model Temperament</label>
+                                        <select
+                                            value={useZenStore.getState().ghostTextTemperament || "Default"}
+                                            onChange={(e) => useZenStore.getState().setGhostTextTemperament(e.target.value)}
+                                            className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-xs text-gray-200 focus:outline-none focus:border-indigo-500/50"
+                                        >
+                                            <option value="Default">Default</option>
+                                            <option value="Action-Heavy">Action-Heavy</option>
+                                            <option value="Dialogue-Focused">Dialogue-Focused</option>
+                                            <option value="Descriptive">Descriptive & Atmospheric</option>
+                                            <option value="Terse">Terse & Punchy</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-gray-400 block mb-1">Constraints</label>
+                                        <input
+                                            type="text"
+                                            value={useZenStore.getState().ghostTextConstraints}
+                                            onChange={(e) => useZenStore.getState().setGhostTextConstraints(e.target.value)}
+                                            placeholder="e.g. Focus on internal monologue..."
+                                            className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-xs text-gray-200 focus:outline-none focus:border-indigo-500/50"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}

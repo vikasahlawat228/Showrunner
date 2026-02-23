@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Layers, BookOpen, Film, BarChart3, Download } from "lucide-react";
+import { Layers, BookOpen, Film, BarChart3, Download, MessageSquare, Clock } from "lucide-react";
 import { useStudioStore } from "@/lib/store";
 import { ExportModal } from "@/components/ui/ExportModal";
 import type { StructureNode } from "@/lib/api";
@@ -50,13 +50,17 @@ export function ProgressOverview() {
     const activeProjectId = useStudioStore((s) => s.activeProjectId);
     const structureTree = useStudioStore((s) => s.structureTree);
     const fetchStructure = useStudioStore((s) => s.fetchStructure);
+    const chatSessions = useStudioStore((s) => s.chatSessions);
+    const fetchChatSessions = useStudioStore((s) => s.fetchChatSessions);
+    const setActiveSession = useStudioStore((s) => s.setActiveSession);
     const [exportOpen, setExportOpen] = useState(false);
 
     useEffect(() => {
         if (activeProjectId) {
             fetchStructure(activeProjectId);
         }
-    }, [activeProjectId, fetchStructure]);
+        fetchChatSessions();
+    }, [activeProjectId, fetchStructure, fetchChatSessions]);
 
     useEffect(() => {
         const handler = () => setExportOpen(true);
@@ -120,6 +124,45 @@ export function ProgressOverview() {
                     {Object.values(counts).reduce((a, b) => a + b, 0)}
                 </span>
             </div>
+
+            {/* Last Chat Session */}
+            {chatSessions.length > 0 && (() => {
+                const latest = chatSessions[0];
+                const updatedMs = new Date(latest.updated_at).getTime();
+                const diffH = Math.floor((Date.now() - updatedMs) / (1000 * 60 * 60));
+                const timeAgo = diffH < 1 ? "just now" : diffH < 24 ? `${diffH}h ago` : `${Math.floor(diffH / 24)}d ago`;
+                return (
+                    <div className="px-3 pb-3 pt-1">
+                        <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-3 group hover:border-indigo-500/30 transition-all duration-200">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-7 h-7 rounded-md bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow">
+                                    <MessageSquare className="w-3.5 h-3.5 text-white" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-gray-200 truncate">{latest.name}</p>
+                                    <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                                        <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{timeAgo}</span>
+                                        <span>·</span>
+                                        <span>{latest.message_count} msgs</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {latest.last_message_preview && (
+                                <p className="text-[11px] text-gray-500 truncate mb-2">{latest.last_message_preview}</p>
+                            )}
+                            <button
+                                onClick={() => {
+                                    setActiveSession(latest.id);
+                                    window.dispatchEvent(new CustomEvent('chat:open'));
+                                }}
+                                className="w-full py-1.5 text-[11px] font-medium rounded-md bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-600/40 transition-colors"
+                            >
+                                Resume Session
+                            </button>
+                        </div>
+                    </div>
+                );
+            })()}
 
             <ExportModal isOpen={exportOpen} onClose={() => setExportOpen(false)} />
         </div>

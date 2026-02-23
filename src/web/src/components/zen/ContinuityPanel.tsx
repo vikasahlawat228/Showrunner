@@ -42,17 +42,15 @@ export function ContinuityPanel() {
     };
 
     const applyResolution = (issue: ContinuityCheckResponse, option: ResolutionOption) => {
-        // Find the original text that caused the issue. The Continuity Analyst doesn't strictly provide
-        // the exact matching snippet by default in its response, so we'll use the reasoning as context
-        // or just insert the replacement text. Since we want to show a diff, let's assume `option.edits` 
-        // string represents the "newText" and we'll attempt to Diff it against the selected or current context.
-        // For accurate diffs, we would ideally change the backend to return `original_text` as well.
-        // For now, we simulate originalText being a generic chunk or empty if unknown, and let the user see the new text.
+        // If the LLM returned exactly what caused it (flagged_text) or the specific
+        // snippet inside of the scene (original_text), we pass it to the Diff node so it
+        // renders correctly inline.
+        const originalText = option.original_text || issue.flagged_text || `(Original text related to: ${issue.reasoning})`;
 
         window.dispatchEvent(
             new CustomEvent("zen:applyDiff", {
                 detail: {
-                    originalText: `(Replace this with original text related to: ${issue.reasoning})`,
+                    originalText: originalText,
                     newText: option.edits
                 }
             })

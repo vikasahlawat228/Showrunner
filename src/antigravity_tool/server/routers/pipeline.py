@@ -15,6 +15,7 @@ from antigravity_tool.schemas.pipeline_steps import (
     PipelineEdge,
     StepRegistryEntry,
     STEP_REGISTRY,
+    DistillRequest,
 )
 from antigravity_tool.services.pipeline_service import PipelineService
 from antigravity_tool.services.agent_dispatcher import AgentDispatcher
@@ -202,6 +203,41 @@ async def create_from_template(
 
 
 # ------------------------------------------------------------------
+# Recorded Workflow Distillation
+# ------------------------------------------------------------------
+
+
+@router.post("/definitions/distill", status_code=201)
+async def distill_recorded_actions(
+    body: DistillRequest,
+    svc: PipelineService = Depends(get_pipeline_service),
+) -> PipelineDefinitionResponse:
+    """Distill recorded user actions into a reusable pipeline definition.
+
+    Uses deterministic rule-based mapping instead of LLM generation.
+    Specific text inputs are generalized into template variables.
+    """
+    try:
+        definition = svc.distill_recorded_actions(
+            actions=[a.model_dump() for a in body.actions],
+            title=body.title,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    saved = svc.save_definition(definition)
+    return PipelineDefinitionResponse(
+        id=saved.id,
+        name=saved.name,
+        description=saved.description,
+        steps=saved.steps,
+        edges=saved.edges,
+        created_at=saved.created_at.isoformat(),
+        updated_at=saved.updated_at.isoformat(),
+    )
+
+
+# ------------------------------------------------------------------
 # NL-to-DAG Pipeline Generation (Phase H Track 3)
 # ------------------------------------------------------------------
 
@@ -277,6 +313,23 @@ async def stream_pipeline_run(run_id: str):
     """Stream Server-Sent Events (SSE) representing pipeline state changes."""
     return EventSourceResponse(PipelineService.stream_pipeline(run_id))
 
+
+class ModelOverrideRequest(BaseModel):
+    model: str
+
+@router.patch("/{run_id}/steps/{step_id}/model")
+async def override_step_model(
+    run_id: str,
+    step_id: str,
+    request: ModelOverrideRequest,
+    svc: PipelineService = Depends(get_pipeline_service),
+):
+    """Override the language model for a specific step before it resumes."""
+    try:
+        svc.set_step_model_override(run_id, step_id, request.model)
+        return {"status": "ok", "run_id": run_id, "step_id": step_id, "model": request.model}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/{run_id}/resume")
 async def resume_pipeline_run(run_id: str, request: PipelineResume):

@@ -120,6 +120,51 @@ class WritingService:
 
         return fragment, detected
 
+    def get_latest_fragment(self, branch_id: str = "main") -> Optional[WritingFragment]:
+        """Retrieve the most recent fragment for a given branch.
+        Falls back to main branch if the requested branch has no fragments yet,
+        assuming the branch was just created and we want to render the parent state.
+        """
+        fragments_data = self.container_repo.list_by_type("fragment")
+        if not fragments_data:
+            return None
+
+        # Try to find exactly matching branch
+        branch_fragments = [
+            f for f in fragments_data 
+            if f.attributes.get("branch_id", "main") == branch_id
+        ]
+        
+        if not branch_fragments and branch_id != "main":
+            # Fall back to main
+            branch_fragments = [
+                f for f in fragments_data 
+                if f.attributes.get("branch_id", "main") == "main"
+            ]
+
+        if not branch_fragments:
+            return None
+
+        # Sort by updated_at or created_at
+        branch_fragments.sort(
+            key=lambda c: c.updated_at or c.created_at, 
+            reverse=True
+        )
+        
+        latest = branch_fragments[0]
+        
+        return WritingFragment(
+            id=latest.id,
+            text=latest.attributes.get("text", ""),
+            title=latest.attributes.get("title"),
+            scene_id=latest.attributes.get("scene_id"),
+            chapter=latest.attributes.get("chapter"),
+            branch_id=latest.attributes.get("branch_id", "main"),
+            associated_containers=latest.attributes.get("associated_containers", []),
+            metadata={k: v for k, v in latest.attributes.items() 
+                      if k not in ["text", "title", "scene_id", "chapter", "branch_id", "associated_containers"]}
+        )
+
     # ------------------------------------------------------------------
     # Entity detection (LLM-based via Gemini)
     # ------------------------------------------------------------------
@@ -227,9 +272,58 @@ class WritingService:
                 )
         return results
 
+    def suggest_ghost_text(self, text: str, scene_id: Optional[str] = None, constraints: Optional[str] = None, temperament: Optional[str] = None) -> str:
+        """Call Gemini to predict ahead-of-cursor ghost text."""
+        try:
+            from litellm import completion
+
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                logger.warning("GEMINI_API_KEY not set; skipping ghost text.")
+                return ""
+
+            system_prompt = (
+                "You are an ambient AI writing assistant. Your job is to suggest the next few words "
+                "or a single sentence to seamlessly continue the user's prose. Do not repeat what they "
+                "just wrote. ONLY output the continuation text, without quotes or explanations.\n"
+            )
+            if temperament and temperament.lower() != "default":
+                 system_prompt += f"Adopt the following model temperament: {temperament}\n"
+
+            if constraints:
+                system_prompt += f"Constraints to strictly follow: {constraints}\n"
+
+            context = "Context: This is a standalone fragment.\n"
+            if scene_id:
+                context = f"Context: Scene {scene_id}\n"
+
+            user_prompt = f"{context}\nProse so far:\n{text}"
+
+            response = completion(
+                model="gemini/gemini-2.0-flash",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                api_key=api_key,
+                temperature=0.7,
+                max_tokens=60,
+            )
+
+            raw = response.choices[0].message.content.strip()
+            # If the model gives empty or just quotes, we clean it
+            if raw.startswith('"') and raw.endswith('"'):
+                raw = raw[1:-1]
+            return raw.strip()
+
+        except Exception as e:
+            logger.error("LLM ghost text suggestion failed: %s", e)
+            return ""
+
     # ------------------------------------------------------------------
     # Context retrieval
     # ------------------------------------------------------------------
+
 
     def get_context_summary(self, container_id: str) -> Optional[ContainerContextResponse]:
         """Build a formatted context summary for a container."""
@@ -320,3 +414,104 @@ class WritingService:
             })
 
         return results
+
+    # ------------------------------------------------------------------
+    # Phase 5: Edits and Alt-Takes
+    # ------------------------------------------------------------------
+
+    def apply_edit(
+        self,
+        fragment_id: str,
+        original_text: str,
+        replacement_text: str,
+        branch_id: str = "main",
+    ) -> bool:
+        """Replace a specific span of text within a fragment."""
+        container = self.container_repo.get_by_id(fragment_id)
+        if not container or container.container_type != "fragment":
+            logger.warning(f"Fragment {fragment_id} not found for applying edit.")
+            return False
+
+        text = container.attributes.get("text", "")
+        if original_text not in text:
+            logger.warning(f"Original text not found in fragment {fragment_id}.")
+            return False
+
+        new_text = text.replace(original_text, replacement_text, 1)
+        container.attributes["text"] = new_text
+        container.updated_at = None # Trigger auto-update of timestamp
+        
+        self.container_repo.save_container(container)
+        
+        # Emit event
+        try:
+            self.event_service.append_event(
+                parent_event_id=None,
+                branch_id=branch_id,
+                event_type="UPDATE",
+                container_id=container.id,
+                payload={"text": new_text, "edit_applied": True},
+            )
+        except Exception as e:
+            logger.warning("Failed to emit UPDATE event for edit on %s: %s", fragment_id, e)
+
+        return True
+
+    async def create_alt_take(
+        self,
+        fragment_id: str,
+        highlighted_text: str,
+        prompt: str,
+        branch_id: str = "main",
+    ) -> Optional[str]:
+        """Generate an alternative version of a text block and store it in metadata."""
+        container = self.container_repo.get_by_id(fragment_id)
+        if not container or container.container_type != "fragment":
+            return None
+
+        # Call LLM to generate the variation
+        try:
+            from litellm import completion
+            
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                return None
+
+            system_prompt = (
+                "You are a creative writing assistant. Rewrite the following text snippet "
+                "based on the provided instructions. Maintain the style and context of the story. "
+                "Return ONLY the rewritten text, no other prose or symbols."
+            )
+            
+            user_msg = f"Original text:\n{highlighted_text}\n\nInstructions: {prompt}"
+            
+            response = await completion(
+                model="gemini/gemini-2.0-flash",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_msg},
+                ],
+                api_key=api_key,
+                temperature=0.8,
+            )
+            
+            alt_text = response.choices[0].message.content.strip()
+            if alt_text.startswith('"') and alt_text.endswith('"'):
+                alt_text = alt_text[1:-1]
+
+            # Store in metadata/attributes
+            takes = container.attributes.get("alt_takes", [])
+            takes.append({
+                "original_text": highlighted_text,
+                "alt_text": alt_text,
+                "prompt": prompt,
+                "created_at": str(container.updated_at or container.created_at)
+            })
+            container.attributes["alt_takes"] = takes
+            self.container_repo.save_container(container)
+
+            return alt_text
+
+        except Exception as e:
+            logger.error(f"Failed to create alt-take: {e}")
+            return None

@@ -108,6 +108,17 @@ body {
   @apply text-gray-600 absolute pointer-events-none;
 }
 
+/* Ghost Text (Ahead of cursor autocomplete) */
+.ghost-text {
+  color: #6b7280;
+  /* text-gray-500 */
+  opacity: 0.6;
+  pointer-events: none;
+  user-select: none;
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
 /* Tippy tooltips for autocomplete */
 .tippy-box {
   background: transparent !important;

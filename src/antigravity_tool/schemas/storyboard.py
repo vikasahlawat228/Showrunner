@@ -134,3 +134,14 @@ class GeneratePanelsRequest(BaseModel):
     """POST body for AI panel generation."""
     panel_count: int = Field(default=6, ge=2, le=20, description="Number of panels to generate")
     style: str = Field(default="manga", description="Visual style hint: manga, western, cinematic")
+
+
+class LiveSketchRequest(BaseModel):
+    """POST body for live margin storyboarding."""
+    recent_prose: str = Field(description="The recently typed prose chunk to visualize.")
+    scene_id: Optional[str] = Field(default=None, description="Optional scene boundary.")
+
+
+class LiveSketchResponse(BaseModel):
+    """Returned live sketch panel."""
+    panel: PanelResponse = Field(description="The fast, ephemeral sketch panel.")

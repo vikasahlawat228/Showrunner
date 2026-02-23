@@ -23,7 +23,7 @@ class ProjectModelConfig(BaseModel):
     """Project-level model configuration stored in antigravity.yaml."""
 
     default_model: str = Field(
-        default="gemini/gemini-2.5-flash",
+        default="gemini/gemini-2.0-flash",
         description="Default model for all AI calls in this project.",
     )
     model_overrides: Dict[str, ModelConfig] = Field(

@@ -102,6 +102,16 @@ export interface BrainstormSuggestion {
   themes: Array<{ name: string; card_ids: string[] }>;
 }
 
+export interface AgentDispatchResult {
+  skill_used: string;
+  response: string;
+  actions: any[];
+  success: boolean;
+  error?: string | null;
+  model_used?: string;
+  context_used: string[];
+}
+
 // ── Analysis Types ──────────────────────────────────────────
 
 export interface VoiceProfile {
@@ -348,7 +358,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, init);
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.error || body?.detail || `API ${res.status}: ${path}`);
+    let errDetail = body?.error || body?.detail;
+    if (typeof errDetail === 'object') errDetail = JSON.stringify(errDetail);
+    throw new Error(errDetail || `API ${res.status}: ${path}`);
   }
   return res.json();
 }
@@ -432,6 +444,8 @@ export const api = {
     post<ContinuityCheckResponse>("/api/v1/analysis/continuity-check", { container_id: containerId, proposed_changes: proposedChanges }),
   checkContinuityScene: (sceneId: string) =>
     post<ContinuityCheckResponse[]>(`/api/v1/analysis/continuity-check/scene/${encodeURIComponent(sceneId)}`),
+  suggestContinuityResolutions: (issue: any) =>
+    post<ResolutionOption[]>("/api/v1/analysis/continuity/suggest-resolutions", { issue }),
   checkStyle: (text: string, sceneId?: string) =>
     post<StyleCheckResponse>("/api/v1/analysis/style-check", { text, scene_id: sceneId }),
 
@@ -465,6 +479,10 @@ export const api = {
     post<AgentDispatchResult>("/api/v1/director/dispatch", { intent, context: context ?? {} }),
   getAgentSkills: () =>
     request<AgentSkillSummary[]>("/api/v1/director/skills"),
+  applyEdit: (body: { fragment_id: string; original_text: string; replacement_text: string; branch_id?: string }) =>
+    post<{ status: string; fragment_id: string }>("/api/v1/director/apply-edit", body),
+  createAltTake: (body: { fragment_id: string; highlighted_text: string; prompt: string; branch_id?: string }) =>
+    post<{ status: string; alt_text: string }>("/api/v1/director/alt-take", body),
 
   // Brainstorm
   getBrainstormCards: () =>
@@ -475,6 +493,8 @@ export const api = {
     del(`/api/v1/director/brainstorm/cards/${encodeURIComponent(cardId)}`),
   suggestBrainstormConnections: (body: { cards: Array<{ id: string; text: string; x: number; y: number }>; intent?: string }) =>
     post<BrainstormSuggestion>("/api/v1/director/brainstorm/suggest-connections", body),
+  brainstorm: (intent: string, context?: Record<string, unknown>) =>
+    post<AgentDispatchResult>("/api/v1/director/brainstorm", { intent, context: context ?? {} }),
 
   // Schemas
   getSchemas: () => request<ContainerSchema[]>("/api/v1/schemas/"),
@@ -491,6 +511,10 @@ export const api = {
 
   // Knowledge Graph
   getGraph: () => request<GraphResponse>("/api/v1/graph/"),
+  getUnresolvedThreads: (eraId?: string) =>
+    request<{ threads: any[] }>(eraId ? `/api/v1/graph/unresolved-threads?era_id=${encodeURIComponent(eraId)}` : "/api/v1/graph/unresolved-threads"),
+  resolveThread: (edgeId: string, resolvedInEra: string) =>
+    post<{ status: string }>("/api/v1/graph/resolve-thread", { edge_id: edgeId, resolved_in_era: resolvedInEra }),
 
   // Pipeline execution
   startPipeline: (initialPayload?: any, definitionId?: string) =>
@@ -541,6 +565,8 @@ export const api = {
     request<BranchComparison>(`/api/v1/timeline/compare?branch_a=${encodeURIComponent(branchA)}&branch_b=${encodeURIComponent(branchB)}`),
 
   // Zen Mode — Writing Surface
+  getLatestFragment: (branchId: string = "main") =>
+    request<FragmentResponse>(`/api/v1/writing/fragments/latest?branch_id=${encodeURIComponent(branchId)}`),
   saveFragment: (data: FragmentCreateRequest) =>
     post<FragmentResponse>("/api/v1/writing/fragments", data),
   detectEntities: (text: string) =>
@@ -553,6 +579,8 @@ export const api = {
     request<ContainerSearchResult[]>(`/api/v1/writing/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   semanticSearchContainers: (q: string, limit = 8) =>
     request<Array<ContainerSearchResult & { similarity?: number }>>(`/api/v1/writing/semantic-search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  suggestGhostText: (body: GhostTextRequest) =>
+    post<GhostTextResponse>("/api/v1/writing/suggest-ghost-text", body),
 
   // Translation
   translateText: (body: {
@@ -606,6 +634,8 @@ export const api = {
     post<any[]>(`/api/v1/storyboard/scenes/${encodeURIComponent(sceneId)}/generate`, { panel_count: count, style }),
   suggestLayout: (sceneId: string) =>
     post<LayoutSuggestion>(`/api/v1/storyboard/scenes/${encodeURIComponent(sceneId)}/suggest-layout`),
+  liveSketch: (body: { recent_prose: string, scene_id?: string }) =>
+    post<any>("/api/v1/storyboard/live-sketch", body),
 
   // Voice-to-Scene
   voiceToScene: (sceneText: string, sceneName?: string, panelCount?: number, style?: string) => {
@@ -658,6 +688,8 @@ export const api = {
   // Pipeline definition tools
   generatePipelineFromNL: (body: { intent: string; title: string }) =>
     post<PipelineDefinitionResponse>("/api/v1/pipeline/definitions/generate", body),
+  distillRecordedActions: (body: { title: string; actions: Array<{ type: string; description: string; payload: Record<string, any> }> }) =>
+    post<PipelineDefinitionResponse>("/api/v1/pipeline/definitions/distill", body),
 
   // Containers
   createContainer: (body: { container_type: string; name: string; parent_id?: string; attributes?: Record<string, unknown>; sort_order?: number }) =>
@@ -670,6 +702,12 @@ export const api = {
     del(`/api/v1/containers/${encodeURIComponent(id)}`),
   reorderContainers: (items: Array<{ id: string; sort_order: number }>) =>
     post("/api/v1/containers/reorder", { items }),
+  extractContainerFromText: (text: string) =>
+    post<any>("/api/v1/containers/extract-from-text", { text }),
+  forkEra: (containerId: string, eraId: string, updates?: Record<string, any>) =>
+    post<any>(`/api/v1/containers/${encodeURIComponent(containerId)}/fork-era`, { era_id: eraId, updates }),
+  getSchemaSuggestions: () =>
+    request<{ suggestions: any[] }>("/api/v1/schemas/suggestions"),
 
   // Character Progressions
   getCharacterProgressions: (characterId: string) =>
@@ -715,7 +753,29 @@ export const api = {
     if (!res.ok) throw new Error('Export preview failed');
     return res.text();
   },
+
+  // Jobs (Background Tasks)
+  startJob: (jobType: string, payload: any) =>
+    post<{ job_id: string }>("/api/v1/jobs/", { job_type: jobType, payload }),
+  getJobs: (activeOnly: boolean = true) =>
+    request<Job[]>(`/api/v1/jobs/?active_only=${activeOnly}`),
+  getJob: (jobId: string) =>
+    request<Job>(`/api/v1/jobs/${encodeURIComponent(jobId)}`),
 };
+
+// ── Job Interface ──────────────────────────────────────────
+
+export interface Job {
+  id: string;
+  job_type: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  result?: Record<string, any>;
+  error?: string;
+  created_at: number;
+  updated_at: number;
+}
 
 // ── Zen Mode Types ──────────────────────────────────────────
 
@@ -748,6 +808,17 @@ export interface EntityDetection {
 
 export interface EntityDetectionResponse {
   entities: EntityDetection[];
+}
+
+export interface GhostTextRequest {
+  current_text: string;
+  scene_id?: string;
+  constraints?: string;
+  temperament?: string;
+}
+
+export interface GhostTextResponse {
+  suggestion: string;
 }
 
 export interface ContainerContextResponse {
@@ -809,15 +880,7 @@ export interface PipelineRunSummary {
 
 // ── Agent Dispatch Types ─────────────────────────────────────
 
-export interface AgentDispatchResult {
-  skill_used: string;
-  response: string;
-  actions: Record<string, unknown>[];
-  success: boolean;
-  error?: string | null;
-  model_used: string;
-  context_used: string[];
-}
+export interface AgentDispatchResultResponse extends AgentDispatchResult { }
 
 export interface AgentSkillSummary {
   id: string;
@@ -914,9 +977,28 @@ export interface ContinuityCheckResponse {
   suggestions: string;
   affected_entities: string[];
   severity: string;
+  flagged_text?: string;
+}
+
+export interface ResolutionOption {
+  description: string;
+  affected_scenes: string[];
+  original_text?: string;
+  edits: string;
+  risk: string;
+  trade_off: string;
+}
+
+export interface SuggestContinuityResolutionsResponse {
+  resolutions: ResolutionOption[];
 }
 
 // ── Style Checker ────────────────────────────────────────────
+
+export interface StyleCheckRequest {
+  text: string;
+  scene_id?: string;
+}
 
 export interface StyleIssueResponse {
   category: string;

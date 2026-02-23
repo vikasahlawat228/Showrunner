@@ -44,7 +44,9 @@ class SQLiteIndexer:
                     parent_id TEXT,
                     sort_order INTEGER DEFAULT 0,
                     tags_json TEXT DEFAULT '[]',
-                    model_preference TEXT
+                    model_preference TEXT,
+                    era_id TEXT,
+                    parent_version_id TEXT
                 )
             """)
 
@@ -77,7 +79,9 @@ class SQLiteIndexer:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     is_deleted INTEGER DEFAULT 0,
-                    deleted_at TEXT
+                    deleted_at TEXT,
+                    era_id TEXT,
+                    parent_version_id TEXT
                 )
             """)
 
@@ -159,6 +163,14 @@ class SQLiteIndexer:
             except sqlite3.OperationalError:
                 pass
 
+        # Add Era versioning columns
+        for table in ["containers", "entities"]:
+            for col_name, col_type in [("era_id", "TEXT"), ("parent_version_id", "TEXT")]:
+                try:
+                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
+                except sqlite3.OperationalError:
+                    pass
+
     def upsert_container(
         self,
         container_id: str,
@@ -172,6 +184,8 @@ class SQLiteIndexer:
         sort_order: int = 0,
         tags: Optional[List[str]] = None,
         model_preference: Optional[str] = None,
+        era_id: Optional[str] = None,
+        parent_version_id: Optional[str] = None,
     ) -> None:
         """Add or update a container in the index."""
         try:
@@ -180,8 +194,8 @@ class SQLiteIndexer:
                     INSERT OR REPLACE INTO containers
                     (id, container_type, name, yaml_path, attributes_json,
                      created_at, updated_at, parent_id, sort_order, tags_json,
-                     model_preference)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     model_preference, era_id, parent_version_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     container_id,
                     container_type,
@@ -194,6 +208,8 @@ class SQLiteIndexer:
                     sort_order,
                     json.dumps(tags or []),
                     model_preference,
+                    era_id,
+                    parent_version_id,
                 ))
         except sqlite3.Error as e:
             raise PersistenceError(f"Database error during container upsert: {e}")
@@ -218,7 +234,7 @@ class SQLiteIndexer:
         if filters:
             for key, value in filters.items():
                 # Direct column matches for Phase F fields
-                if key in ("id", "parent_id", "model_preference"):
+                if key in ("id", "parent_id", "model_preference", "era_id", "parent_version_id"):
                     query += f" AND {key} = ?"
                     params.append(value)
                 elif key == "yaml_path":
@@ -314,6 +330,8 @@ class SQLiteIndexer:
         parent_id: Optional[str] = None,
         sort_order: int = 0,
         tags: Optional[List[str]] = None,
+        era_id: Optional[str] = None,
+        parent_version_id: Optional[str] = None,
     ) -> None:
         """Add or update an entity in the entities index."""
         try:
@@ -322,8 +340,8 @@ class SQLiteIndexer:
                     INSERT OR REPLACE INTO entities
                     (id, entity_type, container_type, name, yaml_path, content_hash,
                      attributes_json, parent_id, sort_order, tags_json,
-                     created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     created_at, updated_at, era_id, parent_version_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     entity_id,
                     entity_type,
@@ -337,6 +355,8 @@ class SQLiteIndexer:
                     json.dumps(tags or []),
                     created_at,
                     updated_at,
+                    era_id,
+                    parent_version_id,
                 ))
         except sqlite3.Error as e:
             raise PersistenceError(f"Database error during entity upsert: {e}")
@@ -432,7 +452,7 @@ class SQLiteIndexer:
 
         if filters:
             for key, value in filters.items():
-                if key in ("id", "parent_id", "yaml_path", "content_hash"):
+                if key in ("id", "parent_id", "yaml_path", "content_hash", "era_id", "parent_version_id"):
                     query += f" AND {key} = ?"
                     params.append(value)
                 else:

@@ -19,6 +19,35 @@ export default function TimelinePage() {
     const [compareBranchA, setCompareBranchA] = useState<string | null>(null);
     const [compareBranchB, setCompareBranchB] = useState<string | null>(null);
     const [isZoomed, setIsZoomed] = useState(false);
+    const zoomAccumulator = React.useRef(0);
+
+    const handleWheel = (e: React.WheelEvent) => {
+        // If the user uses a trackpad or mouse wheel, accumulate deltaY.
+
+        // 1. If not zoomed, active event exists, and scrolling DOWN (deltaY > 0)
+        if (!isZoomed && activeEventId && e.deltaY > 0) {
+            zoomAccumulator.current += e.deltaY;
+            if (zoomAccumulator.current > 400) {
+                setIsZoomed(true);
+                zoomAccumulator.current = 0;
+            }
+        }
+        // 2. If zoomed and scrolling UP (deltaY < 0)
+        else if (isZoomed && e.deltaY < 0) {
+            // Check if the scroll target allows scrolling up. If it's the editor and scrolled down, we shouldn't zoom out.
+            // A simple heuristic: if we get a pure up-scroll, we accumulate.
+            // To prevent accidental zoom-outs while reading, we require a larger threshold.
+            zoomAccumulator.current += e.deltaY;
+            if (zoomAccumulator.current < -600) {
+                setIsZoomed(false);
+                zoomAccumulator.current = 0;
+            }
+        } else {
+            // Reset if scrolling in the opposite direction
+            if (!isZoomed && e.deltaY < 0) zoomAccumulator.current = 0;
+            if (isZoomed && e.deltaY > 0) zoomAccumulator.current = 0;
+        }
+    };
 
     const handleCreateBranch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -76,7 +105,10 @@ export default function TimelinePage() {
                 </div>
 
                 {/* Timeline Canvas */}
-                <div className="flex-1 relative overflow-hidden bg-slate-100 dark:bg-slate-950">
+                <div
+                    className="flex-1 relative overflow-hidden bg-slate-100 dark:bg-slate-950"
+                    onWheel={handleWheel}
+                >
                     <div
                         className={`absolute inset-0 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col ${isZoomed ? "scale-105 opacity-0 pointer-events-none" : "scale-100 opacity-100"
                             }`}

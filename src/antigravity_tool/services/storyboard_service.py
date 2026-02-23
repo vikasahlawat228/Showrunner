@@ -356,6 +356,64 @@ No markdown formatting, just the raw JSON object."""
     # Helpers
     # ------------------------------------------------------------------
 
+    async def generate_live_sketch(self, recent_prose: str, scene_id: Optional[str] = None) -> Panel:
+        """Quickly generate a single ephemeral live sketch panel based on recent prose."""
+        prompt = f"""You are a live storyboard artist visualizing a writer's latest prose in real time.
+Read the recent prose and describe one single powerful comic panel that illustrates the current beat.
+
+Recent Prose:
+{recent_prose}
+
+Return ONLY a JSON object with this exact structure for ONE panel:
+{{
+    "panel_type": "string (action, dialogue, establishing, closeup, transition, montage)",
+    "camera_angle": "string (wide, medium, close, extreme_close, over_shoulder, birds_eye, low_angle, dutch, pov)",
+    "description": "string (detailed visual description of the shot, 1-2 sentences)",
+    "action_notes": "string (brief action/stage note)"
+}}
+No markdown formatting, just the raw JSON object."""
+
+        try:
+            from litellm import completion
+            api_key = os.getenv("GEMINI_API_KEY")
+            response = completion(
+                model="gemini/gemini-2.0-flash",
+                messages=[{"role": "user", "content": prompt}],
+                api_key=api_key,
+                temperature=0.7,
+                max_tokens=250,
+            )
+
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[1]
+                if raw.endswith("```"):
+                    raw = raw[:-3]
+
+            pd = json.loads(raw)
+            
+            # Create a non-persistent Panel object (ephemeral)
+            return Panel(
+                scene_id=scene_id or "live",
+                panel_number=-1, # Indicates it's an ephemeral live sketch
+                panel_type=self._safe_panel_type(pd.get("panel_type", "action")),
+                camera_angle=self._safe_camera_angle(pd.get("camera_angle", "medium")),
+                description=pd.get("description", "A live storyboard sketch of the action."),
+                dialogue="",
+                action_notes=pd.get("action_notes", ""),
+                duration_seconds=3.0,
+            )
+
+        except Exception as e:
+            logger.error("Live sketch generation failed: %s", e)
+            return Panel(
+                scene_id=scene_id or "live",
+                panel_number=-1,
+                panel_type=PanelType.ACTION,
+                camera_angle=CameraAngle.MEDIUM,
+                description="Live sketch failed. Fallback action shot.",
+            )
+
     @staticmethod
     def _safe_panel_type(value: str) -> PanelType:
         try:

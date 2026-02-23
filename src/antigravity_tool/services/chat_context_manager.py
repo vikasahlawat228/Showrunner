@@ -62,11 +62,23 @@ class ChatContextManager:
           - "token_usage": estimated tokens used across layers
           - "layers": breakdown by layer for Glass Box
         """
+        # Make sure context_assembler is available to pull Tier 1
+        if not self._context_assembler:
+            logger.warning("ChatContextManager isolated - no ContextAssembler provided")
         layers: Dict[str, int] = {}
 
         # Layer 1: Project Memory
         memory_budget = int(token_budget * MEMORY_BUDGET_RATIO)
+        
+        # Legacy local project_memory.json (keep for backwards compat)
         memory_text = self._memory_service.to_context_string()
+
+        # Add Tier 1 Auto-Memory from Knowledge Graph
+        if self._context_assembler and hasattr(self._context_assembler, "get_tier1_memory"):
+            active_era = context_payload.get("era_id") if context_payload else None
+            tier1 = self._context_assembler.get_tier1_memory(max_tokens=memory_budget // 2, active_era_id=active_era)
+            if tier1:
+                memory_text = tier1 + "\n\n" + memory_text
         
         # Inject Active Editor Context (CUJ 14 - Zen Mode side-by-side)
         if context_payload:

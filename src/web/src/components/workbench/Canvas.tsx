@@ -35,8 +35,7 @@ export function Canvas() {
     setChapter,
     fetchAll,
   } = useStudioStore();
-
-  const { state, payload, stepName, agentId, error: streamError } = usePipelineStream(pipelineRunId || undefined);
+  const { state, payload, stepName, agentId, error: streamError, isConnecting } = usePipelineStream(pipelineRunId || undefined);
 
   const [isStarting, setIsStarting] = useState(false);
 
@@ -117,7 +116,7 @@ export function Canvas() {
         </div>
         <DirectorControls
           pipelineState={state}
-          isStarting={isStarting}
+          isStarting={isStarting || isConnecting}
           agentId={agentId}
           onStartPipeline={handleStartPipeline}
         />

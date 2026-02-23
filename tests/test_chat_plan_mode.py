@@ -174,7 +174,7 @@ class TestToolExecution:
     async def test_registered_tool_called(self, session_service, active_session):
         tool_called = []
 
-        def my_tool(content, mentions):
+        def my_tool(content, mentions, **kwargs):
             tool_called.append(content)
             return "Tool result here"
 

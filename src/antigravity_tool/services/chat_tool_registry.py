@@ -112,16 +112,45 @@ def build_tool_registry(
                     max_tokens=1024,
                 )
                 
-                yaml_result = response.choices[0].message.content.strip()
-                # Clean up markdown code blocks if the LLM ignores instructions
-                if yaml_result.startswith("```"):
-                    lines = yaml_result.split("\n")
-                    if lines[0].startswith("```yaml"):
-                        yaml_result = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
-                    else:
-                        yaml_result = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+                llm_output = response.choices[0].message.content.strip()
+                parsed = None
+                
+                # Layer 1: Direct YAML/JSON load
+                try:
+                    parsed = yaml.safe_load(llm_output)
+                except Exception:
+                    logger.debug("Layer 1 parsing failed for create_tool")
 
-                parsed = yaml.safe_load(yaml_result)
+                # Layer 2: Markdown block extraction
+                if not isinstance(parsed, list):
+                    import re
+                    blocks = re.findall(r"```(?:yaml|json)?\n(.*?)\n```", llm_output, re.DOTALL)
+                    for block in blocks:
+                        try:
+                            parsed = yaml.safe_load(block)
+                            if isinstance(parsed, list):
+                                break
+                        except Exception:
+                            continue
+
+                # Layer 3: Heuristic Regex Fallback (extract objects)
+                if not isinstance(parsed, list):
+                    logger.warning("Falling back to regex parsing for create_tool output")
+                    # Try to find YAML-like items "- type: ... name: ..."
+                    items = []
+                    item_matches = re.findall(r"- (?:type|name):.*?(?=\n- |\Z)", llm_output, re.DOTALL)
+                    for item_str in item_matches:
+                        try:
+                            item_parsed = yaml.safe_load(item_str)
+                            if isinstance(item_parsed, list):
+                                items.extend(item_parsed)
+                            elif isinstance(item_parsed, dict):
+                                items.append(item_parsed)
+                        except Exception:
+                            continue
+                    if items:
+                        parsed = items
+
                 created_items = []
 
                 if isinstance(parsed, list) and len(parsed) > 0:
@@ -138,29 +167,52 @@ def build_tool_registry(
                         reserved = ["type", "name", "parent_id", "sort_order"]
                         attrs = {k: v for k, v in item.items() if k not in reserved}
                         
-                        c = GenericContainer(
-                            id=str(uuid.uuid4()),
-                            name=name,
-                            container_type=etype,
-                            attributes=attrs,
-                            parent_id=p_id,
-                            sort_order=s_order,
-                            project_path=project_path,
-                        )
-                        container_repo.save_container(c)
-                        created_items.append(f"- **{name}** ({etype})")
+                        try:
+                            # Era forking logic
+                            era_id = kwargs.get("era_id")
+                            import re
+                            season_match = re.search(r"season\s*(\d)", user_prompt, re.I)
+                            if season_match:
+                                era_id = f"season_{season_match.group(1)}"
+
+                            existing_id = None
+                            if entity_ids:
+                                for eid in entity_ids:
+                                    match = kg_service.find_containers(filters={"id": eid})
+                                    if match and match[0].get("name", "").lower() == name.lower():
+                                        existing_id = eid
+                                        break
+
+                            if existing_id and era_id:
+                                c = kg_service.create_era_fork(existing_id, era_id)
+                                c.attributes.update(attrs)
+                                if p_id: c.parent_id = p_id
+                                if s_order: c.sort_order = s_order
+                                container_repo.save_container(c)
+                                created_items.append(f"- **{name}** ({etype}) [Forked to {era_id}]")
+                            else:
+                                c = GenericContainer(
+                                    id=str(uuid.uuid4()),
+                                    name=name,
+                                    container_type=etype,
+                                    attributes=attrs,
+                                    parent_id=p_id,
+                                    sort_order=s_order,
+                                    project_path=project_path,
+                                    era_id=era_id
+                                )
+                                container_repo.save_container(c)
+                                created_items.append(f"- **{name}** ({etype})")
+                        except Exception as e:
+                            logger.error("Failed to save container %s: %s", name, e)
 
                 if created_items:
-                    # Update knowledge graph immediately if possible
-                    kg_service = kwargs.get("kg_service")
-                    if kg_service and hasattr(kg_service, "update_container"):
-                        pass # File watcher typically handles it
                     return f"Successfully scaffolded {len(created_items)} entities:\n" + "\n".join(created_items)
 
                 return (
-                    f"Here is what I extracted, but I couldn't automatically scaffold them. "
-                    f"Please refine your request:\n\n"
-                    f"```yaml\n{yaml_result}\n```"
+                    f"I extracted some information but couldn't automatically scaffold the entities. "
+                    f"Please try being more specific about the types (character, scene, etc.).\n\n"
+                    f"Raw output:\n```yaml\n{llm_output}\n```"
                 )
             except Exception as e:
                 logger.error("Error extracting entities: %s", e)
@@ -190,6 +242,28 @@ def build_tool_registry(
                 )
 
         registry["create"] = create_tool
+
+    # ── UNRESOLVED THREADS: search open loops ────────────────────
+    if kg_service:
+        def unresolved_threads_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            era_id = kwargs.get("era_id")
+            import re
+            season_match = re.search(r"season\s*(\d)", content, re.I)
+            if season_match:
+                era_id = f"season_{season_match.group(1)}"
+                
+            threads = kg_service.get_unresolved_threads(era_id=era_id)
+            if not threads:
+                return "No unresolved plot threads found."
+                
+            lines = [f"Found {len(threads)} unresolved plot thread(s):\n"]
+            for t in threads:
+                desc = f": {t['description']}" if t.get('description') else ""
+                lines.append(f"  - **{t['source']}** ↔ **{t['target']}** ({t['relationship']}){desc}")
+                
+            return "\n".join(lines)
+            
+        registry["unresolved_threads"] = unresolved_threads_tool
 
     # ── UPDATE: describe what will change ────────────────────────
     if kg_service:
@@ -367,6 +441,25 @@ def build_tool_registry(
                 definitions = pipeline_service.list_definitions()
                 
                 content_lower = content.lower()
+
+                import re
+                override_match = re.search(r"(?:use|switch to)\s+([\w-]+(?:\.[\w-]+)*)", content_lower)
+                if override_match and not any(cmd in content_lower for cmd in ["run ", "start ", "execute "]):
+                    target_model = override_match.group(1).strip()
+                    paused_run = None
+                    for r in getattr(pipeline_service, '_runs', {}).values():
+                        if getattr(r, 'current_state', None) and r.current_state.value == "PAUSED_FOR_USER":
+                            paused_run = r
+                            break
+                    
+                    if paused_run and getattr(paused_run, 'current_step_id', None):
+                        pipeline_service.set_step_model_override(paused_run.id, paused_run.current_step_id, target_model)
+                        yield f"Model override set: The next step will use **{target_model}**.\n\nPlease approve or resume the pipeline to continue."
+                        return
+                    elif override_match:
+                        yield "Could not find a paused pipeline step to apply the model override to."
+                        return
+
                 run_trigger = False
                 target_name = ""
                 extra_text = ""
@@ -404,7 +497,11 @@ def build_tool_registry(
                         if entity_ids:
                             payload["pinned_context_ids"] = entity_ids
 
+                        from antigravity_tool.services.job_service import JobService
+                        job = JobService.create_job(job_type="pipeline", payload={"definition_id": target_def.id, "run_id": None})
+                        
                         run_id = await pipeline_service.start_pipeline(payload, definition_id=target_def.id)
+                        JobService.update_job(job.id, status="running", message=f"Pipeline {target_def.name} running...", result={"run_id": run_id})
                         
                         # Emit a special artifact that the frontend will render as an interactive pipeline viewer
                         yield ChatEvent(
@@ -436,31 +533,131 @@ def build_tool_registry(
 
         registry["pipeline"] = pipeline_tool
 
-    # ── DECIDE: store a project decision/preference ──────────────
+    # ── PLAUSIBILITY_CHECK: verify text against research ────────────────────────
+    if kg_service:
+        from antigravity_tool.schemas.chat import ChatEvent
+        async def plausibility_check_tool(content: str, entity_ids: List[str], **kwargs):
+            session_id = kwargs.get("session_id")
+            context_manager = kwargs.get("context_manager")
+            
+            research_text = ""
+            scene_text = content
+            
+            if session_id and context_manager:
+                context = context_manager.build_context(session_id)
+                system_context = context.get("system_context", "")
+                if "Research Notes" in system_context:
+                    research_text = system_context.split("Research Notes")[-1]
+                
+            if not research_text:
+                try:
+                    r_containers = kg_service.find_containers(container_type="research")
+                    if r_containers:
+                        research_text = "\n".join([str(c.get("attributes", {})) for c in r_containers])
+                except Exception:
+                    pass
+
+            if not research_text:
+                yield "No research buckets found to verify plausibility against."
+                return
+
+            yield ChatEvent(
+                event_type="action_trace",
+                data={"tool_name": "plausibility_check", "context_summary": "Cross-referencing text against research..."}
+            )
+
+            import litellm
+            
+            system_prompt = (
+                "You are an expert fact-checker and narrative continuity editor. "
+                "Analyze the provided scene excerpt against the provided Research Notes. "
+                "1. Extract any concrete claims, facts, or descriptions from the excerpt. "
+                "2. Compare them strictly against the Research Notes. "
+                "3. Flag any implausible claims, contradictions, or unrealistic elements. "
+                "Format as a concise markdown list of bullet points explaining WHY they are implausible. "
+                "If everything appears plausible based on the research, state that no issues were found."
+            )
+            
+            user_prompt = f"### Research Notes\n{research_text}\n\n### Excerpt to check\n{scene_text}"
+
+            try:
+                response = await litellm.acompletion(
+                    model="gemini/gemini-2.0-flash",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.3,
+                )
+                yield response.choices[0].message.content.strip()
+            except Exception as e:
+                yield f"Plausibility check failed: {e}"
+
+        registry["plausibility_check"] = plausibility_check_tool
+
+    # ── SAVE_TO_MEMORY: auto-extract facts ──────────────
+    if container_repo and kg_service:
+        def save_to_memory_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            import uuid
+            from antigravity_tool.schemas.container import GenericContainer
+            
+            # Use LLM to extract the core fact to keep it clean
+            try:
+                import litellm
+                system_prompt = (
+                    "You are a Memory Extraction agent for a creative writing AI. "
+                    "Extract the core, immutable fact or lore decision from the user's statement. "
+                    "Keep it incredibly concise, like a wiki fact. Remove conversational filler."
+                )
+                response = litellm.completion(
+                    model="gemini/gemini-2.5-flash",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": content}
+                    ],
+                    max_tokens=150,
+                )
+                fact_str = response.choices[0].message.content.strip()
+            except Exception as e:
+                logger.warning(f"Memory extraction summarization failed: {e}")
+                fact_str = content.strip()
+
+            c = GenericContainer(
+                id=str(uuid.uuid4()),
+                name=f"Fact: {fact_str[:30]}...",
+                container_type="project_memory",
+                attributes={
+                    "fact": fact_str,
+                    "source": "auto_memory_trigger"
+                },
+                project_path=project_path,
+                era_id=kwargs.get("era_id")
+            )
+            container_repo.save_container(c)
+            
+            return (
+                f"Memory Triggered. Saved to Project Lore:\n"
+                f"> {fact_str}\n\n"
+                "This will prioritize across all future context windows."
+            )
+
+        registry["save_to_memory"] = save_to_memory_tool
+
+    # ── DECIDE: record a policy or lore decision ───────────────
     if project_memory_service:
         def decide_tool(content: str, entity_ids: List[str], **kwargs) -> str:
-            # Extract the decision from the message
-            import re
-            # Try patterns like "always use X", "never use Y", "remember that Z"
-            decision = content
-            for prefix in ["decide ", "decision ", "remember that ", "always ", "never "]:
-                if content.lower().startswith(prefix):
-                    decision = content[len(prefix):]
-                    break
-
-            # Generate a key from the first few words
-            key = "_".join(decision.split()[:4]).lower()
-            key = re.sub(r"[^a-z0-9_]", "", key)
-
-            entry = project_memory_service.add_entry(
-                key=key,
-                value=decision.strip(),
-                source="chat_decision",
-            )
+            # Clean up content
+            text = content.strip()
+            if text.lower().startswith("remember that "):
+                text = text[len("remember that "):].strip()
+            
+            # Simple key derivation for now
+            key = text[:50].lower().replace(" ", "_")
+            project_memory_service.add_entry(key=key, value=text)
+            
             return (
-                f"Decision recorded: **{entry.key}**\n"
-                f"> {entry.value}\n\n"
-                "This will be auto-injected into future chat context."
+                f"Decision recorded: **{key}**\n\n"
+                f"I will remember this preference for future generations."
             )
 
         registry["decide"] = decide_tool

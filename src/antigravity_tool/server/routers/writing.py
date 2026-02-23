@@ -10,6 +10,8 @@ from antigravity_tool.schemas.fragment import (
     EntityDetectionResponse,
     FragmentCreateRequest,
     FragmentResponse,
+    GhostTextRequest,
+    GhostTextResponse,
 )
 from antigravity_tool.services.writing_service import WritingService
 from antigravity_tool.server.deps import get_writing_service
@@ -43,6 +45,33 @@ async def save_fragment(
     )
 
 
+@router.get("/fragments/latest", response_model=FragmentResponse)
+async def get_latest_fragment(
+    branch_id: str = "main",
+    svc: WritingService = Depends(get_writing_service),
+):
+    """Get the most recent fragment text for a specified branch."""
+    fragment = svc.get_latest_fragment(branch_id=branch_id)
+    if not fragment:
+        # Return empty fragment if nothing exists yet
+        return FragmentResponse(
+            id="empty",
+            text="",
+            associated_containers=[],
+            detected_entities=[],
+            word_count=0
+        )
+        
+    return FragmentResponse(
+        id=fragment.id,
+        text=fragment.text,
+        title=fragment.title,
+        associated_containers=fragment.associated_containers,
+        detected_entities=[], # Not re-running detection on load to save time/cost
+        word_count=fragment.metadata.get("word_count", 0),
+    )
+
+
 @router.post("/detect-entities", response_model=EntityDetectionResponse)
 async def detect_entities(
     body: EntityDetectionRequest,
@@ -51,6 +80,21 @@ async def detect_entities(
     """Detect entity mentions in text using LLM-based analysis."""
     entities = svc.detect_entities(body.text)
     return EntityDetectionResponse(entities=entities)
+
+
+@router.post("/suggest-ghost-text", response_model=GhostTextResponse)
+async def suggest_ghost_text(
+    body: GhostTextRequest,
+    svc: WritingService = Depends(get_writing_service),
+):
+    """Generate ambient ahead-of-cursor ghost text."""
+    suggestion = svc.suggest_ghost_text(
+        text=body.current_text,
+        scene_id=body.scene_id,
+        constraints=body.constraints,
+        temperament=body.temperament,
+    )
+    return GhostTextResponse(suggestion=suggestion)
 
 
 @router.get("/context/{container_id}", response_model=ContainerContextResponse)

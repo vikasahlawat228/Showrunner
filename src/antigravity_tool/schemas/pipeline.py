@@ -59,6 +59,10 @@ class PipelineRun(BaseModel):
         default=0,
         description="Total number of steps in the definition.",
     )
+    step_overrides: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Runtime configuration overrides for specific steps (e.g. model switching).",
+    )
 
 
 class PipelineRunCreate(BaseModel):

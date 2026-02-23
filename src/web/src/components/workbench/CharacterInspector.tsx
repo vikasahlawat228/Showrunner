@@ -2,6 +2,7 @@
 
 import type { CharacterDetail } from "@/lib/api";
 import { CharacterVoiceScorecard } from "./CharacterVoiceScorecard";
+import { Copy } from "lucide-react";
 import { CharacterProgressionTimeline } from "./CharacterProgressionTimeline";
 
 interface CharacterInspectorProps {
@@ -191,6 +192,21 @@ export function CharacterInspector({ character }: CharacterInspectorProps) {
           characterId={character.id}
           characterName={character.name}
         />
+      </div>
+
+      {/* Actions */}
+      <div className="pt-2">
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("open:fork-era", {
+              detail: { containerId: character.id, containerName: character.name }
+            }));
+          }}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium rounded-md border border-gray-700 transition-all active:scale-95"
+        >
+          <Copy className="w-3.5 h-3.5" />
+          Fork to new Era
+        </button>
       </div>
     </div>
   );

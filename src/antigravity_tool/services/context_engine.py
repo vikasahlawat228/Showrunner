@@ -68,6 +68,7 @@ class ContextEngine:
         container_types: Optional[List[str]] = None,
         max_tokens: int = 4000,
         include_relationships: bool = True,
+        active_era_id: Optional[str] = None,
     ) -> ContextResult:
         """Assemble context from the knowledge graph within a token budget.
 
@@ -80,7 +81,7 @@ class ContextEngine:
         6. Return structured ContextResult with the assembled text and metadata
         """
         # Step 1: Resolve explicitly requested containers
-        raw_containers = self._resolve_containers(container_ids, container_types)
+        raw_containers = self._resolve_containers(container_ids, container_types, active_era_id)
 
         # Step 1b (Phase H): Fetch semantically relevant containers
         semantic_ids: set[str] = set()
@@ -165,6 +166,40 @@ class ContextEngine:
 
         assembled = "\n\n---\n\n".join(included_texts)
 
+        # Step 6: Auto-inject relevant research (Task 4.3)
+        try:
+            research_containers = self.kg_service.find_containers(container_type="research")
+            r_entries = []
+            for c in research_containers:
+                # ignore if already in included_buckets
+                if any(b.id == c.get("id") for b in included_buckets):
+                    continue
+                entry_text = self._format_container(c)
+                rel = self._relevance_score(query, entry_text)
+                if rel >= 0.1:  # Simple overlap threshold
+                    r_entries.append({"text": entry_text, "relevance": rel, "container": c})
+            
+            if r_entries:
+                r_entries.sort(key=lambda e: e["relevance"], reverse=True)
+                r_included = []
+                for r in r_entries[:3]:
+                    r_tokens = self.estimate_tokens(r["text"])
+                    if running_tokens + r_tokens <= max_tokens:
+                        r_included.append(r["text"])
+                        running_tokens += r_tokens
+                        c = r["container"]
+                        included_buckets.append(ContextBucketInfo(
+                            id=c.get("id", ""),
+                            name=c.get("name", "research_note"),
+                            container_type="research",
+                            summary=r["text"][:120].replace("\n", " "),
+                        ))
+                
+                if r_included:
+                    assembled += "\n\n## Research Notes\n\n" + "\n\n---\n\n".join(r_included)
+        except Exception as e:
+            logger.warning("Failed to auto-inject research: %s", e)
+
         return ContextResult(
             text=assembled,
             token_estimate=self.estimate_tokens(assembled),
@@ -220,6 +255,51 @@ class ContextEngine:
         """Estimate token count: ~4 chars per token."""
         return len(text) // 4
 
+    def get_tier1_memory(self, max_tokens: int = 2000, active_era_id: Optional[str] = None) -> str:
+        """Fetch Tier 1 Memory (Global Lore/Facts) stored by the agent."""
+        try:
+            memory_containers = self.kg_service.find_containers(container_type="project_memory")
+            
+            if active_era_id:
+                era_results = []
+                for base in memory_containers:
+                    if base.get("parent_version_id"):
+                        continue
+                    era_entity = self.kg_service.get_entity_at_era(base.get("id"), active_era_id)
+                    if era_entity:
+                        era_results.append(era_entity)
+                memory_containers = era_results
+
+            if not memory_containers:
+                return ""
+
+            lines = ["## Core Project Memory (Tier 1)"]
+            running_tokens = self.estimate_tokens(lines[0])
+            
+            # Sort newest first assuming they have a created_at or just by list order
+            for c in reversed(memory_containers):
+                attrs = c.get("attributes", {})
+                if isinstance(attrs, str):
+                    try:
+                        import json
+                        attrs = json.loads(attrs)
+                    except:
+                        attrs = {}
+                fact = attrs.get("fact", "")
+                if fact:
+                    line = f"- {fact}"
+                    tokens = self.estimate_tokens(line)
+                    if running_tokens + tokens <= max_tokens:
+                        lines.append(line)
+                        running_tokens += tokens
+            
+            if len(lines) > 1:
+                return "\n".join(lines) + "\n\n"
+            return ""
+        except Exception as e:
+            logger.error(f"Failed to fetch Tier 1 Memory: {e}")
+            return ""
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -228,19 +308,38 @@ class ContextEngine:
         self,
         container_ids: Optional[List[str]] = None,
         container_types: Optional[List[str]] = None,
+        active_era_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Resolve containers from the knowledge graph by IDs or types."""
         results: List[Dict[str, Any]] = []
 
         if container_ids:
             # Fetch each container by ID
-            all_containers = self.kg_service.find_containers()
-            id_set = set(container_ids)
-            results.extend(c for c in all_containers if c.get("id") in id_set)
+            if active_era_id:
+                for cid in container_ids:
+                    era_entity = self.kg_service.get_entity_at_era(cid, active_era_id)
+                    if era_entity:
+                        results.append(era_entity)
+            else:
+                for cid in container_ids:
+                    bases = self.kg_service.find_containers(filters={"id": cid})
+                    if bases:
+                        results.extend(bases)
 
         if container_types:
             for ctype in container_types:
                 type_results = self.kg_service.find_containers(container_type=ctype)
+                
+                if active_era_id:
+                    era_results = []
+                    for base in type_results:
+                        if base.get("parent_version_id"):
+                            continue
+                        era_entity = self.kg_service.get_entity_at_era(base.get("id"), active_era_id)
+                        if era_entity:
+                            era_results.append(era_entity)
+                    type_results = era_results
+                    
                 # Deduplicate by id
                 existing_ids = {c.get("id") for c in results}
                 for c in type_results:
@@ -250,6 +349,15 @@ class ContextEngine:
         # If neither IDs nor types specified, fetch all containers
         if not container_ids and not container_types:
             results = self.kg_service.find_containers()
+            if active_era_id:
+                era_results = []
+                for base in results:
+                    if base.get("parent_version_id"):
+                        continue
+                    era_entity = self.kg_service.get_entity_at_era(base.get("id"), active_era_id)
+                    if era_entity:
+                        era_results.append(era_entity)
+                results = era_results
 
         return results
 

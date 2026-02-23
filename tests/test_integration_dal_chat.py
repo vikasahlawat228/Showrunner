@@ -376,7 +376,7 @@ class TestToolExecution:
         """A registered tool is called when intent matches."""
         call_log = []
 
-        def mock_search(content, entity_ids):
+        def mock_search(content, entity_ids, **kwargs):
             call_log.append({"content": content, "entity_ids": entity_ids})
             return "Found 3 characters matching your query."
 
@@ -397,7 +397,7 @@ class TestToolExecution:
     @pytest.mark.asyncio
     async def test_tool_failure_yields_error_in_response(self, session_service):
         """A tool that raises returns error text, not a crash."""
-        def failing_tool(content, entity_ids):
+        def failing_tool(content, entity_ids, **kwargs):
             raise ValueError("Database connection failed")
 
         orch = ChatOrchestrator(

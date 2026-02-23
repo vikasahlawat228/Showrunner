@@ -167,3 +167,25 @@ async def validate_payload(
         raise HTTPException(status_code=422, detail=e.errors())
 
     return {"valid": True, "parsed": instance.model_dump(mode="json")}
+
+
+# ── Schema Suggestions (Implicit Inference) ────────────────────────────
+
+@router.get("/suggestions")
+async def get_schema_suggestions(
+    repo: SchemaRepository = Depends(get_schema_repo),
+):
+    """Analyse schema-less containers and suggest formal schemas.
+
+    Returns a list of suggestions with inferred fields for container_types
+    that have ≥2 instances sharing common attribute keys.
+    """
+    from antigravity_tool.server.deps import get_project
+    from antigravity_tool.repositories.container_repo import ContainerRepository
+    from antigravity_tool.services.schema_inference_service import SchemaInferenceService
+
+    project = get_project()
+    container_repo = ContainerRepository(project.path)
+    service = SchemaInferenceService(container_repo, repo)
+    suggestions = service.analyze_unstructured_containers()
+    return {"suggestions": suggestions}

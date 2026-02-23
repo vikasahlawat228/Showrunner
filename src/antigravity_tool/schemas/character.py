@@ -149,6 +149,8 @@ class RelationshipEdge(BaseModel):
     intensity: int = 5
     known_to_reader: bool = True
     chapter_established: Optional[int] = None
+    resolved: bool = False
+    resolved_in_era: Optional[str] = None
 
 
 class RelationshipEvolution(BaseModel):

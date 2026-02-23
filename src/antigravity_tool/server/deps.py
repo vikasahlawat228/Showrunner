@@ -312,3 +312,16 @@ def get_chat_context_manager(
     memory_svc = ProjectMemoryService(project.path)
     return ChatContextManager(svc, memory_svc)
 
+
+# ── Schema Inference Service ─────────────────────────────────────────
+
+from antigravity_tool.services.schema_inference_service import SchemaInferenceService
+
+
+def get_schema_inference_service(
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    schema_repo: SchemaRepository = Depends(get_schema_repo),
+) -> SchemaInferenceService:
+    """Create a SchemaInferenceService for text extraction and schema suggestions."""
+    return SchemaInferenceService(container_repo, schema_repo)
+

@@ -95,3 +95,18 @@ class ContainerContextResponse(BaseModel):
     context_text: str = Field(description="Formatted prose summary of the container for LLM context.")
     attributes: Dict[str, Any] = Field(default_factory=dict)
     related_count: int = Field(default=0, description="Number of related containers.")
+
+
+class GhostTextRequest(BaseModel):
+    """POST body for generating ambient ghost text."""
+
+    current_text: str = Field(description="The text just typed by the user.")
+    scene_id: Optional[str] = Field(default=None, description="Current scene context if any.")
+    constraints: Optional[str] = Field(default=None, description="Writer constraints (e.g. 'Only suggest dialogue').")
+    temperament: Optional[str] = Field(default=None, description="Model temperament (e.g. 'Action-Heavy', 'Dialogue-Focused').")
+
+
+class GhostTextResponse(BaseModel):
+    """Returned ghost text suggestion."""
+
+    suggestion: str = Field(description="The predicted ahead-of-cursor text.")

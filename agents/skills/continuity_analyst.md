@@ -58,6 +58,9 @@ You must output a JSON object evaluating the proposed diffs. Do not include extr
 {
   "status": "REJECTED",
   "reasoning": "The Writer Agent killed 'char_john_doe' (status: dead). However, 'char_john_doe' is strictly required for future node 'plot_node_trial' as a key witness. This creates a time-paradox.",
-  "suggestions": "Instead of killing John Doe, suggest severely injuring him or having him go into hiding, which still achieves dramatic tension without breaking the future trial node dependency."
+  "suggestions": "Instead of killing John Doe, suggest severely injuring him or having him go into hiding, which still achieves dramatic tension without breaking the future trial node dependency.",
+  "affected_entities": ["char_john_doe"],
+  "severity": "high",
+  "flagged_text": "(Optional) The exact string from the proposed text/changes that triggered this continuity error"
 }
 ```

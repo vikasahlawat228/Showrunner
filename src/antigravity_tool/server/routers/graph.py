@@ -49,3 +49,27 @@ async def search_graph(
     """
     results = svc.semantic_search(q, limit=limit)
     return {"results": results, "query": q, "count": len(results)}
+
+@router.get("/unresolved-threads")
+async def get_unresolved_threads(
+    era_id: str = None,
+    svc: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+) -> Dict[str, Any]:
+    """Get all unresolved plot threads."""
+    threads = svc.get_unresolved_threads(era_id=era_id)
+    return {"threads": threads}
+
+
+from pydantic import BaseModel
+class ResolveThreadRequest(BaseModel):
+    edge_id: str
+    resolved_in_era: str
+
+@router.post("/resolve-thread")
+async def resolve_thread(
+    req: ResolveThreadRequest,
+    svc: KnowledgeGraphService = Depends(get_knowledge_graph_service),
+) -> Dict[str, Any]:
+    """Mark a plot thread as resolved."""
+    svc.resolve_thread(req.edge_id, req.resolved_in_era)
+    return {"status": "success"}

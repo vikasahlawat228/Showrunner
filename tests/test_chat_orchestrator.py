@@ -166,3 +166,38 @@ class TestErrorHandling:
         # Should get an error event (the exact behavior depends on SQLite FK enforcement)
         # At minimum, should not crash
         assert len(events) > 0
+
+
+class TestWelcomeBack:
+    """Resuming after 24 h+ should yield welcome-back tokens."""
+
+    @pytest.mark.asyncio
+    async def test_welcome_back_after_gap(self, session_service, repo):
+        from datetime import datetime, timedelta, timezone
+
+        session = session_service.create_session(project_id="proj_001", name="Old Chat")
+
+        # Backdate updated_at by 48 hours using raw SQL
+        # (repo.update_session always overwrites updated_at with now)
+        past = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+        repo._conn.execute(
+            "UPDATE chat_sessions SET updated_at=? WHERE id=?",
+            (past, session.id),
+        )
+        repo._conn.commit()
+
+        orchestrator = ChatOrchestrator(session_service)
+        events = await _collect_events(orchestrator, session.id, "Hey, I'm back!")
+
+        token_events = [e for e in events if e.event_type == "token"]
+        full_text = "".join(e.data["text"] for e in token_events)
+        assert "Welcome back" in full_text
+
+    @pytest.mark.asyncio
+    async def test_no_welcome_back_for_recent_session(self, orchestrator, active_session):
+        # Active session was just created — no gap
+        events = await _collect_events(orchestrator, active_session.id, "Hello!")
+
+        token_events = [e for e in events if e.event_type == "token"]
+        full_text = "".join(e.data["text"] for e in token_events)
+        assert "Welcome back" not in full_text

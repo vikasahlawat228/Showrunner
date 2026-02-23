@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useCallback } from "react";
+import React, { useEffect, useMemo, useCallback, useState } from "react";
 import {
     ReactFlow,
     MiniMap,
@@ -31,12 +31,17 @@ const InfiniteCanvas = () => {
 
     const nodeTypes = useMemo(() => ({ genericContainer: GenericNode }), []);
 
+    const [mounted, setMounted] = useState(false);
+
     // Rebuild graph whenever underlying semantic data changes or loading finishes
     useEffect(() => {
+        setMounted(true);
         if (!loading) {
             buildGraph();
         }
     }, [loading, characters, scenes, world, buildGraph]);
+
+    if (!mounted) return null;
 
     return (
         <div className="w-full h-full bg-slate-950">
@@ -64,7 +69,7 @@ const InfiniteCanvas = () => {
                         }
                     }}
                     maskColor="rgba(15, 23, 42, 0.7)"
-                    className="!bg-slate-900 border-slate-800 rounded-lg shadow-xl"
+                    className="!bg-slate-900 !border-slate-800 rounded-lg shadow-xl"
                     style={{ backgroundColor: '#0f172a' }}
                 />
 

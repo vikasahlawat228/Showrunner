@@ -45,6 +45,7 @@ class StepType(str, Enum):
     SAVE_TO_BUCKET = "save_to_bucket"
     HTTP_REQUEST = "http_request"
     RESEARCH_DEEP_DIVE = "research_deep_dive"
+    STYLE_ENFORCE_DIALOGUE = "style_enforce_dialogue"
 
     # Logic nodes — control flow
     IF_ELSE = "if_else"
@@ -66,6 +67,7 @@ STEP_CATEGORIES: Dict[StepType, StepCategory] = {
     StepType.SAVE_TO_BUCKET: StepCategory.EXECUTE,
     StepType.HTTP_REQUEST: StepCategory.EXECUTE,
     StepType.RESEARCH_DEEP_DIVE: StepCategory.EXECUTE,
+    StepType.STYLE_ENFORCE_DIALOGUE: StepCategory.EXECUTE,
     StepType.IF_ELSE: StepCategory.LOGIC,
     StepType.LOOP: StepCategory.LOGIC,
     StepType.MERGE_OUTPUTS: StepCategory.LOGIC,
@@ -187,6 +189,16 @@ STEP_REGISTRY: Dict[StepType, Dict[str, Any]] = {
             "save_to_library": {"type": "boolean", "default": True, "description": "Whether to persist results to the research library"},
         },
     },
+    StepType.STYLE_ENFORCE_DIALOGUE: {
+        "label": "Enforce Style on Dialogue",
+        "description": "Restyle a specific character's dialogue without affecting surrounding prose",
+        "icon": "🎭",
+        "category": StepCategory.EXECUTE,
+        "config_schema": {
+            "speaker_name": {"type": "string", "default": "", "description": "Name of the character"},
+            "voice_profile_bucket_id": {"type": "string", "default": "", "description": "ID of the voice profile container"},
+        },
+    },
     StepType.IF_ELSE: {
         "label": "If / Else",
         "description": "Branch pipeline based on a condition evaluated against the payload",
@@ -296,3 +308,27 @@ class StepRegistryEntry(BaseModel):
     icon: str
     category: str
     config_schema: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# Recorded Action Distillation models
+# ---------------------------------------------------------------------------
+
+
+class RecordedActionPayload(BaseModel):
+    """A single recorded UI action from the frontend workflow recorder."""
+
+    type: str = Field(
+        description="Action type: slash_command, chat_message, approval, text_selection, option_select, save, entity_mention"
+    )
+    description: str = Field(default="", description="Human-readable description of the action")
+    payload: Dict[str, Any] = Field(default_factory=dict, description="Context payload captured with the action")
+
+
+class DistillRequest(BaseModel):
+    """Request body for distilling recorded actions into a pipeline definition."""
+
+    title: str = Field(description="Display name for the generated pipeline")
+    actions: List[RecordedActionPayload] = Field(
+        description="Ordered list of recorded user actions to distill into a pipeline DAG"
+    )

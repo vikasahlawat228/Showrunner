@@ -187,6 +187,40 @@ class EventService:
         except sqlite3.Error as e:
             raise PersistenceError(f"Database error during get_all_events: {e}")
 
+    def get_event_chain(self, branch_id: str) -> List[Dict[str, Any]]:
+        """Retrieve all events in the linear history of a branch, from root to head."""
+        try:
+            cursor = self.conn.execute("SELECT head_event_id FROM branches WHERE id = ?", (branch_id,))
+            row = cursor.fetchone()
+            if not row or not row['head_event_id']:
+                return []
+                
+            head_event_id = row['head_event_id']
+            query = """
+                WITH RECURSIVE EventChain AS (
+                    SELECT id, parent_event_id, branch_id, timestamp, event_type, container_id, payload_json, 0 as depth
+                    FROM events WHERE id = ?
+                    
+                    UNION ALL
+                    
+                    SELECT e.id, e.parent_event_id, e.branch_id, e.timestamp, e.event_type, e.container_id, e.payload_json, ec.depth + 1
+                    FROM events e
+                    JOIN EventChain ec ON e.id = ec.parent_event_id
+                )
+                SELECT * FROM EventChain ORDER BY depth DESC;
+            """
+            cursor = self.conn.execute(query, (head_event_id,))
+            events = []
+            for r in cursor.fetchall():
+                evt = dict(r)
+                if 'depth' in evt:
+                    del evt['depth']
+                evt['payload'] = json.loads(evt.pop('payload_json'))
+                events.append(evt)
+            return events
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during get_event_chain: {e}")
+
     def get_branches(self) -> List[Dict[str, Any]]:
         """List all branches with their head event IDs and event counts."""
         try:

@@ -24,6 +24,10 @@ _INTENT_PATTERNS: Dict[str, List[str]] = {
         r"\bwhere\s+is\b", r"\bwhat\s+is\b", r"\bshow\s+me\b",
         r"\blist\s+all\b",
     ],
+    "UNRESOLVED_THREADS": [
+        r"\bunresolved\s+threads\b", r"\bopen\s+plot\b", r"\bunfinished\s+storylines\b",
+        r"\bwhat\s+plots\s+are\s+open\b", r"\bshow\s+unresolved\b", r"\bloose\s+ends\b"
+    ],
     "CREATE": [
         r"\bcreate\b", r"\bnew\b", r"\badd\b", r"\bgenerate\b",
         r"\bwrite\s+(?:a|an|the)\b", r"\bdraft\b", r"\bcompose\b",
@@ -59,6 +63,10 @@ _INTENT_PATTERNS: Dict[str, List[str]] = {
         r"\bdecide\b", r"\bdecision\b", r"\bpreference\b",
         r"\brule\b", r"\balways\b.*\buse\b", r"\bnever\b.*\buse\b",
         r"\bremember\s+that\b",
+    ],
+    "PLAUSIBILITY_CHECK": [
+        r"\brealistic\b", r"\bmake\s+sense\b", r"\bfact\s+check\b",
+        r"\bplausible\b", r"\baccurate\b",
     ],
 }
 

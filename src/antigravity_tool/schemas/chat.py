@@ -71,6 +71,8 @@ class ChatSessionSummary(BaseModel):
 
 class ChatActionTrace(BaseModel):
     """Glass Box trace for a single agent/tool action within a message."""
+    id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex)
+    parent_id: Optional[str] = None
     tool_name: str
     agent_id: Optional[str] = None
     context_summary: str = ""
@@ -80,6 +82,8 @@ class ChatActionTrace(BaseModel):
     token_usage_in: int = 0
     token_usage_out: int = 0
     result_preview: str = ""
+    prompt: Optional[str] = None
+    raw_json: Optional[str] = None
     sub_invocations: List["AgentInvocation"] = Field(default_factory=list)
 
 

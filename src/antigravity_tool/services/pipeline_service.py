@@ -428,43 +428,65 @@ class PipelineService:
                 category = STEP_CATEGORIES.get(step.step_type, StepCategory.EXECUTE)
 
                 if category == StepCategory.HUMAN:
-                    # Human checkpoint — pause for user
-                    run.current_state = PipelineState.PAUSED_FOR_USER
-                    run.payload = {
-                        **run.payload,
-                        "step_name": step.label,
-                        "step_type": step.step_type.value,
-                        "step_config": step.config,
-                    }
-                    event = PipelineService._events.get(run_id)
-                    if event:
-                        event.clear()
-                        await event.wait()
-
-                    # Phase G Track 4: "Chat-to-Refine" Loop-back
-                    refine_text = run.payload.get("refine_instructions")
-                    is_regenerate = run.payload.get("regenerate", False)
+                    # Check auto-approval conditions
+                    auto_approve = False
+                    confidence = run.payload.get("confidence_score", 0)
+                    errors = run.payload.get("continuity_errors", [])
                     
-                    if refine_text or is_regenerate:
-                        if refine_text:
-                            # Append instructions to the existing prompt
-                            current_prompt = run.payload.get("prompt_text", "")
-                            run.payload["prompt_text"] = f"{current_prompt}\n\n[Refined Instructions: {refine_text}]"
-                            # Clear instructions so we don't infinitely loop
-                            run.payload.pop("refine_instructions", None)
+                    if step.step_type == StepType.APPROVE_OUTPUT and isinstance(confidence, (int, float)) and confidence > 90 and len(errors) == 0:
+                        auto_approve = True
+
+                    if not auto_approve:
+                        # Human checkpoint — pause for user
+                        run.current_state = PipelineState.PAUSED_FOR_USER
+                        run.payload = {
+                            **run.payload,
+                            "step_name": step.label,
+                            "step_type": step.step_type.value,
+                            "step_config": step.config,
+                        }
+                        event = PipelineService._events.get(run_id)
+                        if event:
+                            event.clear()
+                            await event.wait()
+
+                        # Phase G Track 4: "Chat-to-Refine" Loop-back
+                        refine_text = run.payload.get("refine_instructions")
+                        is_regenerate = run.payload.get("regenerate", False)
                         
-                        # Find the preceding LLM_GENERATE step
-                        last_llm_step_id = None
-                        for sid in reversed(run.steps_completed):
-                            s = step_map.get(sid)
-                            if s is not None and s.step_type == StepType.LLM_GENERATE:
-                                last_llm_step_id = sid
-                                break
-                        
-                        if last_llm_step_id:
-                            # Do not mark this HUMAN step as completed, just loop back
-                            current_step_id = last_llm_step_id
-                            continue
+                        if refine_text or is_regenerate:
+                            if refine_text:
+                                # Append instructions to the existing prompt
+                                current_prompt = run.payload.get("prompt_text", "")
+                                run.payload["prompt_text"] = f"{current_prompt}\n\n[Refined Instructions: {refine_text}]"
+                                # Clear instructions so we don't infinitely loop
+                                run.payload.pop("refine_instructions", None)
+                            
+                            # Find the preceding LLM_GENERATE step
+                            last_llm_step_id = None
+                            for sid in reversed(run.steps_completed):
+                                s = step_map.get(sid)
+                                if s is not None and s.step_type == StepType.LLM_GENERATE:
+                                    last_llm_step_id = sid
+                                    break
+                            
+                            if last_llm_step_id:
+                                # Do not mark this HUMAN step as completed, just loop back
+                                current_step_id = last_llm_step_id
+                                continue
+                    else:
+                        auto_approved_list = run.payload.get("auto_approved_steps", [])
+                        auto_approved_list.append({
+                            "step_id": step.id,
+                            "step_name": step.label,
+                            "prompt_text": run.payload.get("prompt_text"),
+                            "model": run.payload.get("resolved_model"),
+                            "confidence_score": confidence,
+                            "continuity_errors": errors,
+                            "generated_text": run.payload.get("generated_text"),
+                        })
+                        run.payload["auto_approved_steps"] = auto_approved_list
+                        logger.info(f"Auto-approved step {step.id} due to high confidence ({confidence})")
 
                     # Mark completed and advance to default next
                     run.steps_completed.append(step.id)
@@ -534,8 +556,25 @@ class PipelineService:
         except Exception as e:
             logger.warning("Failed to persist pipeline run %s: %s", run.id, e)
 
+    def set_step_model_override(self, run_id: str, step_id: str, model_name: str):
+        """Override config (e.g. model) for a specific step at runtime."""
+        run = self._runs.get(run_id)
+        if not run:
+            raise ValueError(f"Run {run_id} not found")
+        if not hasattr(run, 'step_overrides') or run.step_overrides is None:
+            run.step_overrides = {}
+        if step_id not in run.step_overrides:
+            run.step_overrides[step_id] = {}
+        run.step_overrides[step_id]["model"] = model_name
+
     async def _execute_step(self, run: PipelineRun, step: PipelineStepDef) -> None:
         """Dispatch a single step to its handler."""
+        # Apply runtime overrides if any exist for this step
+        if getattr(run, 'step_overrides', None) and step.id in run.step_overrides:
+            override = run.step_overrides[step.id]
+            if "model" in override:
+                step.config["target_model"] = override["model"]
+
         handler = self._step_handlers.get(step.step_type)
         if handler:
             await handler(self, run, step)
@@ -865,6 +904,14 @@ class PipelineService:
         if run.payload.get("regenerate"):
             run.payload.pop("regenerate", None)
             
+        # Append instructions for Confidence-Based Auto-Execution
+        prompt_text += (
+            "\n\n[SYSTEM INSTRUCTION: You MUST output your response as a valid JSON object containing exactly three keys: "
+            "'generated_text' (string) containing your actual response to the prompt above, "
+            "'confidence_score' (number 0-100) estimating your confidence in meeting the prompt requirements and preserving continuity, "
+            "and 'continuity_errors' (array of strings) listing any detected logical or continuity errors. Do NOT wrap in markdown blocks if possible.]"
+        )
+
         # Store resolved model in payload for Glass Box transparency
         run.payload["resolved_model"] = model
 
@@ -881,7 +928,28 @@ class PipelineService:
                 api_key=api_key,
                 temperature=temperature,
             )
-            run.payload["generated_text"] = response.choices[0].message.content
+            content = response.choices[0].message.content.strip()
+            
+            # Clean possible markdown block
+            if content.startswith("```json"):
+                content = content[7:]
+            elif content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+                
+            try:
+                import json
+                parsed = json.loads(content)
+                run.payload["generated_text"] = parsed.get("generated_text", content)
+                run.payload["confidence_score"] = parsed.get("confidence_score", 0)
+                run.payload["continuity_errors"] = parsed.get("continuity_errors", [])
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse LLM structured JSON output. Proceeding with raw text.")
+                run.payload["generated_text"] = content
+                run.payload["confidence_score"] = 0
+                run.payload["continuity_errors"] = ["Failed to parse structured output"]
+                
         except Exception as e:
             logger.error("LLM generation failed: %s", e)
             run.payload["generated_text"] = f"[LLM Error: {e}]"
@@ -1103,6 +1171,237 @@ class PipelineService:
             event.set()
 
     # ------------------------------------------------------------------
+    # Deterministic Recorded Action Distillation
+    # ------------------------------------------------------------------
+
+    # Maps known slash commands to descriptive prompt templates
+    _COMMAND_PROMPT_MAP: Dict[str, str] = {
+        "brainstorm": "Brainstorm creative ideas and directions for the given text. Provide varied, imaginative suggestions.\n\nInput text:\n{{input_text}}",
+        "expand": "Expand and develop the following text with richer detail, deeper characterization, and enhanced prose.\n\nInput text:\n{{input_text}}",
+        "compress": "Condense the following text while preserving its core meaning, voice, and key plot points.\n\nInput text:\n{{input_text}}",
+        "rewrite": "Rewrite the following text with improved prose quality, pacing, and emotional impact.\n\nInput text:\n{{input_text}}",
+        "continue": "Continue the narrative from where the following text ends, maintaining consistent voice and pacing.\n\nInput text:\n{{input_text}}",
+        "dialogue": "Generate natural dialogue for the characters in this scene, maintaining their distinct voices.\n\nScene context:\n{{input_text}}",
+        "critique": "Provide a constructive critique of the following text, focusing on prose quality, pacing, character voice, and story coherence.\n\nInput text:\n{{input_text}}",
+        "research": "Research the topics and setting elements referenced in the following text. Provide factual context and creative implications.\n\nInput text:\n{{input_text}}",
+    }
+
+    def distill_recorded_actions(
+        self,
+        actions: List[Dict[str, Any]],
+        title: str,
+    ) -> "PipelineDefinition":
+        """Convert recorded user actions into a pipeline definition deterministically.
+
+        Unlike NL-to-DAG which relies on an LLM, this method uses a rule-based
+        mapping that translates each known action type into the correct pipeline
+        step(s), then wires them together sequentially.
+
+        Specific text values from the recording are generalized into
+        ``{{input_text}}`` template variables so the resulting pipeline is
+        reusable on different content.
+
+        Args:
+            actions: List of recorded action dicts (type, description, payload).
+            title: Display name for the generated pipeline definition.
+
+        Returns:
+            A validated ``PipelineDefinition``.
+
+        Raises:
+            ValueError: If actions list is empty.
+        """
+        if not actions:
+            raise ValueError("Cannot distill an empty action list")
+
+        steps: List[PipelineStepDef] = []
+        edges: List[PipelineEdge] = []
+        step_counter = 0
+        x_pos = 100
+
+        # Track whether the original session included approvals so we know
+        # whether to auto-insert checkpoint steps after LLM nodes.
+        has_approvals = any(a.get("type") == "approval" for a in actions)
+
+        for action in actions:
+            action_type = action.get("type", "")
+            payload = action.get("payload", {})
+            description = action.get("description", "")
+
+            if action_type == "slash_command":
+                command = payload.get("command", "unknown")
+                prompt_template = self._COMMAND_PROMPT_MAP.get(
+                    command,
+                    f"Execute /{command} on the following content.\n\nInput text:\n{{{{input_text}}}}",
+                )
+
+                # Step 1: Prompt assembly
+                step_counter += 1
+                prompt_step = PipelineStepDef(
+                    id=f"step_{step_counter}",
+                    step_type=StepType.PROMPT_TEMPLATE,
+                    label=f"Prepare /{command} Prompt",
+                    config={"template_inline": prompt_template},
+                    position={"x": x_pos, "y": 200},
+                )
+                steps.append(prompt_step)
+                x_pos += 300
+
+                # Step 2: LLM generation
+                step_counter += 1
+                gen_step = PipelineStepDef(
+                    id=f"step_{step_counter}",
+                    step_type=StepType.LLM_GENERATE,
+                    label=f"Generate /{command} Output",
+                    config={"temperature": 0.7, "max_tokens": 2048},
+                    position={"x": x_pos, "y": 200},
+                )
+                steps.append(gen_step)
+                edges.append(PipelineEdge(source=prompt_step.id, target=gen_step.id))
+                x_pos += 300
+
+                # Wire to previous step if exists
+                if len(steps) > 2:
+                    prev_step = steps[-3]
+                    edges.append(PipelineEdge(source=prev_step.id, target=prompt_step.id))
+
+            elif action_type == "chat_message":
+                message = payload.get("message", description)
+                # Generalize the chat message into a template
+                step_counter += 1
+                chat_step = PipelineStepDef(
+                    id=f"step_{step_counter}",
+                    step_type=StepType.LLM_GENERATE,
+                    label=f"Chat: {message[:40]}..." if len(message) > 40 else f"Chat: {message}",
+                    config={
+                        "prompt_override": "{{chat_instruction}}\n\nContext:\n{{input_text}}",
+                        "temperature": 0.7,
+                        "max_tokens": 2048,
+                    },
+                    position={"x": x_pos, "y": 200},
+                )
+                steps.append(chat_step)
+                x_pos += 300
+
+                # Wire to previous
+                if len(steps) > 1:
+                    edges.append(PipelineEdge(source=steps[-2].id, target=chat_step.id))
+
+            elif action_type == "approval":
+                step_counter += 1
+                approval_step = PipelineStepDef(
+                    id=f"step_{step_counter}",
+                    step_type=StepType.APPROVE_OUTPUT,
+                    label="Review & Approve Output",
+                    config={"allow_edit": True},
+                    position={"x": x_pos, "y": 200},
+                )
+                steps.append(approval_step)
+                x_pos += 300
+
+                # Wire to previous
+                if len(steps) > 1:
+                    edges.append(PipelineEdge(source=steps[-2].id, target=approval_step.id))
+
+            elif action_type == "text_selection":
+                step_counter += 1
+                gather_step = PipelineStepDef(
+                    id=f"step_{step_counter}",
+                    step_type=StepType.GATHER_BUCKETS,
+                    label="Gather Context",
+                    config={
+                        "container_types": payload.get("container_types", ["scene", "character"]),
+                        "max_items": 10,
+                    },
+                    position={"x": x_pos, "y": 200},
+                )
+                steps.append(gather_step)
+                x_pos += 300
+
+                # Wire to previous
+                if len(steps) > 1:
+                    edges.append(PipelineEdge(source=steps[-2].id, target=gather_step.id))
+
+            elif action_type == "save":
+                step_counter += 1
+                save_step = PipelineStepDef(
+                    id=f"step_{step_counter}",
+                    step_type=StepType.SAVE_TO_BUCKET,
+                    label="Save Output",
+                    config={
+                        "container_type": payload.get("container_type", "fragment"),
+                    },
+                    position={"x": x_pos, "y": 200},
+                )
+                steps.append(save_step)
+                x_pos += 300
+
+                # Wire to previous
+                if len(steps) > 1:
+                    edges.append(PipelineEdge(source=steps[-2].id, target=save_step.id))
+
+            elif action_type == "option_select":
+                # Option selection (e.g. picking a brainstorm result) maps to
+                # a review checkpoint
+                step_counter += 1
+                review_step = PipelineStepDef(
+                    id=f"step_{step_counter}",
+                    step_type=StepType.REVIEW_PROMPT,
+                    label="Review & Select Option",
+                    config={},
+                    position={"x": x_pos, "y": 200},
+                )
+                steps.append(review_step)
+                x_pos += 300
+
+                if len(steps) > 1:
+                    edges.append(PipelineEdge(source=steps[-2].id, target=review_step.id))
+
+            elif action_type == "entity_mention":
+                # Entity mentions enrich context — add a semantic search step
+                step_counter += 1
+                search_step = PipelineStepDef(
+                    id=f"step_{step_counter}",
+                    step_type=StepType.SEMANTIC_SEARCH,
+                    label=f"Lookup: {payload.get('entity_name', 'entity')}",
+                    config={"limit": 5},
+                    position={"x": x_pos, "y": 200},
+                )
+                steps.append(search_step)
+                x_pos += 300
+
+                if len(steps) > 1:
+                    edges.append(PipelineEdge(source=steps[-2].id, target=search_step.id))
+            else:
+                logger.warning("Unknown recorded action type '%s', skipping", action_type)
+                continue
+
+        # If the original session had approvals but the last step isn't an
+        # approval, add a final checkpoint
+        if has_approvals and steps and steps[-1].step_type not in (
+            StepType.APPROVE_OUTPUT, StepType.REVIEW_PROMPT
+        ):
+            step_counter += 1
+            final_approve = PipelineStepDef(
+                id=f"step_{step_counter}",
+                step_type=StepType.APPROVE_OUTPUT,
+                label="Final Review",
+                config={"allow_edit": True},
+                position={"x": x_pos, "y": 200},
+            )
+            steps.append(final_approve)
+            edges.append(PipelineEdge(source=steps[-2].id, target=final_approve.id))
+
+        definition = PipelineDefinition(
+            name=title,
+            description=f"Recorded workflow distilled into reusable pipeline ({len(steps)} steps)",
+            steps=steps,
+            edges=edges,
+        )
+
+        return definition
+
+    # ------------------------------------------------------------------
     # NL-to-DAG Pipeline Generation (Phase H Track 3)
     # ------------------------------------------------------------------
 
@@ -1246,6 +1545,38 @@ class PipelineService:
     # Topological Sort
     # ------------------------------------------------------------------
 
+    async def _handle_style_enforce_dialogue(self, run: PipelineRun, step: PipelineStepDef) -> None:
+        """Enforce character style on dialogue in the text payload."""
+        run.current_state = PipelineState.EXECUTING
+        speaker_name = step.config.get("speaker_name", "")
+        voice_profile_bucket_id = step.config.get("voice_profile_bucket_id", "")
+        
+        if not speaker_name or not voice_profile_bucket_id:
+            logger.warning("Missing speaker_name or voice_profile_bucket_id for style enforce node")
+            return
+            
+        # Get voice profile container
+        profile_container = self.container_repo.get_container(voice_profile_bucket_id)
+        if not profile_container:
+            logger.warning(f"Voice profile container {voice_profile_bucket_id} not found")
+            return
+            
+        voice_profile_attrs = profile_container.attributes
+        
+        # Get text from payload
+        text = run.payload.get("text", run.payload.get("prompt_text", ""))
+        if not text:
+            return
+            
+        # Use style service locally
+        from antigravity_tool.services.style_service import StyleService
+        style_service = StyleService(None, None, None)
+        
+        new_text = await style_service.enforce_style_on_dialogue(text, speaker_name, voice_profile_attrs)
+        
+        run.payload["text"] = new_text
+        run.payload["style_enforced_for"] = speaker_name
+        
     @staticmethod
     def _topological_sort(definition: PipelineDefinition) -> List[PipelineStepDef]:
         """Sort pipeline steps in topological order (respects edges)."""
@@ -1291,4 +1622,5 @@ PipelineService._step_handlers = {
     StepType.SAVE_TO_BUCKET: PipelineService._handle_save_to_bucket,
     StepType.HTTP_REQUEST: PipelineService._handle_http_request,
     StepType.RESEARCH_DEEP_DIVE: PipelineService._handle_research_deep_dive,
+    StepType.STYLE_ENFORCE_DIALOGUE: PipelineService._handle_style_enforce_dialogue,
 }

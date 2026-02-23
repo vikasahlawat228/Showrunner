@@ -9,10 +9,13 @@ from antigravity_tool.server.api_schemas import (
     DirectorActRequest,
     DirectorResultResponse,
     DispatchRequest,
+    ApplyEditRequest,
+    AltTakeRequest,
 )
-from antigravity_tool.server.deps import get_agent_dispatcher, get_director_service, get_container_repo
+from antigravity_tool.server.deps import get_agent_dispatcher, get_director_service, get_container_repo, get_writing_service
 from antigravity_tool.services.agent_dispatcher import AgentDispatcher
 from antigravity_tool.services.director_service import DirectorService
+from antigravity_tool.services.writing_service import WritingService
 from antigravity_tool.schemas.container import GenericContainer
 from antigravity_tool.repositories.container_repo import ContainerRepository
 
@@ -88,6 +91,36 @@ async def director_dispatch(
         files_modified=director_result.files_modified,
         next_step=director_result.next_step,
         message=director_result.message,
+    )
+
+
+@router.post("/brainstorm", response_model=AgentResultResponse)
+async def director_brainstorm(
+    req: DispatchRequest,
+    dispatcher: AgentDispatcher = Depends(get_agent_dispatcher),
+):
+    """Specific endpoint for Zen Mode brainstorming with scene context."""
+    # Ensure intent has the brainstorm prefix if not already present
+    intent = req.intent
+    if not intent.lower().startswith("brainstorm"):
+        intent = f"brainstorm: {intent}"
+        
+    result = await dispatcher.route_and_execute(
+        intent=intent,
+        context=req.context or None,
+    )
+    
+    if result is None:
+        raise HTTPException(status_code=500, detail="No agent handled the brainstorm request.")
+        
+    return AgentResultResponse(
+        skill_used=result.skill_used,
+        response=result.response,
+        actions=result.actions,
+        success=result.success,
+        error=result.error,
+        model_used=result.model_used,
+        context_used=result.context_used,
     )
 
 
@@ -192,3 +225,43 @@ async def delete_brainstorm_card(
     if not container_repo.delete_container(card_id):
         raise HTTPException(status_code=404, detail="Card not found")
     return {"status": "deleted", "id": card_id}
+
+
+# ── Phase 5 Writing Edits ──────────────────────────────────────────
+
+@router.post("/apply-edit")
+async def director_apply_edit(
+    req: ApplyEditRequest,
+    writing_svc: WritingService = Depends(get_writing_service),
+):
+    """Safely apply a string replacement in a writing fragment."""
+    success = writing_svc.apply_edit(
+        fragment_id=req.fragment_id,
+        original_text=req.original_text,
+        replacement_text=req.replacement_text,
+        branch_id=req.branch_id,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=400, 
+            detail="Failed to apply edit. Snippet might be missing or fragment invalid."
+        )
+    return {"status": "success", "fragment_id": req.fragment_id}
+
+
+@router.post("/alt-take")
+async def director_alt_take(
+    req: AltTakeRequest,
+    writing_svc: WritingService = Depends(get_writing_service),
+):
+    """Generate and store an alternative version of a text snippet."""
+    alt_text = await writing_svc.create_alt_take(
+        fragment_id=req.fragment_id,
+        highlighted_text=req.highlighted_text,
+        prompt=req.prompt,
+        branch_id=req.branch_id,
+    )
+    if not alt_text:
+        raise HTTPException(status_code=500, detail="Failed to generate alt-take.")
+        
+    return {"status": "success", "alt_text": alt_text}

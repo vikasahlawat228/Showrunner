@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -16,13 +17,14 @@ import {
 } from "./SlashCommandList";
 import { DiffExtension } from "./extensions/DiffExtension";
 import { AltTakeExtension } from "./extensions/AltTakeExtension";
+import { GhostTextExtension } from "./extensions/GhostTextExtension";
 import { toast } from "sonner";
 import { useZenStore } from "@/lib/store/zenSlice";
 import { useStudioStore } from "@/lib/store";
 import { useRecorderStore } from "@/lib/store/recorderSlice";
 import { api } from "@/lib/api";
 import { type AIOperationContext } from "@/components/ui/ContextInspector";
-import { Save, Clock, Loader2, Focus, GitBranch } from "lucide-react";
+import { Save, Clock, Loader2, Focus, GitBranch, CopyPlus, Zap } from "lucide-react";
 
 // ── Suggestion utilities ────────────────────────────────────
 
@@ -240,14 +242,38 @@ function createSlashSuggestion() {
                     current_text: currentText.slice(0, 2000),
                     source: "zen"
                 })
-                    .then((result) => {
+                    .then(async (result) => {
                         if (result.response) {
+                            let activeBranch = store.activeBranch || "main";
+
+                            // Automatically branch if we're on main to prevent destructive edits
+                            if (activeBranch === "main") {
+                                try {
+                                    const branchName = `ai-brainstorm-${Math.floor(Date.now() / 1000)}`;
+                                    toast.info(`Creating branch ${branchName}...`);
+
+                                    const eventsData = await api.getTimelineEvents();
+                                    const parentEvent = eventsData.length > 0 ? eventsData[eventsData.length - 1].id : "root";
+
+                                    await api.createBranch({
+                                        branch_name: branchName,
+                                        parent_event_id: parentEvent,
+                                        source_branch_id: "main",
+                                    });
+
+                                    store.setActiveBranch(branchName);
+                                    activeBranch = branchName;
+                                } catch (e) {
+                                    console.error("Auto-branch failed", e);
+                                }
+                            }
+
                             editor
                                 .chain()
                                 .focus()
                                 .insertContent(`\n\n> **Brainstorming Result:**\n${result.response}\n\n`)
                                 .run();
-                            toast.success(`Brainstorm complete`);
+                            toast.success(`Brainstorm complete`, { description: `Merged to ${activeBranch}` });
 
                             const glassBox: AIOperationContext = {
                                 agentName: result.skill_used,
@@ -276,8 +302,35 @@ function createSlashSuggestion() {
             toast.info(`Running ${cmd.label}...`);
 
             api.directorDispatch(intent, { source: "zen", action: cmd.action })
-                .then((result) => {
+                .then(async (result) => {
                     if (result.response) {
+                        const store = useZenStore.getState();
+                        let activeBranch = store.activeBranch || "main";
+
+                        // Automatically branch if we're on main to prevent destructive edits
+                        if (activeBranch === "main") {
+                            try {
+                                const branchName = `ai-${cmd.action}-${Math.floor(Date.now() / 1000)}`;
+                                toast.info(`Creating branch ${branchName}...`);
+
+                                const eventsData = await api.getTimelineEvents();
+                                const parentEvent = eventsData.length > 0 ? eventsData[eventsData.length - 1].id : "root";
+
+                                await api.createBranch({
+                                    branch_name: branchName,
+                                    parent_event_id: parentEvent,
+                                    source_branch_id: "main",
+                                });
+
+                                store.setActiveBranch(branchName);
+                                // No need to checkout since we are already holding the text state in memory
+                                // and the branch is identical to main right now
+                                activeBranch = branchName;
+                            } catch (e) {
+                                console.error("Auto-branch failed", e);
+                            }
+                        }
+
                         // Insert the agent's response at cursor
                         editor
                             .chain()
@@ -285,7 +338,7 @@ function createSlashSuggestion() {
                             .insertContent(`\n\n${result.response}`)
                             .run();
                         toast.success(`${cmd.label} complete`, {
-                            description: `Agent: ${result.skill_used}`,
+                            description: `Agent: ${result.skill_used} (Merged to ${activeBranch})`,
                         });
 
                         // Populate Glass Box with AI operation metadata
@@ -329,6 +382,40 @@ export function ZenEditor() {
     const detectDebounceRef = useRef<NodeJS.Timeout | null>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+    // ── Spark floating button state ───────────────────────────
+    const [sparkPos, setSparkPos] = useState<{ x: number; y: number } | null>(null);
+    const [sparkText, setSparkText] = useState("");
+    const sparkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Track native text selection for Spark button
+    useEffect(() => {
+        const handleSelectionChange = () => {
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+                if (sparkTimeoutRef.current) clearTimeout(sparkTimeoutRef.current);
+                sparkTimeoutRef.current = setTimeout(() => {
+                    setSparkPos(null);
+                    setSparkText("");
+                }, 300);
+                return;
+            }
+            const range = sel.getRangeAt(0);
+            const editorEl = document.querySelector('.ProseMirror');
+            if (!editorEl || !editorEl.contains(range.commonAncestorContainer)) return;
+            const text = sel.toString().trim();
+            if (text.length < 10) return;
+            if (sparkTimeoutRef.current) clearTimeout(sparkTimeoutRef.current);
+            const rect = range.getBoundingClientRect();
+            setSparkPos({ x: rect.right + 8, y: rect.top - 4 });
+            setSparkText(text);
+        };
+        document.addEventListener('selectionchange', handleSelectionChange);
+        return () => {
+            document.removeEventListener('selectionchange', handleSelectionChange);
+            if (sparkTimeoutRef.current) clearTimeout(sparkTimeoutRef.current);
+        };
+    }, []);
+
     // Mouse movement listener to break focus typing fade
     useEffect(() => {
         const handleMouseMove = () => {
@@ -369,7 +456,6 @@ export function ZenEditor() {
                 },
                 suggestion: createMentionSuggestion(),
             }),
-            // Slash commands use Mention under the hood with "/" trigger
             Mention.extend({ name: "slashCommand" }).configure({
                 HTMLAttributes: {
                     class: "slash-command",
@@ -378,6 +464,7 @@ export function ZenEditor() {
             }),
             DiffExtension,
             AltTakeExtension,
+            GhostTextExtension,
         ],
         editorProps: {
             attributes: {
@@ -434,12 +521,69 @@ export function ZenEditor() {
         },
     });
 
+    const { ghostTextContent, ghostTextConstraints, fetchGhostText, setGhostTextContent, activeSceneId, sidebarVisible, setGhostTextConstraints } = useZenStore();
+    const ghostTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Ghost text idle timer
+    useEffect(() => {
+        if (!editor) return;
+
+        const handleEditorUpdate = () => {
+            // Clear suggestion on typing
+            setGhostTextContent("");
+
+            // Set new idle timer
+            if (ghostTimerRef.current) clearTimeout(ghostTimerRef.current);
+
+            ghostTimerRef.current = setTimeout(() => {
+                const text = editor.getText();
+                if (text.trim().length > 10) { // Only suggest if there is enough context
+                    fetchGhostText(text, activeSceneId || undefined);
+                }
+            }, 2000); // 2 seconds of idle time
+        };
+
+        editor.on('update', handleEditorUpdate);
+
+        return () => {
+            editor.off('update', handleEditorUpdate);
+            if (ghostTimerRef.current) clearTimeout(ghostTimerRef.current);
+        }
+    }, [editor, fetchGhostText, setGhostTextContent, activeSceneId]);
+
+    // Update TipTap extension with new ghost text
+    useEffect(() => {
+        if (!editor || !ghostTextContent) return;
+
+        // This effectively updates the options of the GhostTextExtension
+        // which forces the plugin to re-evaluate decorations
+        editor.extensionManager.extensions.find(e => e.name === 'ghostText')!.options.suggestion = ghostTextContent;
+        editor.view.dispatch(editor.state.tr.setMeta('ghostText', true));
+    }, [editor, ghostTextContent]);
+
+    // Handle custom event from extension to clear ghost text on accept
+    useEffect(() => {
+        const handleClearGhostText = () => {
+            setGhostTextContent("");
+            if (editor) {
+                const ext = editor.extensionManager.extensions.find(e => e.name === 'ghostText');
+                if (ext) ext.options.suggestion = "";
+            }
+        };
+
+        window.addEventListener("zen:clearGhostText", handleClearGhostText);
+        return () => {
+            window.removeEventListener("zen:clearGhostText", handleClearGhostText);
+        }
+    }, [editor, setGhostTextContent]);
+
     // Clean up debounce timers
     useEffect(() => {
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
             if (detectDebounceRef.current) clearTimeout(detectDebounceRef.current);
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            if (ghostTimerRef.current) clearTimeout(ghostTimerRef.current);
         };
     }, []);
 
@@ -506,13 +650,23 @@ export function ZenEditor() {
             }
         };
 
+        const handleLoadBranchText = (e: CustomEvent<string>) => {
+            if (editor) {
+                // Completely replace the editor's text content with the branch's text
+                editor.commands.setContent(e.detail);
+            }
+        };
+
         window.addEventListener("zen:replace", handleReplace as any);
         window.addEventListener("zen:insertBelow", handleInsertBelow as any);
         window.addEventListener("zen:applyDiff", handleApplyDiff as any);
+        window.addEventListener("zen:loadBranchText", handleLoadBranchText as any);
+
         return () => {
             window.removeEventListener("zen:replace", handleReplace as any);
             window.removeEventListener("zen:insertBelow", handleInsertBelow as any);
             window.removeEventListener("zen:applyDiff", handleApplyDiff as any);
+            window.removeEventListener("zen:loadBranchText", handleLoadBranchText as any);
         };
     }, [editor]);
 
@@ -613,8 +767,56 @@ export function ZenEditor() {
 
             {/* Editor surface */}
             <div className={`flex-1 overflow-y-auto px-6 lg:px-16 xl:px-24 2xl:px-32 ${focusMode ? 'zen-focus-mode pt-32' : ''}`}>
+                {editor && (
+                    <BubbleMenu
+                        editor={editor}
+                        className="flex items-center gap-1 p-1.5 rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
+                    >
+                        <button
+                            onClick={() => {
+                                const { from, to } = editor.state.selection;
+                                const text = editor.state.doc.textBetween(from, to, "\n");
+                                // Delete selection and insert AltTake
+                                editor.chain()
+                                    .focus()
+                                    .deleteRange({ from, to })
+                                    .insertAltTake({ initialText: text })
+                                    .run();
+                            }}
+                            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-indigo-300 hover:text-white hover:bg-gray-800 rounded transition-colors"
+                        >
+                            <CopyPlus className="w-3.5 h-3.5" />
+                            Create Take
+                        </button>
+                    </BubbleMenu>
+                )}
                 <EditorContent editor={editor} />
             </div>
+
+            {/* ⚡ Spark floating button — appears on text selection */}
+            {sparkPos && sparkText && (
+                <button
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.dispatchEvent(
+                            new CustomEvent("zen:sparkExtract", { detail: sparkText })
+                        );
+                        setSparkPos(null);
+                        setSparkText("");
+                    }}
+                    className="fixed z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full
+                        bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium
+                        shadow-xl shadow-indigo-500/30 border border-indigo-400/40
+                        transition-all duration-200 hover:scale-105
+                        animate-in fade-in slide-in-from-left-2 duration-200"
+                    style={{ left: sparkPos.x, top: sparkPos.y }}
+                    title="Extract this text as a Knowledge Graph bucket"
+                >
+                    <Zap className="w-3.5 h-3.5" />
+                    Spark
+                </button>
+            )}
 
             {/* Shortcuts Overlay */}
             {showShortcuts && (

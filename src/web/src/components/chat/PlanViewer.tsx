@@ -18,6 +18,8 @@ export function PlanViewer({ content, onSend }: PlanViewerProps) {
     }).filter(Boolean) as { num: number, text: string }[];
 
     const [selectedSteps, setSelectedSteps] = useState<number[]>([]);
+    const [isModifying, setIsModifying] = useState(false);
+    const [modifyInstructions, setModifyInstructions] = useState('');
 
     const toggleStep = (num: number) => {
         if (selectedSteps.includes(num)) {
@@ -50,6 +52,57 @@ export function PlanViewer({ content, onSend }: PlanViewerProps) {
                     </label>
                 ))}
             </div>
+
+            <div className="mb-4">
+                {isModifying ? (
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded text-sm text-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            placeholder="New instructions..."
+                            value={modifyInstructions}
+                            onChange={(e) => setModifyInstructions(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && modifyInstructions.trim()) {
+                                    onSend?.(`/replan ${modifyInstructions.trim()}`);
+                                    setIsModifying(false);
+                                    setModifyInstructions('');
+                                }
+                            }}
+                            autoFocus
+                        />
+                        <button
+                            onClick={() => {
+                                if (modifyInstructions.trim()) {
+                                    onSend?.(`/replan ${modifyInstructions.trim()}`);
+                                    setIsModifying(false);
+                                    setModifyInstructions('');
+                                }
+                            }}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold transition-colors shrink-0"
+                        >
+                            Re-plan
+                        </button>
+                        <button
+                            onClick={() => {
+                                setIsModifying(false);
+                                setModifyInstructions('');
+                            }}
+                            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs font-semibold transition-colors shrink-0"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setIsModifying(true)}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                    >
+                        Modify Plan...
+                    </button>
+                )}
+            </div>
+
             {onSend && (
                 <div className="flex gap-2 border-t border-gray-700 pt-3">
                     <button

@@ -1,6 +1,7 @@
 import logging
 import json
 from typing import Optional, Dict, Any, List
+import os
 from dataclasses import dataclass
 
 from antigravity_tool.services.knowledge_graph_service import KnowledgeGraphService
@@ -17,6 +18,7 @@ class ContinuityVerdict:
     suggestions: str
     affected_entities: list[str]
     severity: str        # "high", "medium", "low"
+    flagged_text: Optional[str] = None
 
 class ContinuityService:
     def __init__(
@@ -36,28 +38,26 @@ class ContinuityService:
         self,
         container_id: str,
         proposed_changes: Optional[Dict[str, Any]] = None,
+        branch_id: str = "main",
     ) -> ContinuityVerdict:
-        """Validate a container's current state against the KG and future deps."""
-        # 1. Get the container and its current state from KG
+        """Run a continuity check against the knowledge graph and future events."""
+        # 1. Fetch the container details
         container = self.kg_service.get_container(container_id)
         if not container:
             return ContinuityVerdict(
-                status="APPROVED",
+                status="FAILED",
                 reasoning=f"Container {container_id} not found.",
                 suggestions="",
                 affected_entities=[],
-                severity="low"
+                severity="high"
             )
 
-        # 2. Get related entities
-        neighbors = self.kg_service.get_neighbors(container_id)
-        related_ids = [n.get("id") for n in neighbors if n.get("id")]
-        related_ids.append(container_id)
-
+        # 2. Extract involved entities
+        related_ids = [r.target_id for r in container.relationships if hasattr(r, 'target_id')]
+        
         # 3. Query future dependencies (events mentioning these entities)
-        # We roughly guess "future" by looking at recent events, or all events 
-        # for these entities as dependencies
-        all_events = self.event_service.get_all_events()
+        # Check only the linear event history of this branch
+        all_events = self.event_service.get_event_chain(branch_id)
         future_deps = []
         for e in all_events:
             # Match if the event affects one of our related entities
@@ -131,8 +131,10 @@ class ContinuityService:
              suggestions = data.get("suggestions", suggestions)
              affected_entities = data.get("affected_entities", affected_entities)
              severity = data.get("severity", severity)
+             flagged_text = data.get("flagged_text", None)
         except Exception as e:
              logger.warning(f"Failed to parse continuity_analyst response: {e}")
+             flagged_text = None
              if not result.success:
                  reasoning = f"Agent failed: {result.error}"
         
@@ -141,7 +143,8 @@ class ContinuityService:
             reasoning=reasoning,
             suggestions=suggestions,
             affected_entities=affected_entities,
-            severity=severity
+            severity=severity,
+            flagged_text=flagged_text
         )
         
         self._recent_issues[container_id] = verdict
@@ -206,3 +209,52 @@ class ContinuityService:
              # For now, just return all
              return list(self._recent_issues.values())
         return list(self._recent_issues.values())
+
+    async def suggest_resolutions(self, issue: dict, kg_context: dict) -> list:
+        """Given a continuity issue, generate 3 resolution options via LLM."""
+        try:
+            from litellm import completion
+            
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                logger.warning("GEMINI_API_KEY not set for suggest_resolutions")
+                return []
+                
+            prompt = f"""You found this continuity issue in a story:
+Issue: {issue.get('description', issue.get('reasoning', ''))}
+Status: {issue.get('status', 'unknown')}
+
+Story context: {str(kg_context)[:3000]}
+
+Generate exactly 3 resolution options as a JSON array of objects.
+Each object must have these keys:
+- "description": a short title for the fix
+- "affected_scenes": list of scene IDs to change (strings)
+- "original_text": the exact snippet of text from the scene that needs to be replaced (string)
+- "edits": specific instructions on what to change, or the exact new replacement text
+- "risk": "low" | "medium" | "high" 
+- "trade_off": what the writer gives up or impacts
+
+Return ONLY the JSON array, no other text.
+"""
+            response = completion(
+                model="gemini/gemini-2.0-flash",
+                messages=[{"role": "user", "content": prompt}],
+                api_key=api_key
+            )
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith("```json"):
+                raw = raw[7:]
+            if raw.startswith("```"):
+                raw = raw[3:]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+                
+            # Basic validation
+            data = json.loads(raw.strip())
+            if isinstance(data, list):
+                return data
+            return []
+        except Exception as e:
+            logger.error(f"Failed to generate resolutions: {e}")
+            return []

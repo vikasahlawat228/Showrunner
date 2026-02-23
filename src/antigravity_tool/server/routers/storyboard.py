@@ -11,6 +11,8 @@ from antigravity_tool.schemas.storyboard import (
     PanelReorder,
     PanelResponse,
     GeneratePanelsRequest,
+    LiveSketchRequest,
+    LiveSketchResponse,
 )
 from antigravity_tool.services.storyboard_service import StoryboardService
 from antigravity_tool.server.deps import get_storyboard_service
@@ -155,6 +157,16 @@ async def suggest_layout(
         scene_text = "A key scene taking place in the story. Analyze it for dynamic visual action."
 
     return await svc.suggest_layout(scene_id, scene_text, scene_name)
+
+
+@router.post("/live-sketch", response_model=LiveSketchResponse)
+async def live_sketch(
+    body: LiveSketchRequest,
+    svc: StoryboardService = Depends(get_storyboard_service),
+):
+    """Generate ephemeral storyboard panel for recent prose."""
+    panel = await svc.generate_live_sketch(body.recent_prose, body.scene_id)
+    return LiveSketchResponse(panel=_panel_to_response(panel))
 
 
 @router.post("/voice-to-scene")

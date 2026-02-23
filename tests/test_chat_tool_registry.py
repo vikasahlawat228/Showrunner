@@ -67,7 +67,7 @@ def full_registry(mock_kg_service, mock_container_repo, mock_pipeline_service, m
 
 class TestRegistryBuilding:
     def test_full_registry_has_all_tools(self, full_registry):
-        expected = {"search", "create", "update", "delete", "navigate", "evaluate", "research", "pipeline", "decide"}
+        expected = {"search", "create", "update", "delete", "navigate", "evaluate", "research", "relationship", "world_summary", "pipeline", "decide", "unresolved_threads", "plausibility_check", "save_to_memory"}
         assert set(full_registry.keys()) == expected
 
     def test_empty_registry_has_navigate_only(self):
@@ -116,18 +116,32 @@ class TestSearchTool:
 
 
 class TestCreateTool:
-    def test_create_character(self, full_registry):
+    @patch("litellm.completion")
+    def test_create_character(self, mock_completion, full_registry):
+        mock_completion.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="- type: character\n  name: Villain"))]
+        )
         result = full_registry["create"]('Create a character called "Villain"', [])
         assert "character" in result
         assert "Villain" in result
 
-    def test_create_scene(self, full_registry):
+    @patch("litellm.completion")
+    def test_create_scene(self, mock_completion, full_registry):
+        mock_completion.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="- type: scene\n  name: Battle"))]
+        )
         result = full_registry["create"]("Create a scene for the battle", [])
         assert "scene" in result
 
-    def test_create_unknown_type(self, full_registry):
+    @patch("litellm.completion")
+    def test_create_unknown_type(self, mock_completion, full_registry):
+        # Mock LLM to return something that doesn't match a known type in the fallback
+        mock_completion.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="I can't help with that."))]
+        )
         result = full_registry["create"]("Create something weird", [])
-        assert "specify" in result.lower()
+        # The new implementation returns a 'couldn't automatically scaffold' message
+        assert "automatically scaffold" in result.lower()
 
 
 # ── UPDATE tool ─────────────────────────────────────────────────
@@ -203,19 +217,34 @@ class TestResearchTool:
 
 
 class TestPipelineTool:
-    def test_pipeline_lists_definitions(self, full_registry):
-        result = full_registry["pipeline"]("Show pipelines", [])
+    @pytest.mark.asyncio
+    async def test_pipeline_lists_definitions(self, full_registry):
+        result_gen = full_registry["pipeline"]("Show pipelines", [])
+        chunks = []
+        async for chunk in result_gen:
+            chunks.append(str(chunk))
+        result = "".join(chunks)
         assert "Scene→Panels" in result
         assert "3 steps" in result
 
-    def test_pipeline_empty(self, full_registry, mock_pipeline_service):
+    @pytest.mark.asyncio
+    async def test_pipeline_empty(self, full_registry, mock_pipeline_service):
         mock_pipeline_service.list_definitions.return_value = []
-        result = full_registry["pipeline"]("Show pipelines", [])
+        result_gen = full_registry["pipeline"]("Show pipelines", [])
+        chunks = []
+        async for chunk in result_gen:
+            chunks.append(str(chunk))
+        result = "".join(chunks)
         assert "No pipeline definitions" in result
 
-    def test_pipeline_error(self, full_registry, mock_pipeline_service):
+    @pytest.mark.asyncio
+    async def test_pipeline_error(self, full_registry, mock_pipeline_service):
         mock_pipeline_service.list_definitions.side_effect = RuntimeError("DB error")
-        result = full_registry["pipeline"]("Show pipelines", [])
+        result_gen = full_registry["pipeline"]("Show pipelines", [])
+        chunks = []
+        async for chunk in result_gen:
+            chunks.append(str(chunk))
+        result = "".join(chunks)
         assert "error" in result.lower()
 
 

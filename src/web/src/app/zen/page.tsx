@@ -6,6 +6,8 @@ import { ZenEditor } from "@/components/zen/ZenEditor";
 import { ContextSidebar } from "@/components/zen/ContextSidebar";
 import { StoryboardStrip } from "@/components/zen/StoryboardStrip";
 import { InlineTranslation } from "@/components/zen/InlineTranslation";
+import { LiveStoryboardSidebar } from "@/components/zen/LiveStoryboardSidebar";
+import { TimelineRibbon } from "@/components/zen/TimelineRibbon";
 import { useZenStore } from "@/lib/store/zenSlice";
 import { ArrowLeft, Feather } from "lucide-react";
 
@@ -35,6 +37,7 @@ export default function ZenPage() {
             {/* Main content area */}
             <div className="flex flex-1 overflow-hidden relative">
                 <div className="flex-1 flex flex-col relative overflow-hidden">
+                    <TimelineRibbon />
                     <ZenEditor />
                     {showTranslation && (
                         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl shadow-2xl z-40 animate-in slide-in-from-bottom-4 fade-in duration-200">
@@ -47,7 +50,8 @@ export default function ZenPage() {
                         </div>
                     )}
                 </div>
-                <div className={`transition-opacity duration-700 ${isFocusTyping ? "opacity-0 pointer-events-none w-0" : "opacity-100"}`}>
+                <div className={`flex flex-row shrink-0 transition-opacity duration-700 ${isFocusTyping ? "opacity-0 pointer-events-none w-0" : "opacity-100"}`}>
+                    <LiveStoryboardSidebar />
                     <ContextSidebar />
                 </div>
             </div>

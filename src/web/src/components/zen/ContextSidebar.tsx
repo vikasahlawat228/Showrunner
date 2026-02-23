@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useZenStore, type ContextEntry } from "@/lib/store/zenSlice";
 import { ContextInspector } from "@/components/ui/ContextInspector";
 import { ContinuityPanel } from "./ContinuityPanel";
 import { StyleScorecard } from "./StyleScorecard";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import {
     PanelRightClose,
     PanelRightOpen,
@@ -18,6 +19,10 @@ import {
     X,
     ChevronDown,
     Clock,
+    Sparkles,
+    Zap,
+    ArrowDown,
+    Lightbulb,
 } from "lucide-react";
 import { InlineTranslation } from "./InlineTranslation";
 
@@ -138,6 +143,148 @@ function PreviouslySection() {
     );
 }
 
+// ── Drop Zone for drag-and-drop and Spark extraction ───────────────
+
+function DropZone() {
+    const [isDragOver, setIsDragOver] = useState(false);
+    const [isExtracting, setIsExtracting] = useState(false);
+    const [lastExtracted, setLastExtracted] = useState<{ name: string; type: string } | null>(null);
+
+    const handleExtract = useCallback(async (text: string) => {
+        if (!text || text.trim().length < 5) {
+            toast.error("Text too short to extract");
+            return;
+        }
+        setIsExtracting(true);
+        setLastExtracted(null);
+        try {
+            const result = await api.extractContainerFromText(text.trim());
+            setLastExtracted({ name: result.name, type: result.container_type });
+            toast.success(`Created "${result.name}"`, {
+                description: `Type: ${result.container_type} · ${Object.keys(result.attributes || {}).length} attributes`,
+            });
+        } catch (err) {
+            toast.error("Extraction failed", {
+                description: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            setIsExtracting(false);
+        }
+    }, []);
+
+    // Listen for custom spark events from ZenEditor
+    useEffect(() => {
+        const handler = (e: CustomEvent<string>) => handleExtract(e.detail);
+        window.addEventListener("zen:sparkExtract" as any, handler as any);
+        return () => window.removeEventListener("zen:sparkExtract" as any, handler as any);
+    }, [handleExtract]);
+
+    const onDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        setIsDragOver(true);
+    };
+    const onDragLeave = () => setIsDragOver(false);
+    const onDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const text = e.dataTransfer.getData("text/plain");
+        if (text) handleExtract(text);
+    };
+
+    return (
+        <div
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            className={`mx-3 mt-2 rounded-xl border-2 border-dashed transition-all duration-300 ${isDragOver
+                    ? "border-indigo-400 bg-indigo-500/10 scale-[1.02] shadow-lg shadow-indigo-500/20"
+                    : "border-gray-700/60 bg-gray-900/30 hover:border-gray-600"
+                }`}
+        >
+            <div className="flex flex-col items-center gap-1.5 py-4 px-3">
+                {isExtracting ? (
+                    <>
+                        <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+                        <span className="text-xs text-indigo-300 font-medium animate-pulse">
+                            Sparking bucket…
+                        </span>
+                    </>
+                ) : lastExtracted ? (
+                    <>
+                        <Sparkles className="w-5 h-5 text-emerald-400" />
+                        <span className="text-xs text-emerald-300 font-medium">
+                            Created "{lastExtracted.name}"
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                            {lastExtracted.type} · Drop or ⚡Spark more
+                        </span>
+                    </>
+                ) : (
+                    <>
+                        <div className={`p-2 rounded-full transition-colors ${isDragOver ? "bg-indigo-500/20" : "bg-gray-800/60"
+                            }`}>
+                            <Zap className={`w-4 h-4 transition-colors ${isDragOver ? "text-indigo-400" : "text-gray-500"
+                                }`} />
+                        </div>
+                        <span className={`text-xs font-medium transition-colors ${isDragOver ? "text-indigo-300" : "text-gray-500"
+                            }`}>
+                            {isDragOver ? "Drop to create bucket" : "Drop lore text here"}
+                        </span>
+                        <span className="text-[10px] text-gray-600">
+                            or highlight text & click ⚡ Spark
+                        </span>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ── Schema Suggestion Banner ────────────────────────────────────
+
+function SchemaSuggestionBanner() {
+    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [dismissed, setDismissed] = useState(false);
+
+    useEffect(() => {
+        api.getSchemaSuggestions()
+            .then((res) => {
+                if (res.suggestions && res.suggestions.length > 0) {
+                    setSuggestions(res.suggestions);
+                }
+            })
+            .catch(() => { /* silently ignore */ });
+    }, []);
+
+    if (dismissed || suggestions.length === 0) return null;
+
+    return (
+        <div className="mx-3 mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <div className="flex items-start gap-2">
+                <Lightbulb className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs text-amber-200 font-medium mb-1">
+                        Schema patterns detected
+                    </p>
+                    {suggestions.slice(0, 2).map((s) => (
+                        <p key={s.container_type} className="text-[11px] text-gray-400 truncate">
+                            <span className="text-amber-300/80">{s.container_type}</span>
+                            {" "} — {s.instance_count} buckets share {s.common_keys.length} common fields
+                        </p>
+                    ))}
+                </div>
+                <button
+                    onClick={() => setDismissed(true)}
+                    className="text-gray-500 hover:text-gray-300 p-0.5"
+                >
+                    <X className="w-3 h-3" />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 export function ContextSidebar() {
     const {
         sidebarVisible,
@@ -151,8 +298,6 @@ export function ContextSidebar() {
         activeSidebarTab,
         setActiveSidebarTab,
     } = useZenStore();
-
-    // Use effects to sync any legacy state if necessary, but we rely on activeSidebarTab now.
 
     if (!sidebarVisible) {
         return (
@@ -235,6 +380,12 @@ export function ContextSidebar() {
 
             {activeSidebarTab === "context" && (
                 <>
+                    {/* Drop zone for drag-and-drop bucket creation */}
+                    <DropZone />
+
+                    {/* Schema suggestions banner */}
+                    <SchemaSuggestionBanner />
+
                     {/* "Previously…" section for returning users */}
                     <PreviouslySection />
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from antigravity_tool.server.deps import get_analysis_service, get_continuity_service, get_style_service
-from antigravity_tool.server.api_schemas import EmotionalArcResponse, CharacterRibbonResponse, VoiceScorecardResponse, ContinuityCheckRequest, ContinuityCheckResponse, StyleCheckRequest, StyleCheckResponse
+from antigravity_tool.server.api_schemas import EmotionalArcResponse, CharacterRibbonResponse, VoiceScorecardResponse, ContinuityCheckRequest, ContinuityCheckResponse, SuggestResolutionsRequest, ResolutionOption, StyleCheckRequest, StyleCheckResponse
 from antigravity_tool.services.analysis_service import AnalysisService
 from antigravity_tool.services.continuity_service import ContinuityService
 from antigravity_tool.services.style_service import StyleService
@@ -102,6 +102,16 @@ async def get_continuity_issues(
             severity=v.severity
         ) for v in verdicts
     ]
+
+
+@router.post("/continuity/suggest-resolutions", response_model=list[ResolutionOption])
+async def suggest_resolutions(
+    body: SuggestResolutionsRequest,
+    svc: ContinuityService = Depends(get_continuity_service),
+):
+    """Generate resolution options for a continuity issue."""
+    options = await svc.suggest_resolutions(body.issue, {})
+    return [ResolutionOption(**opt) for opt in options]
 
 
 @router.post("/style-check", response_model=StyleCheckResponse)

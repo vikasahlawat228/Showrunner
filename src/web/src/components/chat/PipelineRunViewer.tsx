@@ -3,6 +3,7 @@
 import React from 'react';
 import { usePipelineStream } from '@/components/pipeline/usePipelineStream';
 import { InlinePromptReview } from './InlinePromptReview';
+import { PipelineAuditFeed } from './PipelineAuditFeed';
 import { api } from '@/lib/api';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 
@@ -20,6 +21,18 @@ export function PipelineRunViewer({ runId, title }: PipelineRunViewerProps) {
         } catch (e) {
             console.error("Failed to resume pipeline", e);
         }
+    };
+
+    const handleReverse = async (stepId: string) => {
+        // Requires Event Sourcing branch/rollback API
+        console.log("Reverse triggered for step", stepId, "Not fully implemented on backend yet");
+        alert("Event timeline reversed (Stubbed)");
+    };
+
+    const handleEditRetry = async (stepId: string, newPrompt: string) => {
+        // Requires Pipeline rewind tracking or new run kickoff via Event Sourcing branch
+        console.log("Edit retry for step", stepId, newPrompt);
+        alert("Pipeline retry triggered (Stubbed)");
     };
 
     if (isConnecting && state === 'IDLE') {
@@ -92,6 +105,16 @@ export function PipelineRunViewer({ runId, title }: PipelineRunViewerProps) {
                         <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></span>
                     </div>
                     <span className="text-[10px] uppercase font-medium tracking-wide">Executing Background Task</span>
+                </div>
+            )}
+
+            {payload?.auto_approved_steps && payload.auto_approved_steps.length > 0 && (
+                <div className="px-3 pb-3">
+                    <PipelineAuditFeed
+                        steps={payload.auto_approved_steps}
+                        onReverse={handleReverse}
+                        onEditRetry={handleEditRetry}
+                    />
                 </div>
             )}
         </div>

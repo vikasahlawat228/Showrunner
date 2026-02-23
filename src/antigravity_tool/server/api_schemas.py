@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from typing import Optional, Any
+import os
 
 
 # ── Responses ────────────────────────────────────────────────────
@@ -276,6 +277,18 @@ class ContinuityCheckResponse(BaseModel):
     suggestions: str
     affected_entities: list[str]
     severity: str
+    flagged_text: Optional[str] = None
+
+class SuggestResolutionsRequest(BaseModel):
+    issue: dict[str, Any]
+
+class ResolutionOption(BaseModel):
+    description: str
+    affected_scenes: list[str]
+    original_text: Optional[str] = None
+    edits: str
+    risk: str
+    trade_off: str
 
 class StyleCheckRequest(BaseModel):
     text: str
@@ -314,6 +327,9 @@ class ContainerUpdateRequest(BaseModel):
 class ReorderRequest(BaseModel):
     items: list[dict]
 
+class ExtractFromTextRequest(BaseModel):
+    text: str
+
 # ── Sync ────────────────────────────────────────────────────────
 
 class SyncAuthRequest(BaseModel):
@@ -322,3 +338,17 @@ class SyncAuthRequest(BaseModel):
 class SyncRevertRequest(BaseModel):
     yaml_path: str
     revision_id: str
+
+
+class ApplyEditRequest(BaseModel):
+    fragment_id: str
+    original_text: str
+    replacement_text: str
+    branch_id: str = "main"
+
+
+class AltTakeRequest(BaseModel):
+    fragment_id: str
+    highlighted_text: str
+    prompt: str
+    branch_id: str = "main"

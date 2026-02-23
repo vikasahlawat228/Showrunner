@@ -3,11 +3,12 @@
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 
-from antigravity_tool.server.deps import get_container_repo, get_event_service, get_knowledge_graph_service
+from antigravity_tool.server.deps import get_container_repo, get_event_service, get_knowledge_graph_service, get_schema_inference_service
 from antigravity_tool.repositories.container_repo import ContainerRepository
 from antigravity_tool.repositories.event_sourcing_repo import EventService
 from antigravity_tool.schemas.container import GenericContainer
-from antigravity_tool.server.api_schemas import ContainerCreateRequest, ContainerUpdateRequest, ReorderRequest
+from antigravity_tool.server.api_schemas import ContainerCreateRequest, ContainerUpdateRequest, ReorderRequest, ExtractFromTextRequest
+from antigravity_tool.services.schema_inference_service import SchemaInferenceService
 
 router = APIRouter(prefix="/api/v1/containers", tags=["containers"])
 
@@ -129,3 +130,64 @@ async def reorder_containers(
                 container.sort_order = sort_order
                 container_repo.save_container(container)
     return {"status": "reordered"}
+
+@router.post("/{container_id}/fork-era")
+async def fork_era(
+    container_id: str,
+    req: Dict[str, Any],
+    kg_service: Any = Depends(get_knowledge_graph_service),
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    event_service: EventService = Depends(get_event_service),
+):
+    era_id = req.get("era_id")
+    if not era_id:
+        raise HTTPException(status_code=400, detail="era_id is required")
+        
+    try:
+        new_container = kg_service.create_era_fork(container_id, era_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+        
+    updates = req.get("updates")
+    if updates:
+        new_container.attributes.update(updates)
+        container_repo.save_container(new_container)
+        
+    event_service.append_event(
+        parent_event_id=None,
+        branch_id="main",
+        event_type="CREATE_FORK",
+        container_id=new_container.id,
+        payload=new_container.model_dump(mode="json"),
+    )
+    
+    return new_container.model_dump()
+
+
+@router.post("/extract-from-text")
+async def extract_from_text(
+    req: ExtractFromTextRequest,
+    container_repo: ContainerRepository = Depends(get_container_repo),
+    event_service: EventService = Depends(get_event_service),
+    inference_service: SchemaInferenceService = Depends(get_schema_inference_service),
+):
+    """Extract structured data from a prose snippet and create a GenericContainer.
+
+    This powers the drag-and-drop worldbuilding: writers highlight lore text,
+    drag it to the sidebar, and a bucket is automatically created.
+    """
+    if not req.text or len(req.text.strip()) < 5:
+        raise HTTPException(status_code=400, detail="Text too short to extract")
+
+    container = await inference_service.extract_container_from_text(req.text.strip())
+    container_repo.save_container(container)
+
+    event_service.append_event(
+        parent_event_id=None,
+        branch_id="main",
+        event_type="CREATE",
+        container_id=container.id,
+        payload=container.model_dump(mode="json"),
+    )
+
+    return container.model_dump()

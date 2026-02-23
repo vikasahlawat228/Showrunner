@@ -27,7 +27,7 @@ export function WorkbenchLayout() {
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
-      <div className="h-screen flex bg-gray-950 text-white overflow-hidden">
+      <div className="h-full flex bg-gray-950 text-white overflow-hidden w-full">
         <Sidebar />
         <Canvas />
         <Inspector />
