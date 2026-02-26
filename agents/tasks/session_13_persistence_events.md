@@ -24,9 +24,9 @@ Currently, `pipeline_service.py`, `writing_service.py`, and `storyboard_service.
 
 **Output Specification**:
 Provide the updated Python code for:
-1. `src/antigravity_tool/services/writing_service.py`
-2. `src/antigravity_tool/services/storyboard_service.py`
-3. `src/antigravity_tool/services/pipeline_service.py`
-4. `src/antigravity_tool/server/deps.py` (if dependency injection changes)
+1. `src/showrunner_tool/services/writing_service.py`
+2. `src/showrunner_tool/services/storyboard_service.py`
+3. `src/showrunner_tool/services/pipeline_service.py`
+4. `src/showrunner_tool/server/deps.py` (if dependency injection changes)
 
-*Note: Ensure you comply exactly with the `AntigravityBase` and `GenericContainer` paradigms found in `schemas/container.py` and `repositories/container_repo.py`.*
+*Note: Ensure you comply exactly with the `ShowrunnerBase` and `GenericContainer` paradigms found in `schemas/container.py` and `repositories/container_repo.py`.*

@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.schemas.dal import ContextScope, ProjectSnapshot
-from antigravity_tool.services.project_snapshot import (
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.schemas.dal import ContextScope, ProjectSnapshot
+from showrunner_tool.services.project_snapshot import (
     STEP_ENTITY_MAP,
     ProjectSnapshotFactory,
 )
@@ -160,7 +160,7 @@ class TestCacheIntegration:
     """When mtime_cache is provided, factory should use it."""
 
     def test_cache_hit_skips_yaml_read(self, indexer, tmp_path):
-        from antigravity_tool.repositories.mtime_cache import MtimeCache
+        from showrunner_tool.repositories.mtime_cache import MtimeCache
 
         cache = MtimeCache(max_size=100)
         factory = ProjectSnapshotFactory(indexer, mtime_cache=cache)
@@ -182,7 +182,7 @@ class TestCacheIntegration:
         assert snapshot.world["name"] == "Cached World"
 
     def test_cache_miss_reads_yaml(self, indexer, tmp_path):
-        from antigravity_tool.repositories.mtime_cache import MtimeCache
+        from showrunner_tool.repositories.mtime_cache import MtimeCache
 
         cache = MtimeCache(max_size=100)
         factory = ProjectSnapshotFactory(indexer, mtime_cache=cache)

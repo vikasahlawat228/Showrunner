@@ -23,7 +23,7 @@ writing_tool/
 ├── schemas/                            # User-defined ContainerSchema YAMLs
 ├── characters/                         # Character instance YAMLs
 ├── src/
-│   ├── antigravity_tool/               # Python backend
+│   ├── showrunner_tool/               # Python backend
 │   │   ├── schemas/                    # Pydantic model files
 │   │   ├── services/                   # Service layer
 │   │   ├── repositories/              # YAML, SQLite, Event Sourcing, ChromaDB repos
@@ -32,7 +32,7 @@ writing_tool/
 │       ├── src/app/                    # Route pages
 │       ├── src/components/            # Component groups
 │       └── src/lib/                    # API client + Zustand stores
-├── antigravity.yaml                    # Project manifest + model config
+├── showrunner.yaml                    # Project manifest + model config
 └── CLAUDE.md                           # Agent briefing
 ```
 
@@ -42,7 +42,7 @@ Each project lives in its own directory with fully self-contained persistence:
 
 ```
 ~/projects/midnight-chronicle/          # Project root
-├── antigravity.yaml                    # Project manifest + model_overrides
+├── showrunner.yaml                    # Project manifest + model_overrides
 ├── schemas/                            # ContainerSchema YAML files
 │   ├── character.yaml
 │   ├── location.yaml
@@ -74,7 +74,7 @@ Each project lives in its own directory with fully self-contained persistence:
 ├── knowledge_graph.db                  # SQLite relational index
 ├── event_log.db                        # SQLite event sourcing DAG
 ├── .chroma/                            # ChromaDB vector embeddings (project-scoped)
-├── .antigravity/                       # Internal state
+├── .showrunner/                       # Internal state
 │   ├── decisions.yaml                  # Cross-session decision log
 │   └── sessions/                       # Session logs
 └── agents/skills/                      # Agent system prompts
@@ -111,7 +111,7 @@ src/web/src/app/
 
 | File | Key Models | Notes | Phase |
 |------|-----------|-------|:-----:|
-| `base.py` | `AntigravityBase` | ULID `id`, `created_at`, `updated_at`, `schema_version` — base for all domain objects | Core |
+| `base.py` | `ShowrunnerBase` | ULID `id`, `created_at`, `updated_at`, `schema_version` — base for all domain objects | Core |
 | `container.py` | `FieldType` (8 variants), `FieldDefinition`, `ContainerSchema`, `GenericContainer` | Universal Bucket model — see §2.2 for Phase F additions | Core+F |
 | `pipeline.py` | `PipelineState`, `PipelineRun`, `PipelineRunCreate`, `PipelineResume` | Pipeline execution state machine | Core |
 | `pipeline_steps.py` | `StepType` (17 types), `StepCategory` (5 categories), `STEP_REGISTRY`, `PipelineStepDef`, `PipelineEdge`, `PipelineDefinition`, `PipelineDefinitionCreate`, `PipelineDefinitionResponse`, `StepRegistryEntry` | Composable pipeline DAG — see §2.3 for Phase G logic node additions | Core+B+G |
@@ -140,11 +140,11 @@ src/web/src/app/
 
 ### 2.2 `GenericContainer` — Phase F Additions
 
-The current `GenericContainer` in `src/antigravity_tool/schemas/container.py` has 4 fields: `container_type`, `name`, `attributes`, `relationships`. Phase F adds 6 new fields:
+The current `GenericContainer` in `src/showrunner_tool/schemas/container.py` has 4 fields: `container_type`, `name`, `attributes`, `relationships`. Phase F adds 6 new fields:
 
 ```python
-# src/antigravity_tool/schemas/container.py — Phase F target state
-class GenericContainer(AntigravityBase):
+# src/showrunner_tool/schemas/container.py — Phase F target state
+class GenericContainer(ShowrunnerBase):
     """A polymorphic container instance that holds dynamic attributes."""
 
     container_type: str                       # References a ContainerSchema.name
@@ -174,7 +174,7 @@ class GenericContainer(AntigravityBase):
 
 ### 2.3 `PipelineStepDef` — Phase G Logic Node Additions
 
-The current `StepType` enum in `src/antigravity_tool/schemas/pipeline_steps.py` has 11 step types across 4 categories. Phase G adds:
+The current `StepType` enum in `src/showrunner_tool/schemas/pipeline_steps.py` has 11 step types across 4 categories. Phase G adds:
 
 ```python
 # Added to StepType enum
@@ -214,7 +214,7 @@ class StepCategory(str, Enum):
 
 ### 2.4 New Pydantic Models — Phase F–G
 
-#### `ModelConfig` Classes (new file: `src/antigravity_tool/schemas/model_config.py`)
+#### `ModelConfig` Classes (new file: `src/showrunner_tool/schemas/model_config.py`)
 
 ```python
 class ModelConfig(BaseModel):
@@ -225,12 +225,12 @@ class ModelConfig(BaseModel):
     fallback_model: Optional[str] = None      # Used if primary model fails
 
 class ProjectModelConfig(BaseModel):
-    """Project-level model configuration from antigravity.yaml."""
+    """Project-level model configuration from showrunner.yaml."""
     default_model: str = "gemini/gemini-2.0-flash"
     model_overrides: Dict[str, ModelConfig] = {}  # Keyed by agent_id
 ```
 
-#### `ContextResult` (existing: `src/antigravity_tool/services/context_engine.py`)
+#### `ContextResult` (existing: `src/showrunner_tool/services/context_engine.py`)
 
 Already implemented as a dataclass:
 
@@ -248,13 +248,13 @@ class ContextResult:
 
 ### 2.5 Chat Pydantic Models — Phase J
 
-#### Core Chat Models (`src/antigravity_tool/schemas/chat.py`)
+#### Core Chat Models (`src/showrunner_tool/schemas/chat.py`)
 
 ```python
 from enum import Enum
 from typing import List, Literal, Optional
 from pydantic import BaseModel
-from antigravity_tool.schemas.base import AntigravityBase
+from showrunner_tool.schemas.base import ShowrunnerBase
 
 
 class SessionState(str, Enum):
@@ -269,7 +269,7 @@ class AutonomyLevel(int, Enum):
     EXECUTE = 2   # Act immediately for routine ops, pause for destructive actions
 
 
-class ChatSession(AntigravityBase):
+class ChatSession(ShowrunnerBase):
     """A chat conversation session within a project."""
     name: str                                    # User-provided or auto-generated name
     project_id: str                              # Project this session belongs to
@@ -284,7 +284,7 @@ class ChatSession(AntigravityBase):
     tags: List[str] = []                         # User-defined session tags
 
 
-class ChatMessage(AntigravityBase):
+class ChatMessage(ShowrunnerBase):
     """A single message in a chat session."""
     session_id: str
     role: Literal["user", "assistant", "system"]
@@ -380,13 +380,13 @@ class ChatEvent(BaseModel):
     data: dict                                   # Event-specific payload
 ```
 
-#### Project Memory Models (`src/antigravity_tool/schemas/project_memory.py`)
+#### Project Memory Models (`src/showrunner_tool/schemas/project_memory.py`)
 
 ```python
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel
-from antigravity_tool.schemas.base import AntigravityBase
+from showrunner_tool.schemas.base import ShowrunnerBase
 
 
 class MemoryScope(str, Enum):
@@ -407,7 +407,7 @@ class MemoryEntry(BaseModel):
     created_at: str = ""                         # ISO timestamp
 
 
-class ProjectMemory(AntigravityBase):
+class ProjectMemory(ShowrunnerBase):
     """Persistent project-level memory — auto-injected into every chat context."""
     entries: List[MemoryEntry] = []
 
@@ -605,15 +605,15 @@ class ConsistencyIssue(BaseModel):
 
 ### 3.3 New Services
 
-#### `ModelConfigRegistry` (new file: `src/antigravity_tool/services/model_config_registry.py`)
+#### `ModelConfigRegistry` (new file: `src/showrunner_tool/services/model_config_registry.py`)
 
 ```python
 class ModelConfigRegistry:
     """Resolves the correct model for any execution context via cascade."""
 
     def __init__(self, project_path: Path):
-        self._project_config: ModelConfig    # From antigravity.yaml default_model
-        self._agent_configs: Dict[str, ModelConfig]  # From antigravity.yaml model_overrides
+        self._project_config: ModelConfig    # From showrunner.yaml default_model
+        self._agent_configs: Dict[str, ModelConfig]  # From showrunner.yaml model_overrides
         self._load_configs(project_path)
 
     def resolve(
@@ -627,18 +627,18 @@ class ModelConfigRegistry:
         """
 ```
 
-**Storage:** Reads `antigravity.yaml` at boot. No persistence — configuration changes go back to YAML via `PUT /api/v1/projects/{id}/model-config`.
+**Storage:** Reads `showrunner.yaml` at boot. No persistence — configuration changes go back to YAML via `PUT /api/v1/projects/{id}/model-config`.
 
 ### 3.4 Chat Session Repository (Phase J)
 
-#### `ChatSessionRepository` (new file: `src/antigravity_tool/repositories/chat_session_repo.py`)
+#### `ChatSessionRepository` (new file: `src/showrunner_tool/repositories/chat_session_repo.py`)
 
 ```python
 class ChatSessionRepository:
     """YAML-based persistence for chat sessions and messages.
 
     Storage layout:
-      .antigravity/sessions/{session_id}/
+      .showrunner/sessions/{session_id}/
       ├── manifest.yaml         # ChatSession metadata
       ├── messages/
       │   ├── msg_{ulid}.yaml   # Individual ChatMessage files
@@ -657,13 +657,13 @@ class ChatSessionRepository:
     """
 
     def __init__(self, project_path: Path):
-        self._sessions_dir = project_path / ".antigravity" / "sessions"
+        self._sessions_dir = project_path / ".showrunner" / "sessions"
         self._sessions_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Session CRUD ────────────────────────────────────────────
 
     def save_session(self, session: ChatSession) -> None:
-        """Write session manifest to .antigravity/sessions/{id}/manifest.yaml."""
+        """Write session manifest to .showrunner/sessions/{id}/manifest.yaml."""
         ...
 
     def load_session(self, session_id: str) -> Optional[ChatSession]:
@@ -714,17 +714,17 @@ class ChatSessionRepository:
         ...
 ```
 
-#### `ProjectMemoryRepository` (new file: `src/antigravity_tool/repositories/project_memory_repo.py`)
+#### `ProjectMemoryRepository` (new file: `src/showrunner_tool/repositories/project_memory_repo.py`)
 
 ```python
 class ProjectMemoryRepository:
     """YAML persistence for project-level memory.
 
-    Storage: .antigravity/project_memory.yaml
+    Storage: .showrunner/project_memory.yaml
     """
 
     def __init__(self, project_path: Path):
-        self._memory_file = project_path / ".antigravity" / "project_memory.yaml"
+        self._memory_file = project_path / ".showrunner" / "project_memory.yaml"
 
     def load(self) -> ProjectMemory:
         """Load project memory from YAML. Returns empty if file doesn't exist."""
@@ -847,7 +847,7 @@ character_repo.subscribe_save(lambda path, entity: indexer.upsert_entity(
 
 ### 3.6 MtimeCache Implementation (Phase K)
 
-New file: `src/antigravity_tool/repositories/mtime_cache.py`
+New file: `src/showrunner_tool/repositories/mtime_cache.py`
 
 ```python
 """Mtime-based LRU cache for YAML repository entities.
@@ -865,7 +865,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generic, Optional, TypeVar
 
-from antigravity_tool.schemas.dal import CacheStats
+from showrunner_tool.schemas.dal import CacheStats
 
 T = TypeVar("T")
 
@@ -1011,14 +1011,14 @@ class YAMLRepository(Generic[T]):
 | `context_engine.py` | `ContextEngine` | KnowledgeGraphService, ContainerRepository | Stateless (assembles context on demand) | Core+F |
 | `agent_dispatcher.py` | `AgentDispatcher` | Skill markdown files, ModelConfigRegistry*, ContextEngine* | In-memory skill registry + LiteLLM calls | Core+G |
 | `file_watcher_service.py` | `FileWatcherService` | watchdog, KnowledgeGraphService, ContainerRepository | Background thread + SSE broadcast | E |
-| `model_config_registry.py`* | `ModelConfigRegistry` | Project path (reads `antigravity.yaml`) | YAML config (read-only at runtime) | F |
+| `model_config_registry.py`* | `ModelConfigRegistry` | Project path (reads `showrunner.yaml`) | YAML config (read-only at runtime) | F |
 | `character_service.py` | `CharacterService` | ServiceContext | YAML via project | Legacy |
 | `world_service.py` | `WorldService` | ServiceContext | YAML via project | Legacy |
 | `story_service.py` | `StoryService` | ServiceContext | YAML via project | Legacy |
 | `scene_service.py` | `SceneService` | ServiceContext | YAML via project | Legacy |
 | `panel_service.py` | `PanelService` | ServiceContext | YAML via project | Legacy |
 | `evaluation_service.py` | `EvaluationService` | ServiceContext | YAML via project | Core |
-| `session_service.py` | `SessionService` | ServiceContext | YAML (.antigravity/sessions/) | Core |
+| `session_service.py` | `SessionService` | ServiceContext | YAML (.showrunner/sessions/) | Core |
 | `creative_room_service.py` | `CreativeRoomService` | ServiceContext | YAML via project | Core |
 | `analysis_service.py` | `AnalysisService` | KnowledgeGraphService, ContainerRepository, ContextEngine | Stateless (LLM calls) | Next-B |
 | `export_service.py` | `ExportService` | ContainerRepository, KnowledgeGraphService | Stateless | Core |
@@ -1087,13 +1087,13 @@ The ReAct loop is implemented as a multi-turn LLM conversation within `execute()
 
 Four new services implement the Agentic Chat system. They follow existing patterns (constructor DI, async methods, YAML persistence) and integrate with all existing services.
 
-#### `ChatOrchestrator` (new file: `src/antigravity_tool/services/chat_orchestrator.py`)
+#### `ChatOrchestrator` (new file: `src/showrunner_tool/services/chat_orchestrator.py`)
 
 The central brain for all chat interactions. Routes user intents to tools/agents, manages the ReAct loop, and streams responses.
 
 ```python
 from typing import AsyncGenerator, Dict, List, Optional
-from antigravity_tool.schemas.chat import (
+from showrunner_tool.schemas.chat import (
     ChatActionTrace, ChatEvent, ChatMessage, ChatSession,
     AgentInvocation, ToolIntent, BackgroundTask,
 )
@@ -1288,7 +1288,7 @@ class ChatOrchestrator:
         ...
 ```
 
-#### `ChatSessionService` (new file: `src/antigravity_tool/services/chat_session_service.py`)
+#### `ChatSessionService` (new file: `src/showrunner_tool/services/chat_session_service.py`)
 
 ```python
 class ChatSessionService:
@@ -1368,7 +1368,7 @@ class ChatSessionService:
         return len(text) // 4
 ```
 
-#### `ProjectMemoryService` (new file: `src/antigravity_tool/services/project_memory_service.py`)
+#### `ProjectMemoryService` (new file: `src/showrunner_tool/services/project_memory_service.py`)
 
 ```python
 class ProjectMemoryService:
@@ -1448,7 +1448,7 @@ class ProjectMemoryService:
         return memory.entries
 ```
 
-#### `ChatContextManager` (new file: `src/antigravity_tool/services/chat_context_manager.py`)
+#### `ChatContextManager` (new file: `src/showrunner_tool/services/chat_context_manager.py`)
 
 ```python
 from dataclasses import dataclass
@@ -1532,7 +1532,7 @@ class ChatContextManager:
 
 ### 4.4 UnitOfWork Service (Phase K)
 
-New file: `src/antigravity_tool/services/unit_of_work.py`
+New file: `src/showrunner_tool/services/unit_of_work.py`
 
 The `UnitOfWork` enforces atomic writes across YAML, SQLite index, and EventService. Services buffer mutations, then commit them in a single transaction.
 
@@ -1552,11 +1552,11 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.repositories.event_sourcing_repo import EventService
-from antigravity_tool.repositories.mtime_cache import MtimeCache
-from antigravity_tool.schemas.dal import UnitOfWorkEntry
-from antigravity_tool.utils.io import write_yaml
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.repositories.event_sourcing_repo import EventService
+from showrunner_tool.repositories.mtime_cache import MtimeCache
+from showrunner_tool.schemas.dal import UnitOfWorkEntry
+from showrunner_tool.utils.io import write_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -1738,7 +1738,7 @@ class UnitOfWork:
 
 ### 4.5 ProjectSnapshotFactory (Phase K)
 
-New file: `src/antigravity_tool/services/project_snapshot.py`
+New file: `src/showrunner_tool/services/project_snapshot.py`
 
 Batch-loads all project data needed for a context scope in a single pass through the SQLite index + MtimeCache.
 
@@ -1753,10 +1753,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.repositories.mtime_cache import MtimeCache
-from antigravity_tool.schemas.dal import ContextScope, ProjectSnapshot
-from antigravity_tool.utils.io import read_yaml
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.repositories.mtime_cache import MtimeCache
+from showrunner_tool.schemas.dal import ContextScope, ProjectSnapshot
+from showrunner_tool.utils.io import read_yaml
 
 
 # Maps workflow steps to the entity types needed
@@ -1874,7 +1874,7 @@ class ProjectSnapshotFactory:
 
 ### 4.6 Unified ContextAssembler (Phase K)
 
-New file: `src/antigravity_tool/services/context_assembler.py`
+New file: `src/showrunner_tool/services/context_assembler.py`
 
 Merges the CLI's `ContextCompiler` (Jinja2 templates, no token budget) and the Web's `ContextEngine` (token budget, Glass Box, no templates) into a single service.
 
@@ -1892,10 +1892,10 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from antigravity_tool.core.template_engine import TemplateEngine
-from antigravity_tool.schemas.dal import ContextScope, ProjectSnapshot
-from antigravity_tool.services.context_engine import ContextResult, ContextBucketInfo
-from antigravity_tool.services.project_snapshot import ProjectSnapshotFactory
+from showrunner_tool.core.template_engine import TemplateEngine
+from showrunner_tool.schemas.dal import ContextScope, ProjectSnapshot
+from showrunner_tool.services.context_engine import ContextResult, ContextBucketInfo
+from showrunner_tool.services.project_snapshot import ProjectSnapshotFactory
 
 logger = logging.getLogger(__name__)
 
@@ -2124,7 +2124,7 @@ class ContextAssembler:
 
 ### 5.2 Router Registration (`server/app.py`)
 
-Current registration order in `src/antigravity_tool/server/app.py`:
+Current registration order in `src/showrunner_tool/server/app.py`:
 
 ```python
 app.include_router(project.router)               # /api/v1/project
@@ -2166,7 +2166,7 @@ app.include_router(chat.router)                   # /api/v1/chat
 
 ### 5.3 Dependency Injection (`server/deps.py`)
 
-**Current DI graph** (from `src/antigravity_tool/server/deps.py`):
+**Current DI graph** (from `src/showrunner_tool/server/deps.py`):
 
 ```
 get_project()                    → Project (LRU cached singleton via Project.find(Path.cwd()))
@@ -2211,7 +2211,7 @@ get_translation_service(kg_service, container_repo, agent_dispatcher) → Transl
 def get_model_config_registry(
     project: Project = Depends(get_project),
 ) -> ModelConfigRegistry:
-    """LRU cached model config registry, loaded from antigravity.yaml."""
+    """LRU cached model config registry, loaded from showrunner.yaml."""
     return ModelConfigRegistry(project.path)
 
 def get_context_engine(
@@ -2354,10 +2354,10 @@ def get_context_assembler(
 | Method | Path | Request Body | Response | Description |
 |--------|------|-------------|----------|-------------|
 | `GET` | `/` | — | `List[ProjectSummary]` | List all projects in the workspace |
-| `POST` | `/` | `ProjectCreate` | `ProjectSummary` | Create new project directory + `antigravity.yaml` |
+| `POST` | `/` | `ProjectCreate` | `ProjectSummary` | Create new project directory + `showrunner.yaml` |
 | `GET` | `/{id}/structure` | — | `StructureTree` | Walk `parent_id` chains to build Season→Scene tree |
 | `PUT` | `/{id}/settings` | `ProjectSettingsUpdate` | `ProjectSettings` | Update project metadata |
-| `PUT` | `/{id}/model-config` | `ProjectModelConfig` | `ProjectModelConfig` | Update `model_overrides` in `antigravity.yaml` |
+| `PUT` | `/{id}/model-config` | `ProjectModelConfig` | `ProjectModelConfig` | Update `model_overrides` in `showrunner.yaml` |
 
 #### Models Router (`/api/v1/models`) — Phase F
 
@@ -2638,14 +2638,14 @@ class DBStatsResponse(BaseModel):
      Body: { scene_id, text, title }
 
 3. API ROUTER
-   src/antigravity_tool/server/routers/writing.py
+   src/showrunner_tool/server/routers/writing.py
      @router.post("/fragments")
      async def save_fragment(req: FragmentCreateRequest,
                              writing_service: WritingService = Depends(get_writing_service))
        → writing_service.save_fragment(req)
 
 4. WRITING SERVICE → CONTAINER REPOSITORY (YAML Write)
-   src/antigravity_tool/services/writing_service.py
+   src/showrunner_tool/services/writing_service.py
      WritingService.save_fragment():
        a. Build GenericContainer:
             container_type = "fragment"
@@ -2655,26 +2655,26 @@ class DBStatsResponse(BaseModel):
        b. self.container_repo.save_container(container)
 
 5. CONTAINER REPOSITORY → YAML ON DISK
-   src/antigravity_tool/repositories/container_repo.py
+   src/showrunner_tool/repositories/container_repo.py
      ContainerRepository.save_container():
        a. _save_file() → writes containers/fragment/{slug}.yaml
        b. Fires _on_save callback chain:
 
 6. SQLITE INDEXER (Knowledge Graph Update)
-   src/antigravity_tool/repositories/sqlite_indexer.py
+   src/showrunner_tool/repositories/sqlite_indexer.py
      Callback: SQLiteIndexer.upsert_container(container)
        → INSERT OR REPLACE INTO containers (id, container_type, name, attributes_json, ...)
        → INSERT OR REPLACE INTO relationships (source_id, target_id, rel_type, ...)
        → knowledge_graph.db updated
 
 7. CHROMA INDEXER (Vector Embedding Update)
-   src/antigravity_tool/repositories/chroma_indexer.py
+   src/showrunner_tool/repositories/chroma_indexer.py
      Callback: ChromaIndexer.upsert_embedding(container)
        → Encode container text via all-MiniLM-L6-v2
        → Upsert into .chroma/ collection
 
 8. WRITING SERVICE → EVENT SERVICE (Event Log)
-   src/antigravity_tool/repositories/event_sourcing_repo.py
+   src/showrunner_tool/repositories/event_sourcing_repo.py
      WritingService.save_fragment() continues:
        self.event_service.append_event(
            branch_id = "main",
@@ -2704,7 +2704,7 @@ class DBStatsResponse(BaseModel):
 
 ```
 1. PIPELINE STEP REACHED: llm_generate (step_5 in a "Outline → Draft" workflow)
-   src/antigravity_tool/services/pipeline_service.py
+   src/showrunner_tool/services/pipeline_service.py
      PipelineService._run_composable_pipeline():
        current_step = PipelineStepDef(
            step_type = "llm_generate",
@@ -2714,7 +2714,7 @@ class DBStatsResponse(BaseModel):
 
 2. CONTEXT ASSEMBLY
    PipelineService calls ContextEngine.assemble_context():
-     src/antigravity_tool/services/context_engine.py
+     src/showrunner_tool/services/context_engine.py
        a. _resolve_containers():
             → KnowledgeGraphService.find_containers(container_type="character")
             → KnowledgeGraphService.find_containers(container_type="scene")
@@ -2738,7 +2738,7 @@ class DBStatsResponse(BaseModel):
 
 3. MODEL RESOLUTION
    PipelineService calls ModelConfigRegistry.resolve():
-     src/antigravity_tool/services/model_config_registry.py
+     src/showrunner_tool/services/model_config_registry.py
        a. Check step_config["model"] → "" (empty, skip)
        b. Check bucket.model_preference → None (no bucket override, skip)
        c. Check agent_configs["writing_agent"] → ModelConfig(model="anthropic/claude-3.5-sonnet")
@@ -2798,14 +2798,14 @@ class DBStatsResponse(BaseModel):
      }
 
 3. API ROUTER
-   src/antigravity_tool/server/routers/timeline.py
+   src/showrunner_tool/server/routers/timeline.py
      @router.post("/branch")
      async def create_branch(req: BranchCreate,
                              event_service: EventService = Depends(get_event_service))
        → event_service.branch(req.source_branch_id, req.new_branch_name, req.checkout_event_id)
 
 4. EVENT SERVICE — BRANCH CREATION
-   src/antigravity_tool/repositories/event_sourcing_repo.py
+   src/showrunner_tool/repositories/event_sourcing_repo.py
      EventService.branch():
        a. Validate checkout_event_id exists on source_branch_id
        b. Generate new branch_id (ULID)
@@ -2877,7 +2877,7 @@ class DBStatsResponse(BaseModel):
      Body: { query: "How would a railgun work in low gravity?", auto_link_scene_id: "scene_5" }
 
 3. RESEARCH AGENT EXECUTION
-   src/antigravity_tool/server/routers/research.py
+   src/showrunner_tool/server/routers/research.py
      @router.post("/query")
      → Gets AgentDispatcher via Depends(get_agent_dispatcher)
      → Gets ContextEngine via Depends(get_context_engine)
@@ -2985,7 +2985,7 @@ class DBStatsResponse(BaseModel):
    Response: SSE EventSourceResponse (streaming)
 
 3. CHAT ROUTER → CHAT ORCHESTRATOR
-   src/antigravity_tool/server/routers/chat.py
+   src/showrunner_tool/server/routers/chat.py
      @router.post("/sessions/{id}/messages")
      async def send_message(req: ChatMessageCreate,
                             orchestrator: ChatOrchestrator = Depends(get_chat_orchestrator),
@@ -3358,7 +3358,7 @@ class DBStatsResponse(BaseModel):
 
 ### 7.9 The Incremental Sync on Startup (Phase K)
 
-**Scenario:** The Antigravity server starts up. Instead of `sync_all()` (which crawls every YAML file), the DAL performs an incremental sync.
+**Scenario:** The Showrunner server starts up. Instead of `sync_all()` (which crawls every YAML file), the DAL performs an incremental sync.
 
 ```
 1. STARTUP — LOAD SYNC METADATA
@@ -3439,7 +3439,7 @@ class DBStatsResponse(BaseModel):
    → Server ready to accept requests
 
 FALLBACK — FULL RESYNC
-   Triggered by: `antigravity db reindex` CLI command or `POST /api/v1/db/reindex`
+   Triggered by: `showrunner db reindex` CLI command or `POST /api/v1/db/reindex`
    → Drop all sync_metadata rows
    → Process ALL disk files as "new" (bucket c)
    → Rebuild entities table from scratch
@@ -3492,7 +3492,7 @@ Phase Next-B adds three analytical features that give writers superpowers no com
 
 ### 10.1 New Backend Service: `AnalysisService`
 
-**File:** `src/antigravity_tool/services/analysis_service.py`
+**File:** `src/showrunner_tool/services/analysis_service.py`
 
 ```python
 from dataclasses import dataclass, field
@@ -3584,7 +3584,7 @@ class AnalysisService:
 
 ### 10.2 New API Endpoints
 
-**Router:** `src/antigravity_tool/server/routers/analysis.py`
+**Router:** `src/showrunner_tool/server/routers/analysis.py`
 
 | Method | Path | Request Body | Response | Description |
 |--------|------|-------------|----------|-------------|
@@ -3802,7 +3802,7 @@ Both sessions create the same `AnalysisService` file but implement different met
 
 ### 12.1 Workflow Templates Library
 
-**Backend:** New `src/antigravity_tool/templates/workflow_templates.py` with 5 templates as PipelineDefinition data:
+**Backend:** New `src/showrunner_tool/templates/workflow_templates.py` with 5 templates as PipelineDefinition data:
 1. Scene → Panels (gather → prompt → review → generate → save)
 2. Concept → Outline (input → brainstorm → review → architect → approve → save)
 3. Outline → Draft (gather → prompt → review → draft → save)
@@ -3840,7 +3840,7 @@ Both sessions create the same `AnalysisService` file but implement different met
 ### 13.1 Story Structure Visual Editor ✅
 
 **Backend (implemented):**
-- `src/antigravity_tool/server/routers/containers.py` (131 lines) with prefix `/api/v1/containers`:
+- `src/showrunner_tool/server/routers/containers.py` (131 lines) with prefix `/api/v1/containers`:
   - `POST /` — Create container (type-validated: season/arc/act/chapter/scene)
   - `GET /{id}` — Get container by ID
   - `PUT /{id}` — Update container (name, sort_order, parent_id, attributes)
@@ -4020,10 +4020,10 @@ Sessions 30 and 31 have zero file overlap. Session 32 touches api.ts (also modif
 @pytest.fixture
 def project_path(tmp_path):
     """Create a temporary project directory with required structure."""
-    (tmp_path / ".antigravity" / "sessions").mkdir(parents=True)
+    (tmp_path / ".showrunner" / "sessions").mkdir(parents=True)
     (tmp_path / "containers").mkdir()
     (tmp_path / "schemas").mkdir()
-    (tmp_path / "antigravity.yaml").write_text("name: test-project\n")
+    (tmp_path / "showrunner.yaml").write_text("name: test-project\n")
     return tmp_path
 
 @pytest.fixture
@@ -4600,7 +4600,7 @@ When CI/CD is added, the chat test suite should include:
 from enum import Enum
 from typing import Optional, List, Dict
 from pydantic import BaseModel
-from antigravity_tool.schemas.base import AntigravityBase
+from showrunner_tool.schemas.base import ShowrunnerBase
 
 class SyncStatus(str, Enum):
     IDLE = "idle"

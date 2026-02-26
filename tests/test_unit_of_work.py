@@ -20,11 +20,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from antigravity_tool.errors import ConflictError
-from antigravity_tool.repositories.event_sourcing_repo import EventService
-from antigravity_tool.repositories.mtime_cache import MtimeCache
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.services.unit_of_work import UnitOfWork
+from showrunner_tool.errors import ConflictError
+from showrunner_tool.repositories.event_sourcing_repo import EventService
+from showrunner_tool.repositories.mtime_cache import MtimeCache
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.services.unit_of_work import UnitOfWork
 
 
 # ===================================================================

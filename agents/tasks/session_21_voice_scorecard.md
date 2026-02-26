@@ -10,11 +10,11 @@ This session adds a Voice Scorecard feature: analyze all dialogue attributed to 
 **Read these files first** (essential context):
 - `docs/LOW_LEVEL_DESIGN.md` §10 — Full detailed design for Phase Next-B (service, endpoints, components, DI)
 - `docs/PRD.md` §13 — Phase Next-B description
-- `src/antigravity_tool/server/deps.py` — Current dependency injection graph
-- `src/antigravity_tool/server/app.py` — Router registration
-- `src/antigravity_tool/server/api_schemas.py` — Existing API schema patterns
-- `src/antigravity_tool/services/knowledge_graph_service.py` — KG queries
-- `src/antigravity_tool/services/context_engine.py` — Context assembly
+- `src/showrunner_tool/server/deps.py` — Current dependency injection graph
+- `src/showrunner_tool/server/app.py` — Router registration
+- `src/showrunner_tool/server/api_schemas.py` — Existing API schema patterns
+- `src/showrunner_tool/services/knowledge_graph_service.py` — KG queries
+- `src/showrunner_tool/services/context_engine.py` — Context assembly
 - `src/web/src/components/workbench/Inspector.tsx` — Inspector routing component
 - `src/web/src/components/workbench/CharacterInspector.tsx` — Character detail view (add scorecard here)
 - `src/web/src/lib/api.ts` — API client patterns
@@ -26,7 +26,7 @@ This session adds a Voice Scorecard feature: analyze all dialogue attributed to 
 
 ### Backend (Python)
 
-**1. Create or extend `src/antigravity_tool/services/analysis_service.py`**
+**1. Create or extend `src/showrunner_tool/services/analysis_service.py`**
 
 > **IMPORTANT:** A parallel session (Session A) is creating this file with `analyze_emotional_arc` and `compute_character_ribbons` methods. If the file already exists when you start, ADD your code to it. If it doesn't exist yet, create the file with your code and leave placeholder comments for Session A's methods.
 
@@ -67,7 +67,7 @@ Add the following to `AnalysisService`:
 
 **2. Add endpoint to analysis router**
 
-> If Session A already created `src/antigravity_tool/server/routers/analysis.py`, add to it. Otherwise, create it with prefix `/api/v1/analysis`, tags `["analysis"]`.
+> If Session A already created `src/showrunner_tool/server/routers/analysis.py`, add to it. Otherwise, create it with prefix `/api/v1/analysis`, tags `["analysis"]`.
 
 - `GET /voice-scorecard` — optional query param `character_ids: str | None = None` (comma-separated). Returns `VoiceScorecardResponse`.
 
@@ -173,11 +173,11 @@ Add a collapsible section at the bottom of the Character Inspector:
 ## Output Specification
 
 Provide the complete code for:
-1. `src/antigravity_tool/services/analysis_service.py` — `VoiceProfile`, `VoiceScorecardResult` dataclasses + `analyze_character_voices` method (leave clear placeholders for Session A's methods if creating the file fresh)
-2. `src/antigravity_tool/server/routers/analysis.py` — voice-scorecard endpoint (leave placeholders for Session A's endpoints if creating fresh)
-3. Updates to `src/antigravity_tool/server/api_schemas.py` (add `VoiceProfileResponse`, `VoiceScorecardResponse`)
-4. Updates to `src/antigravity_tool/server/deps.py` (add `get_analysis_service` if not present)
-5. Updates to `src/antigravity_tool/server/app.py` (register analysis router if not present)
+1. `src/showrunner_tool/services/analysis_service.py` — `VoiceProfile`, `VoiceScorecardResult` dataclasses + `analyze_character_voices` method (leave clear placeholders for Session A's methods if creating the file fresh)
+2. `src/showrunner_tool/server/routers/analysis.py` — voice-scorecard endpoint (leave placeholders for Session A's endpoints if creating fresh)
+3. Updates to `src/showrunner_tool/server/api_schemas.py` (add `VoiceProfileResponse`, `VoiceScorecardResponse`)
+4. Updates to `src/showrunner_tool/server/deps.py` (add `get_analysis_service` if not present)
+5. Updates to `src/showrunner_tool/server/app.py` (register analysis router if not present)
 6. `src/web/src/components/workbench/CharacterVoiceScorecard.tsx` (new file)
 7. Updates to `src/web/src/components/workbench/CharacterInspector.tsx` (integrate scorecard)
 8. Updates to `src/web/src/lib/api.ts` (add method + interfaces)
@@ -188,8 +188,8 @@ Provide the complete code for:
 
 - **A parallel session (Session A) is implementing Emotional Arc + Story Ribbons.** It will also create/modify `AnalysisService` and the `analysis.py` router. Ensure your code merges cleanly by using clear section comments.
 - **Do NOT modify** files outside the scope listed above. Specifically, do not touch `TimelineView.tsx`, `StoryRibbons.tsx`, or `EmotionalArcChart.tsx`.
-- The LLM calls should use `litellm.completion()` — follow the pattern in `src/antigravity_tool/services/agent_dispatcher.py` for how LLM calls are made in this codebase.
+- The LLM calls should use `litellm.completion()` — follow the pattern in `src/showrunner_tool/services/agent_dispatcher.py` for how LLM calls are made in this codebase.
 - For dialogue extraction, be pragmatic: if fragments don't have explicit dialogue attribution, use simple heuristic first (text between quotation marks) and fall back to LLM extraction.
 - Use `toast.success()` / `toast.error()` from `sonner` for user feedback.
 - Run `cd src/web && npx tsc --noEmit` to verify TypeScript compiles cleanly.
-- Run `python -c "from antigravity_tool.services.analysis_service import AnalysisService; print('OK')"` to verify Python imports.
+- Run `python -c "from showrunner_tool.services.analysis_service import AnalysisService; print('OK')"` to verify Python imports.

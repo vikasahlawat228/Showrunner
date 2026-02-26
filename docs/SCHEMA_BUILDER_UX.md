@@ -170,7 +170,7 @@ Each `FieldRow` renders as:
 
 ### 4.1 Extended `FieldType` Enum
 
-The existing `FieldType` enum in [container.py](file:///Users/vikasahlawat/Documents/writing_tool/src/antigravity_tool/schemas/container.py) supports 6 types. The `schema_architect.md` skill already describes `enum` and `reference` types. Align the backend:
+The existing `FieldType` enum in [container.py](file:///Users/vikasahlawat/Documents/writing_tool/src/showrunner_tool/schemas/container.py) supports 6 types. The `schema_architect.md` skill already describes `enum` and `reference` types. Align the backend:
 
 ```python
 class FieldType(str, Enum):
@@ -187,7 +187,7 @@ class FieldType(str, Enum):
 ### 4.2 Extended `FieldDefinition`
 
 ```python
-class FieldDefinition(AntigravityBase):
+class FieldDefinition(ShowrunnerBase):
     name: str
     field_type: FieldType = FieldType.STRING
     description: Optional[str] = None

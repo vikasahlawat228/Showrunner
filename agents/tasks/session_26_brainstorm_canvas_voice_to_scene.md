@@ -13,16 +13,16 @@ This session adds two features:
 - `src/web/src/components/storyboard/SemanticCanvas.tsx` — ReactFlow canvas with semantic zoom (161 lines, pattern for brainstorm canvas)
 - `src/web/src/components/canvas/InfiniteCanvas.tsx` — KG ReactFlow canvas (existing infinite canvas pattern)
 - `src/web/src/lib/store/reactFlowSlice.ts` — ReactFlow state management pattern (266 lines)
-- `src/antigravity_tool/services/agent_dispatcher.py` — AgentDispatcher with brainstorm_agent (702 lines)
-- `src/antigravity_tool/server/routers/director.py` — `POST /dispatch` endpoint for agent calls
-- `src/antigravity_tool/services/storyboard_service.py` — `generate_panels_for_scene()` and `suggest_layout()` (388 lines)
-- `src/antigravity_tool/server/routers/storyboard.py` — Panel generation endpoints
+- `src/showrunner_tool/services/agent_dispatcher.py` — AgentDispatcher with brainstorm_agent (702 lines)
+- `src/showrunner_tool/server/routers/director.py` — `POST /dispatch` endpoint for agent calls
+- `src/showrunner_tool/services/storyboard_service.py` — `generate_panels_for_scene()` and `suggest_layout()` (388 lines)
+- `src/showrunner_tool/server/routers/storyboard.py` — Panel generation endpoints
 - `src/web/src/components/zen/ZenEditor.tsx` — TipTap editor (381 lines, reference for slash commands)
 - `src/web/src/components/workbench/Canvas.tsx` — Main nav header with page links (194 lines)
 - `src/web/src/app/storyboard/page.tsx` — Storyboard page (129 lines)
 - `src/web/src/lib/api.ts` — API client (check `directorDispatch`, `generateStoryboardPanels`, `suggestLayout`)
 - `src/web/package.json` — Current dependencies (`@xyflow/react`, `@dnd-kit`, `@tiptap`)
-- `src/antigravity_tool/server/deps.py` — DI graph
+- `src/showrunner_tool/server/deps.py` — DI graph
 
 ---
 
@@ -32,7 +32,7 @@ This session adds two features:
 
 **1. Add a brainstorm endpoint for AI-suggested connections**
 
-Add to the existing `src/antigravity_tool/server/routers/director.py` (do NOT create a new router):
+Add to the existing `src/showrunner_tool/server/routers/director.py` (do NOT create a new router):
 
 ```python
 class BrainstormSuggestRequest(BaseModel):
@@ -227,7 +227,7 @@ export interface BrainstormSuggestion {
 Create a simple endpoint for audio transcription. For the browser-native Web Speech API path, no backend is needed. But for Whisper fallback (when Web Speech API is unavailable or for better accuracy), add:
 
 ```python
-# Add to src/antigravity_tool/server/routers/storyboard.py
+# Add to src/showrunner_tool/server/routers/storyboard.py
 
 @router.post("/voice-to-scene")
 async def voice_to_scene(
@@ -369,8 +369,8 @@ voiceToScene: (body: { scene_text: string; scene_name?: string; panel_count?: nu
 ## Output Specification
 
 Provide the complete code for:
-1. Updates to `src/antigravity_tool/server/routers/director.py` (add brainstorm endpoints: suggest-connections, save-card, get-cards, delete-card)
-2. Updates to `src/antigravity_tool/server/routers/storyboard.py` (add voice-to-scene endpoint)
+1. Updates to `src/showrunner_tool/server/routers/director.py` (add brainstorm endpoints: suggest-connections, save-card, get-cards, delete-card)
+2. Updates to `src/showrunner_tool/server/routers/storyboard.py` (add voice-to-scene endpoint)
 3. `src/web/src/app/brainstorm/page.tsx` (new file — Brainstorm Canvas page)
 4. `src/web/src/components/brainstorm/IdeaCardNode.tsx` (new file — custom ReactFlow node)
 5. `src/web/src/components/brainstorm/SuggestionPanel.tsx` (new file — AI suggestion display)

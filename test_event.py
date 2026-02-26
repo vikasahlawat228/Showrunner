@@ -1,5 +1,5 @@
 import json
-from src.antigravity_tool.repositories.event_sourcing_repo import EventService
+from src.showrunner_tool.repositories.event_sourcing_repo import EventService
 
 def test_event_service():
     svc = EventService()

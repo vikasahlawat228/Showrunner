@@ -11,17 +11,17 @@ This session adds two features:
 
 **Read these files first** (essential context):
 - `docs/PRD.md` §13 — Phase Next-C and Next-D descriptions
-- `src/antigravity_tool/services/storyboard_service.py` — Current panel generation logic (314 lines)
-- `src/antigravity_tool/schemas/storyboard.py` — Panel/PanelType/CameraAngle models (136 lines)
-- `src/antigravity_tool/services/pipeline_service.py` — Pipeline execution, especially `_handle_llm_generate` for model resolution pattern
+- `src/showrunner_tool/services/storyboard_service.py` — Current panel generation logic (314 lines)
+- `src/showrunner_tool/schemas/storyboard.py` — Panel/PanelType/CameraAngle models (136 lines)
+- `src/showrunner_tool/services/pipeline_service.py` — Pipeline execution, especially `_handle_llm_generate` for model resolution pattern
 - `src/web/src/components/storyboard/SceneStrip.tsx` — Scene strip with "Generate Panels" button
 - `src/web/src/components/storyboard/PanelCard.tsx` — Panel card component
 - `src/web/src/app/storyboard/page.tsx` — Storyboard page layout
 - `src/web/src/components/pipeline/PromptReviewModal.tsx` — Current modal (274 lines, 3 tabs)
 - `src/web/src/components/pipeline/usePipelineStream.ts` — Pipeline SSE hook
 - `src/web/src/lib/api.ts` — API client patterns
-- `src/antigravity_tool/server/routers/storyboard.py` — Storyboard API endpoints
-- `src/antigravity_tool/server/routers/pipeline.py` — Pipeline resume endpoint
+- `src/showrunner_tool/server/routers/storyboard.py` — Storyboard API endpoints
+- `src/showrunner_tool/server/routers/pipeline.py` — Pipeline resume endpoint
 
 ---
 
@@ -259,12 +259,12 @@ onClick={() => onResume({
 ## Output Specification
 
 Provide the complete code for:
-1. Updates to `src/antigravity_tool/services/storyboard_service.py` (add `suggest_layout` method)
-2. Updates to `src/antigravity_tool/server/routers/storyboard.py` (add suggest-layout endpoint)
+1. Updates to `src/showrunner_tool/services/storyboard_service.py` (add `suggest_layout` method)
+2. Updates to `src/showrunner_tool/server/routers/storyboard.py` (add suggest-layout endpoint)
 3. `src/web/src/components/storyboard/LayoutSuggestionPanel.tsx` (new file)
 4. Updates to `src/web/src/components/storyboard/SceneStrip.tsx` (add Suggest Layout button)
 5. Updates to `src/web/src/lib/api.ts` (add suggestLayout method + interfaces)
-6. Updates to `src/antigravity_tool/services/pipeline_service.py` (temperature_override + pinned_context_ids in _handle_llm_generate)
+6. Updates to `src/showrunner_tool/services/pipeline_service.py` (temperature_override + pinned_context_ids in _handle_llm_generate)
 7. Updates to `src/web/src/components/pipeline/PromptReviewModal.tsx` (temperature slider, context pinning, regenerate button)
 
 ---

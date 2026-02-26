@@ -21,7 +21,7 @@ Currently, the `KnowledgeGraphService` indexes containers into SQLite using JSON
 
 **Output Specification**:
 Provide the Python code for:
-1. `src/antigravity_tool/services/knowledge_graph_service.py` (with the new RAG embedding sync and search methods)
-2. `src/antigravity_tool/server/routers/graph.py` (with the new search endpoint)
+1. `src/showrunner_tool/services/knowledge_graph_service.py` (with the new RAG embedding sync and search methods)
+2. `src/showrunner_tool/server/routers/graph.py` (with the new search endpoint)
 
 *Note: Assume the user has `litellm` installed and `GEMINI_API_KEY` set in their environment for generating embeddings. Use `ChromaDB` if it keeps the implementation cleanest.*

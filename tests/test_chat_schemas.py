@@ -5,7 +5,7 @@ Tests cover all models in schemas/chat.py and schemas/project_memory.py.
 
 import pytest
 
-from antigravity_tool.schemas.chat import (
+from showrunner_tool.schemas.chat import (
     AgentInvocation,
     AutonomyLevel,
     BackgroundTask,
@@ -19,7 +19,7 @@ from antigravity_tool.schemas.chat import (
     SessionState,
     ToolIntent,
 )
-from antigravity_tool.schemas.project_memory import (
+from showrunner_tool.schemas.project_memory import (
     MemoryEntry,
     MemoryScope,
     ProjectMemory,
@@ -66,7 +66,7 @@ class TestChatSession:
         assert session.digest is None
         assert session.compaction_count == 0
         assert session.tags == []
-        # From AntigravityBase
+        # From ShowrunnerBase
         assert session.id is not None
         assert session.created_at is not None
 

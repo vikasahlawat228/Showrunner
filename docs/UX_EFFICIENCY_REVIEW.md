@@ -1,14 +1,14 @@
 # UX Efficiency Prompts — Implementation Review
 
 **Status:** Completed
-**Reviewer:** Antigravity AI
+**Reviewer:** Showrunner AI
 **Date:** 2026-02-23
 
 All 5 UX/UI efficiency prompts have been successfully implemented! Here is a breakdown of the review:
 
 ## 1. Implicit Schema Inference / Drag-and-Drop
 - **Status:** ✅ Verified
-- **Implementation:** The backend now features `SchemaInferenceService` (`src/antigravity_tool/services/schema_inference_service.py`), which uses the LLM to extract structured data (`GenericContainer`) from raw text snippets. On the frontend, the `ZenEditor` now includes a `Spark` floating action button that appears upon text selection, allowing 1-click drag-and-drop worldbuilding extraction. Tests in `test_schema_inference.py` are passing.
+- **Implementation:** The backend now features `SchemaInferenceService` (`src/showrunner_tool/services/schema_inference_service.py`), which uses the LLM to extract structured data (`GenericContainer`) from raw text snippets. On the frontend, the `ZenEditor` now includes a `Spark` floating action button that appears upon text selection, allowing 1-click drag-and-drop worldbuilding extraction. Tests in `test_schema_inference.py` are passing.
 
 ## 2. Smart Glass Box / Confidence-Based Execution
 - **Status:** ✅ Verified

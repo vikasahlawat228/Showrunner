@@ -1,7 +1,7 @@
 import sys
 import logging
-from antigravity_tool.services.chat_tool_registry import build_tool_registry
-from antigravity_tool.repositories.container_repo import ContainerRepository
+from showrunner_tool.services.chat_tool_registry import build_tool_registry
+from showrunner_tool.repositories.container_repo import ContainerRepository
 from dotenv import load_dotenv
 
 load_dotenv()

@@ -11,17 +11,17 @@ You are executing **Track 2 of Phase G**. Please read `docs/LOW_LEVEL_DESIGN.md`
    - The agent should be instructed to output its findings in a structured JSON format suitable for a `GenericContainer` with `container_type: "research_topic"`.
 
 2. **Implement `ResearchService`**
-   - Create `src/antigravity_tool/services/research_service.py`.
+   - Create `src/showrunner_tool/services/research_service.py`.
    - Implement logic to take research findings and save them as `GenericContainer` objects in the `containers/research_topic/` folder.
    - Fields should include: `summary`, `confidence_score` (0-1), `sources` (list of URLs/citations), and `key_facts` (dictionary).
 
 3. **Build the Research Router**
-   - Create `src/antigravity_tool/server/routers/research.py`.
+   - Create `src/showrunner_tool/server/routers/research.py`.
    - `POST /api/v1/research/query`: Triggers the `AgentDispatcher` using the `research_agent` skill and the user's query. Saves the output via `ResearchService`.
    - `GET /api/v1/research/library`: Returns a list of all research containers in the Knowledge Graph.
 
 4. **Integration with Pipelines**
-   - Open `src/antigravity_tool/services/pipeline_service.py`.
+   - Open `src/showrunner_tool/services/pipeline_service.py`.
    - Implement the handler for `StepType.RESEARCH_DEEP_DIVE`. This step should invoke the `ResearchService` and return the resulting container ID to the pipeline payload.
 
 Please write tests in `tests/test_research.py` to verify the agent dispatch and container creation.

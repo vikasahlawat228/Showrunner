@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from antigravity_tool.schemas.project_memory import MemoryEntry, MemoryScope
-from antigravity_tool.services.project_memory_service import ProjectMemoryService
+from showrunner_tool.schemas.project_memory import MemoryEntry, MemoryScope
+from showrunner_tool.services.project_memory_service import ProjectMemoryService
 
 
 # ═══════════════════════════════════════════════════════════════════

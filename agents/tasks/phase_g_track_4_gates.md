@@ -11,7 +11,7 @@ You are executing **Track 4 of Phase G**. Please read `docs/LOW_LEVEL_DESIGN.md`
    - Add a "Refine" text area that allows the user to append follow-up instructions to the AI prompt without manually modifying the generated output text.
 
 2. **Backend Processing for "Chat-to-Refine"**
-   - Update `src/antigravity_tool/services/pipeline_service.py` to handle the `model` and `refine_instructions` keys from the `resume_pipeline` payload.
+   - Update `src/showrunner_tool/services/pipeline_service.py` to handle the `model` and `refine_instructions` keys from the `resume_pipeline` payload.
    - If `refine_instructions` are provided, the state machine should NOT proceed to the next step. Instead, it should re-run the previous LLM generation step, appending the instructions to the user prompt.
 
 3. **Backend Tests**

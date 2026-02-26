@@ -11,12 +11,12 @@ This session adds two features:
 
 **Read these files first** (essential context):
 - `agents/skills/translator_agent.md` — Full system prompt for translation (71 lines)
-- `src/antigravity_tool/services/agent_dispatcher.py` — AgentDispatcher with execute() method (700+ lines)
-- `src/antigravity_tool/services/pipeline_service.py` — Has `generate_pipeline_from_nl()` already (lines 1105-1260+)
-- `src/antigravity_tool/server/routers/pipeline.py` — Has `POST /definitions/generate` already (lines 209-234)
-- `src/antigravity_tool/services/context_engine.py` — ContextEngine for context assembly (312 lines)
-- `src/antigravity_tool/services/knowledge_graph_service.py` — KG service with find_containers()
-- `src/antigravity_tool/server/deps.py` — DI graph (219 lines)
+- `src/showrunner_tool/services/agent_dispatcher.py` — AgentDispatcher with execute() method (700+ lines)
+- `src/showrunner_tool/services/pipeline_service.py` — Has `generate_pipeline_from_nl()` already (lines 1105-1260+)
+- `src/showrunner_tool/server/routers/pipeline.py` — Has `POST /definitions/generate` already (lines 209-234)
+- `src/showrunner_tool/services/context_engine.py` — ContextEngine for context assembly (312 lines)
+- `src/showrunner_tool/services/knowledge_graph_service.py` — KG service with find_containers()
+- `src/showrunner_tool/server/deps.py` — DI graph (219 lines)
 - `src/web/src/app/pipelines/page.tsx` — Pipelines page with TemplateGallery
 - `src/web/src/components/pipeline-builder/PipelineBuilder.tsx` — Visual DAG editor
 - `src/web/src/components/pipeline-builder/TemplateGallery.tsx` — Template browser
@@ -30,7 +30,7 @@ This session adds two features:
 
 ### Backend
 
-**1. Create `src/antigravity_tool/services/translation_service.py`**
+**1. Create `src/showrunner_tool/services/translation_service.py`**
 
 ```python
 from dataclasses import dataclass, field
@@ -103,7 +103,7 @@ class TranslationService:
         ...
 ```
 
-**2. Create `src/antigravity_tool/server/routers/translation.py`**
+**2. Create `src/showrunner_tool/server/routers/translation.py`**
 
 New router (do NOT add to `analysis.py` — a parallel session is modifying that file):
 
@@ -189,9 +189,9 @@ async def save_glossary_entry(
 
 **3. Register the new router in `app.py`**
 
-Add to `src/antigravity_tool/server/app.py`:
+Add to `src/showrunner_tool/server/app.py`:
 ```python
-from antigravity_tool.server.routers import translation as translation_router
+from showrunner_tool.server.routers import translation as translation_router
 # ...
 app.include_router(translation_router.router)  # Phase H
 ```
@@ -199,7 +199,7 @@ app.include_router(translation_router.router)  # Phase H
 **4. Add DI provider to `deps.py`**
 
 ```python
-from antigravity_tool.services.translation_service import TranslationService
+from showrunner_tool.services.translation_service import TranslationService
 
 def get_translation_service(
     kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
@@ -437,10 +437,10 @@ export interface GlossaryEntry {
 ## Output Specification
 
 Provide the complete code for:
-1. `src/antigravity_tool/services/translation_service.py` (new file)
-2. `src/antigravity_tool/server/routers/translation.py` (new file — new router)
-3. Updates to `src/antigravity_tool/server/app.py` (register translation router)
-4. Updates to `src/antigravity_tool/server/deps.py` (add translation provider)
+1. `src/showrunner_tool/services/translation_service.py` (new file)
+2. `src/showrunner_tool/server/routers/translation.py` (new file — new router)
+3. Updates to `src/showrunner_tool/server/app.py` (register translation router)
+4. Updates to `src/showrunner_tool/server/deps.py` (add translation provider)
 5. `src/web/src/components/translation/TranslationPanel.tsx` (new file)
 6. `src/web/src/app/translation/page.tsx` (new file — Translation Studio page)
 7. `src/web/src/components/pipeline-builder/NLPipelineWizard.tsx` (new file)

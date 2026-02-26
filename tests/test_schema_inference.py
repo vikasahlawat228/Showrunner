@@ -4,8 +4,8 @@ import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 from pathlib import Path
 
-from antigravity_tool.schemas.container import GenericContainer, ContainerSchema
-from antigravity_tool.services.schema_inference_service import SchemaInferenceService, _infer_field_type
+from showrunner_tool.schemas.container import GenericContainer, ContainerSchema
+from showrunner_tool.services.schema_inference_service import SchemaInferenceService, _infer_field_type
 
 
 # ── Helpers ─────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ class TestAnalyzeUnstructuredContainers:
 
 @pytest.mark.asyncio
 class TestExtractContainerFromText:
-    @patch("antigravity_tool.services.schema_inference_service.litellm")
+    @patch("showrunner_tool.services.schema_inference_service.litellm")
     async def test_extracts_from_text(self, mock_litellm):
         import json
         mock_response = MagicMock()
@@ -142,7 +142,7 @@ class TestExtractContainerFromText:
         assert container.container_type == "item"
         assert container.attributes["power_source"] == "emotional resonance"
 
-    @patch("antigravity_tool.services.schema_inference_service.litellm")
+    @patch("showrunner_tool.services.schema_inference_service.litellm")
     async def test_fallback_on_llm_failure(self, mock_litellm):
         mock_litellm.acompletion = AsyncMock(side_effect=Exception("API down"))
 

@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
-from antigravity_tool.server.app import app
-from antigravity_tool.services.job_service import JobService
-from antigravity_tool.schemas.job import JobStatus
+from showrunner_tool.server.app import app
+from showrunner_tool.services.job_service import JobService
+from showrunner_tool.schemas.job import JobStatus
 
 client = TestClient(app)
 

@@ -68,7 +68,7 @@ A fixed top navbar that appears on ALL pages. Design specs:
 ### Modify `src/web/src/components/workbench/Canvas.tsx`
 
 **Remove the cross-page navigation links** from the header (lines ~103–158). Keep:
-- The "Antigravity Studio" brand + project name
+- The "Showrunner Studio" brand + project name
 - The `Graph` / `Timeline` view toggle (these are dashboard-local views, not pages)
 - The `DirectorControls`
 - The sidebar toggle button

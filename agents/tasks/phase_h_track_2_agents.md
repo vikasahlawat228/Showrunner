@@ -17,7 +17,7 @@ You are executing **Track 2 of Phase H**. Please read `docs/LOW_LEVEL_DESIGN.md`
      - `brainstorm_agent.md` — High-divergence ideator.
 
 2. **Enhance AgentDispatcher**
-   - Open `src/antigravity_tool/services/agent_dispatcher.py`.
+   - Open `src/showrunner_tool/services/agent_dispatcher.py`.
    - Update `route_and_execute()` to parse "ReAct" responses. For instance, if an agent responds with `Action: SearchKG("spaceship design")`, the dispatcher uses `KnowledgeGraphService/ChromaIndexer` to fetch context, appends the result to the history, and calls the LLM again.
    - You do NOT need to implement the actual complex tools yet, just the parsing loop (Reason/Act/Observe) around LiteLLM.
 

@@ -14,9 +14,9 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel, Field
 
-from antigravity_tool.repositories.base import YAMLRepository
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.services.entity_index_bridge import EntityIndexBridge
+from showrunner_tool.repositories.base import YAMLRepository
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.services.entity_index_bridge import EntityIndexBridge
 
 
 # ═══════════════════════════════════════════════════════════════════

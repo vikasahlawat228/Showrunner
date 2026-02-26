@@ -3,7 +3,7 @@
 **Context:** We are building "Showrunner", an AI co-writer. Because AI generation can violently alter the story state across multiple character and faction objects, we cannot use standard CRUD (overwriting YAML files). We are implementing a Git-style "Undo Tree" using a Directed Acyclic Graph (DAG) event log in SQLite.
 
 **Your Objective: Write the Python Backend Code**
-You need to implement the Event Sourcing layer in `src/antigravity_tool/repositories/event_sourcing_repo.py`.
+You need to implement the Event Sourcing layer in `src/showrunner_tool/repositories/event_sourcing_repo.py`.
 
 **Requirements:**
 1. **The SQLite Schema (in a `setup()` method):**

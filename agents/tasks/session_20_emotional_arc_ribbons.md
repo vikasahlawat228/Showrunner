@@ -12,11 +12,11 @@ This session adds two new analytical visualizations to the Timeline page:
 **Read these files first** (essential context):
 - `docs/LOW_LEVEL_DESIGN.md` §10 — Full detailed design for Phase Next-B (service, endpoints, components, DI)
 - `docs/PRD.md` §13 — Phase Next-B description
-- `src/antigravity_tool/server/deps.py` — Current dependency injection graph
-- `src/antigravity_tool/server/app.py` — Router registration
-- `src/antigravity_tool/server/api_schemas.py` — Existing API schema patterns
-- `src/antigravity_tool/services/context_engine.py` — Context assembly (you'll inject this into AnalysisService)
-- `src/antigravity_tool/services/knowledge_graph_service.py` — KG queries (for ribbon data)
+- `src/showrunner_tool/server/deps.py` — Current dependency injection graph
+- `src/showrunner_tool/server/app.py` — Router registration
+- `src/showrunner_tool/server/api_schemas.py` — Existing API schema patterns
+- `src/showrunner_tool/services/context_engine.py` — Context assembly (you'll inject this into AnalysisService)
+- `src/showrunner_tool/services/knowledge_graph_service.py` — KG queries (for ribbon data)
 - `src/web/src/components/timeline/TimelineView.tsx` — Current Timeline page (add charts here)
 - `src/web/src/lib/api.ts` — API client (follow existing patterns)
 - `src/web/src/lib/store.ts` — Zustand store
@@ -27,7 +27,7 @@ This session adds two new analytical visualizations to the Timeline page:
 
 ### Backend (Python)
 
-**1. Create `src/antigravity_tool/services/analysis_service.py`**
+**1. Create `src/showrunner_tool/services/analysis_service.py`**
 
 Create the `AnalysisService` class with two methods for this session:
 
@@ -49,7 +49,7 @@ Create the `AnalysisService` class with two methods for this session:
 
 Use the dataclass definitions from `docs/LOW_LEVEL_DESIGN.md` §10.1.
 
-**2. Create `src/antigravity_tool/server/routers/analysis.py`**
+**2. Create `src/showrunner_tool/server/routers/analysis.py`**
 
 New router with prefix `/api/v1/analysis`, tags `["analysis"]`:
 
@@ -138,11 +138,11 @@ Add both components to the Timeline page:
 ## Output Specification
 
 Provide the complete code for:
-1. `src/antigravity_tool/services/analysis_service.py` (new file — `EmotionalScore`, `EmotionalArcResult`, `CharacterRibbon` dataclasses + `AnalysisService` class with `analyze_emotional_arc` and `compute_character_ribbons`)
-2. `src/antigravity_tool/server/routers/analysis.py` (new file — 2 endpoints)
-3. Updates to `src/antigravity_tool/server/api_schemas.py` (add response models)
-4. Updates to `src/antigravity_tool/server/deps.py` (add `get_analysis_service`)
-5. Updates to `src/antigravity_tool/server/app.py` (register router)
+1. `src/showrunner_tool/services/analysis_service.py` (new file — `EmotionalScore`, `EmotionalArcResult`, `CharacterRibbon` dataclasses + `AnalysisService` class with `analyze_emotional_arc` and `compute_character_ribbons`)
+2. `src/showrunner_tool/server/routers/analysis.py` (new file — 2 endpoints)
+3. Updates to `src/showrunner_tool/server/api_schemas.py` (add response models)
+4. Updates to `src/showrunner_tool/server/deps.py` (add `get_analysis_service`)
+5. Updates to `src/showrunner_tool/server/app.py` (register router)
 6. `src/web/src/components/timeline/EmotionalArcChart.tsx` (new file)
 7. `src/web/src/components/timeline/StoryRibbons.tsx` (new file)
 8. Updates to `src/web/src/components/timeline/TimelineView.tsx` (integrate both)

@@ -20,7 +20,7 @@ Right now, LLM prompts inside `storyboard_service.py` and `pipeline_service.py` 
 
 **Output Specification**:
 Provide the Python code for:
-1. `src/antigravity_tool/services/context_engine.py`
-2. The modified methods in `src/antigravity_tool/services/pipeline_service.py` and `director_service.py` integrating the new engine.
+1. `src/showrunner_tool/services/context_engine.py`
+2. The modified methods in `src/showrunner_tool/services/pipeline_service.py` and `director_service.py` integrating the new engine.
 
 *Note: You can estimate tokens using roughly 4 chars per token. Use LiteLLM (which is already installed) if you need to call a summarization model during the engine's compilation process.*

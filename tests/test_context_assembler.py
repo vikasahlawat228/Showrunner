@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from antigravity_tool.schemas.dal import ContextScope, ProjectSnapshot
-from antigravity_tool.services.context_assembler import (
+from showrunner_tool.schemas.dal import ContextScope, ProjectSnapshot
+from showrunner_tool.services.context_assembler import (
     STEP_TEMPLATE_MAP,
     ContextAssembler,
     ContextResult,

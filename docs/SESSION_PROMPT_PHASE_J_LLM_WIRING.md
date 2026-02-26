@@ -18,7 +18,7 @@ This means the primary CUJ flow — natural language brain-dumping, brainstormin
 ## Audit Findings (5 gaps to fix)
 
 ### Gap 1: CHAT intent returns shell mode placeholder (CRITICAL)
-- **File**: `src/antigravity_tool/services/chat_orchestrator.py` lines 422-433
+- **File**: `src/showrunner_tool/services/chat_orchestrator.py` lines 422-433
 - **Problem**: `_generate_shell_response()` is a hardcoded string. No LLM call.
 - **Fix**: Replace with a real LLM call via LiteLLM using the context assembled by `ChatContextManager`
 
@@ -33,12 +33,12 @@ This means the primary CUJ flow — natural language brain-dumping, brainstormin
 - **Fix**: Ensure the SSE parser doesn't corrupt multi-byte UTF-8 characters. The token streaming in the orchestrator splits on `response.split()` which handles em-dashes correctly (they're part of the word), so the issue is likely in the frontend concatenation or rendering.
 
 ### Gap 4: `GET /api/pipeline/runs` endpoint missing → 404 (LOW)
-- **File**: `src/antigravity_tool/server/routers/pipeline.py`
+- **File**: `src/showrunner_tool/server/routers/pipeline.py`
 - **Problem**: Frontend calls `api.getPipelineRuns(state)` → `GET /api/pipeline/runs?state=PAUSED_FOR_USER` but this endpoint doesn't exist in the pipeline router. Only definition CRUD and run/stream/resume endpoints exist.
 - **Fix**: Add a `GET /pipeline/runs` endpoint that queries `PipelineService._runs` (in-memory dict) with optional state filter.
 
 ### Gap 5: Artifact events never emitted by orchestrator (LOW)
-- **File**: `src/antigravity_tool/services/chat_orchestrator.py`
+- **File**: `src/showrunner_tool/services/chat_orchestrator.py`
 - **Problem**: The `ChatArtifact` schema is imported but never used. The `artifact` SSE event type is defined in the schema but the orchestrator never yields `ChatEvent(event_type="artifact", ...)`. The frontend handler `onArtifact` exists but is never triggered.
 - **Fix**: When tool execution produces structured content (search results, plan outlines, entity previews), emit an `artifact` event alongside the token stream.
 
@@ -46,7 +46,7 @@ This means the primary CUJ flow — natural language brain-dumping, brainstormin
 
 ### Task 1: LLM Integration in ChatOrchestrator (Gap 1 — CRITICAL)
 
-**File to modify**: `src/antigravity_tool/services/chat_orchestrator.py`
+**File to modify**: `src/showrunner_tool/services/chat_orchestrator.py`
 
 Replace `_generate_shell_response()` with a real LLM call:
 
@@ -85,7 +85,7 @@ async def _generate_llm_response(
 2. Project Memory entries (Layer 1) from `context["system_context"]`
 3. Intent-specific instructions: if CHAT, be conversational; if intent fell through to CHAT, explain capabilities
 
-**Fallback**: If `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` is not set, or if `litellm` import fails, fall back to the existing shell response with a message like: "LLM not configured. Set ANTHROPIC_API_KEY or configure a model in antigravity.yaml to enable AI responses."
+**Fallback**: If `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` is not set, or if `litellm` import fails, fall back to the existing shell response with a message like: "LLM not configured. Set ANTHROPIC_API_KEY or configure a model in showrunner.yaml to enable AI responses."
 
 **Update the main `handle_message` flow** (lines 124-157):
 - Replace `response_text = self._generate_shell_response(content, intent)` with an async generator call
@@ -132,7 +132,7 @@ async def _generate_llm_response(
 
 ### Task 3: Pipeline Runs Endpoint (Gap 4)
 
-**File to modify**: `src/antigravity_tool/server/routers/pipeline.py`
+**File to modify**: `src/showrunner_tool/server/routers/pipeline.py`
 
 Add a `GET /pipeline/runs` endpoint:
 
@@ -162,7 +162,7 @@ async def list_pipeline_runs(
 
 ### Task 4: Artifact Event Emission (Gap 5)
 
-**File to modify**: `src/antigravity_tool/services/chat_orchestrator.py`
+**File to modify**: `src/showrunner_tool/services/chat_orchestrator.py`
 
 In `_execute_tool()`, after the tool produces a result, check if the result is structured enough to warrant an artifact:
 
@@ -210,9 +210,9 @@ The backend `chat_orchestrator.py` splits response on whitespace (`response.spli
 
 | File | Change Type | Priority |
 |------|------------|----------|
-| `src/antigravity_tool/services/chat_orchestrator.py` | Major rewrite of response generation path | CRITICAL |
+| `src/showrunner_tool/services/chat_orchestrator.py` | Major rewrite of response generation path | CRITICAL |
 | `src/web/src/components/chat/ChatMessage.tsx` | Add react-markdown rendering | MEDIUM |
-| `src/antigravity_tool/server/routers/pipeline.py` | Add `GET /runs` endpoint | LOW |
+| `src/showrunner_tool/server/routers/pipeline.py` | Add `GET /runs` endpoint | LOW |
 | `src/web/package.json` | Add react-markdown + remark-gfm deps | MEDIUM |
 | `src/web/src/components/chat/ArtifactPreview.tsx` | Consistent markdown rendering | LOW |
 | `src/web/src/hooks/useChatStream.ts` | Investigate em-dash (may need no changes) | LOW |
@@ -236,7 +236,7 @@ cd src/web && npm run build     # Production build must succeed
 ```
 
 ### Manual CUJ Verification
-1. Start backend: `cd /path/to/project && antigravity server start --reload`
+1. Start backend: `cd /path/to/project && showrunner server start --reload`
 2. Start frontend: `cd src/web && npm run dev`
 3. Open http://localhost:3000, toggle chat sidebar
 4. Send: "Tell me about the story so far" → Should get a real LLM response (not shell mode)
@@ -249,7 +249,7 @@ cd src/web && npm run build     # Production build must succeed
 
 - `ANTHROPIC_API_KEY` environment variable set (for LiteLLM → Claude)
 - OR `GEMINI_API_KEY` for Gemini models
-- OR configure model in `antigravity.yaml` under `model_config`
+- OR configure model in `showrunner.yaml` under `model_config`
 - `litellm` package must be installed (already in requirements as it's used by pipeline steps)
 
 ## Important Constraints

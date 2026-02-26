@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Antigravity Studio - Development Environment Launcher
+# Showrunner Studio - Development Environment Launcher
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -8,7 +8,7 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== Starting Antigravity Studio ===${NC}"
+echo -e "${BLUE}=== Starting Showrunner Studio ===${NC}"
 
 # 1. Setup Backend Environment
 echo -e "${GREEN}[Backend] checking dependencies...${NC}"
@@ -33,7 +33,7 @@ fi
 
 # 2. Start Backend in Background
 echo -e "${GREEN}[Backend] Starting Server on port 8000...${NC}"
-$PYTHON_CMD -m antigravity_tool.server.app &
+$PYTHON_CMD -m showrunner_tool.server.app &
 BACKEND_PID=$!
 
 # 3. Start Frontend

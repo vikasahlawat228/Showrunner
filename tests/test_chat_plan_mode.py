@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from antigravity_tool.repositories.chat_session_repo import ChatSessionRepository
-from antigravity_tool.schemas.chat import ChatEvent, ChatSession
-from antigravity_tool.services.chat_orchestrator import ChatOrchestrator
-from antigravity_tool.services.chat_session_service import ChatSessionService
+from showrunner_tool.repositories.chat_session_repo import ChatSessionRepository
+from showrunner_tool.schemas.chat import ChatEvent, ChatSession
+from showrunner_tool.services.chat_orchestrator import ChatOrchestrator
+from showrunner_tool.services.chat_session_service import ChatSessionService
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -178,7 +178,7 @@ class TestToolExecution:
             tool_called.append(content)
             return "Tool result here"
 
-        from antigravity_tool.services.intent_classifier import IntentClassifier
+        from showrunner_tool.services.intent_classifier import IntentClassifier
 
         orchestrator = ChatOrchestrator(
             session_service,

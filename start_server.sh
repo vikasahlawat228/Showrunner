@@ -11,4 +11,4 @@ echo "PYTHONPATH: $PYTHONPATH"
 echo "=================="
 
 # Direct invocation to bypass potential CLI/Typer issues and ensure server starts
-.venv_clean/bin/python -c "import uvicorn; uvicorn.run('antigravity_tool.server.app:app', host='0.0.0.0', port=8000)"
+.venv_clean/bin/python -c "import uvicorn; uvicorn.run('showrunner_tool.server.app:app', host='0.0.0.0', port=8000)"

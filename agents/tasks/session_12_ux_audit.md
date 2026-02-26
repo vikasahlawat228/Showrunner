@@ -21,7 +21,7 @@ Your primary reference documents are:
 ### 1. Environment Verification
 The frontend Next.js server should be running on `http://localhost:3000` and the FastAPI backend on `http://localhost:8000`. 
 - If they are not running, use your terminal tools to start them:
-  - Backend: `PYTHONPATH=src python3 -m uvicorn antigravity_tool.server.app:app --host 0.0.0.0 --port 8000`
+  - Backend: `PYTHONPATH=src python3 -m uvicorn showrunner_tool.server.app:app --host 0.0.0.0 --port 8000`
   - Frontend: `npm run dev` in `src/web`
 
 ### 2. End-to-End Visual Audit

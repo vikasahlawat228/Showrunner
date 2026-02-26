@@ -314,7 +314,7 @@ if ((e.metaKey || e.ctrlKey) && e.key === '/') {
 
 ## Feature 5: Backend Word Count Tracking
 
-### Modify `src/antigravity_tool/services/writing_service.py`
+### Modify `src/showrunner_tool/services/writing_service.py`
 
 In the `save_fragment` method (or wherever fragments are saved), compute and store word_count:
 
@@ -330,11 +330,11 @@ if title:
 
 Ensure the `word_count` is included in the saved fragment's attributes dict.
 
-### Modify `src/antigravity_tool/server/routers/writing.py`
+### Modify `src/showrunner_tool/server/routers/writing.py`
 
 Ensure the response from `save_fragment` includes `word_count`. If `FragmentResponse` doesn't already have it, add it.
 
-### Modify `src/antigravity_tool/server/api_schemas.py`
+### Modify `src/showrunner_tool/server/api_schemas.py`
 
 Add `word_count` field to `FragmentResponse`:
 ```python
@@ -382,17 +382,17 @@ Remove the `<nav>` section with Canvas/Zen Mode/Schemas links (these will be in 
 2. `src/web/src/lib/store/zenSlice.ts` — Session writing stats state + actions
 3. `src/web/src/app/zen/page.tsx` — Simplify header (remove redundant nav links)
 4. `src/web/src/app/globals.css` — Focus mode CSS for paragraph dimming
-5. `src/antigravity_tool/services/writing_service.py` — Compute word_count on save
-6. `src/antigravity_tool/server/routers/writing.py` — Include word_count in response
-7. `src/antigravity_tool/server/api_schemas.py` — Add word_count to FragmentResponse
+5. `src/showrunner_tool/services/writing_service.py` — Compute word_count on save
+6. `src/showrunner_tool/server/routers/writing.py` — Include word_count in response
+7. `src/showrunner_tool/server/api_schemas.py` — Add word_count to FragmentResponse
 8. `src/web/src/lib/api.ts` — Update FragmentResponse interface with word_count
 
 ### Files you must NOT modify:
 - `src/web/src/app/layout.tsx` (modified by parallel session 30)
 - `src/web/src/components/workbench/Canvas.tsx` (modified by parallel session 30)
 - `src/web/src/components/command-center/*` (modified by parallel session 31)
-- `src/antigravity_tool/services/export_service.py` (modified by parallel session 31)
-- `src/antigravity_tool/server/routers/export.py` (modified by parallel session 31)
+- `src/showrunner_tool/services/export_service.py` (modified by parallel session 31)
+- `src/showrunner_tool/server/routers/export.py` (modified by parallel session 31)
 - `src/web/src/components/ui/Navbar.tsx` (may not exist yet)
 - `src/web/src/components/ui/CommandPalette.tsx` (may not exist yet)
 - `src/web/src/components/ui/ExportModal.tsx` (may not exist yet)

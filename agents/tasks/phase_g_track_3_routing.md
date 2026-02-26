@@ -6,7 +6,7 @@ You are executing **Track 3 of Phase G**. Please read `docs/LOW_LEVEL_DESIGN.md`
 ## Your Task
 
 1. **Implement Entity Detection Logic**
-   - Open `src/antigravity_tool/services/writing_service.py`.
+   - Open `src/showrunner_tool/services/writing_service.py`.
    - Update `save_fragment` (or an asynchronous processor paired with it) to detect entities mentioned in the text.
    - You can use the `AgentDispatcher` (perhaps the `story_architect` or a new specialized `entity_detector` skill) to analyze the text and return a list of recognized entities (characters, locations, items).
 

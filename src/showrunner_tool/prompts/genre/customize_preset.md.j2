@@ -1,0 +1,54 @@
+{# Template: Customize Genre Preset #}
+{# Step: genre_customization #}
+{# access_level: story #}
+
+# Customize Genre Preset for {{ project_name }}
+
+{% if genre_preset %}
+## Current Genre: {{ genre_preset.display_name }}
+
+{{ genre_preset.description }}
+
+### Current Configuration
+
+**Narrative Style:**
+- Tone: {{ current_narrative.get('tone', 'not set') }}
+- POV: {{ current_narrative.get('pov_default', 'not set') }}
+- Prose style: {{ current_narrative.get('prose_style', 'not set') }}
+- Dialogue style: {{ current_narrative.get('dialogue_style', 'not set') }}
+- Pacing: {{ current_narrative.get('pacing_preference', 'not set') }}
+
+**Visual Style:**
+- Art style: {{ current_visual.get('art_style', 'not set') }}
+- Line weight: {{ current_visual.get('line_weight', 'not set') }}
+- Color mode: {{ current_visual.get('color_mode', 'not set') }}
+- Shading: {{ current_visual.get('shading_style', 'not set') }}
+
+{% else %}
+## No Genre Preset Applied
+
+No genre preset is currently applied. Apply one first with `showrunner genre apply <genre_id>`, or customize from scratch below.
+{% endif %}
+
+## Instructions
+
+Review the current style configuration and suggest modifications to better fit the story's specific needs. Consider:
+
+1. What aspects of the genre defaults work well for THIS specific story?
+2. What should be adjusted to make the project unique within the genre?
+3. Are there any visual or narrative elements that should be added?
+4. Should the mood lighting presets be tuned differently?
+
+Output the customizations as two YAML blocks — one for `style_guide/visual.yaml` updates and one for `style_guide/narrative.yaml` updates. Only include fields that should change.
+
+```yaml
+# visual_updates:
+prompt_style_tokens: "..."
+color_palette: [...]
+mood_lighting_presets:
+  custom_mood: "..."
+
+# narrative_updates:
+tone: "..."
+themes: [...]
+```

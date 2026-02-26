@@ -10,15 +10,15 @@ This session adds two features:
 2. **Alternate Timeline Browser** — Add branch listing, branch comparison, SSE streaming, and a side-by-side diff view
 
 **Read these files first** (essential context):
-- `src/antigravity_tool/server/routers/projects.py` — Current project router with `GET /structure` (124 lines)
-- `src/antigravity_tool/schemas/project.py` — `StructureTreeNode`, `StructureTree` models (71 lines)
-- `src/antigravity_tool/schemas/container.py` — `GenericContainer` with `parent_id`, `sort_order` (112 lines)
-- `src/antigravity_tool/repositories/container_repo.py` — `ContainerRepository` (50 lines, needs new methods)
-- `src/antigravity_tool/repositories/sqlite_indexer.py` — SQLite indexer with `get_children()`, `get_roots()` (227 lines)
-- `src/antigravity_tool/repositories/event_sourcing_repo.py` — `EventService` with `branch()`, `project_state()`, `get_all_events()` (189 lines)
-- `src/antigravity_tool/server/routers/timeline.py` — Timeline router (37 lines, only `/events` and `/checkout`)
-- `src/antigravity_tool/services/knowledge_graph_service.py` — `get_structure_tree()` (262 lines)
-- `src/antigravity_tool/server/deps.py` — DI graph
+- `src/showrunner_tool/server/routers/projects.py` — Current project router with `GET /structure` (124 lines)
+- `src/showrunner_tool/schemas/project.py` — `StructureTreeNode`, `StructureTree` models (71 lines)
+- `src/showrunner_tool/schemas/container.py` — `GenericContainer` with `parent_id`, `sort_order` (112 lines)
+- `src/showrunner_tool/repositories/container_repo.py` — `ContainerRepository` (50 lines, needs new methods)
+- `src/showrunner_tool/repositories/sqlite_indexer.py` — SQLite indexer with `get_children()`, `get_roots()` (227 lines)
+- `src/showrunner_tool/repositories/event_sourcing_repo.py` — `EventService` with `branch()`, `project_state()`, `get_all_events()` (189 lines)
+- `src/showrunner_tool/server/routers/timeline.py` — Timeline router (37 lines, only `/events` and `/checkout`)
+- `src/showrunner_tool/services/knowledge_graph_service.py` — `get_structure_tree()` (262 lines)
+- `src/showrunner_tool/server/deps.py` — DI graph
 - `src/web/src/components/timeline/StoryStructureTree.tsx` — Existing tree with drag-reorder (386 lines)
 - `src/web/src/components/timeline/TimelineView.tsx` — Timeline with SSE polling (199 lines)
 - `src/web/src/components/timeline/TimelinePanel.tsx` — SVG branch visualization (162 lines)
@@ -33,7 +33,7 @@ This session adds two features:
 
 **1. Create a containers router for CRUD operations**
 
-Create `src/antigravity_tool/server/routers/containers.py` with prefix `/api/v1/containers`:
+Create `src/showrunner_tool/server/routers/containers.py` with prefix `/api/v1/containers`:
 
 ```
 POST   /api/v1/containers                    → Create a new container (any type)
@@ -125,9 +125,9 @@ getProjectStructure: () =>
 
 **3. Register the containers router**
 
-In `src/antigravity_tool/server/app.py`, add:
+In `src/showrunner_tool/server/app.py`, add:
 ```python
-from antigravity_tool.server.routers import containers
+from showrunner_tool.server.routers import containers
 app.include_router(containers.router)
 ```
 
@@ -207,7 +207,7 @@ getProjectStructure: () =>
 
 **6. Add methods to `EventService`**
 
-Add these methods to `src/antigravity_tool/repositories/event_sourcing_repo.py`:
+Add these methods to `src/showrunner_tool/repositories/event_sourcing_repo.py`:
 
 ```python
 def get_branches(self) -> List[Dict[str, Any]]:
@@ -274,7 +274,7 @@ def compare_branches(self, branch_a: str, branch_b: str) -> Dict[str, Any]:
 
 **7. Extend `timeline.py` router**
 
-Add these endpoints to the existing `src/antigravity_tool/server/routers/timeline.py`:
+Add these endpoints to the existing `src/showrunner_tool/server/routers/timeline.py`:
 
 ```python
 @router.get("/branches")
@@ -449,12 +449,12 @@ export interface BranchComparison {
 ## Output Specification
 
 Provide the complete code for:
-1. `src/antigravity_tool/server/routers/containers.py` (new file — container CRUD + reorder)
-2. Updates to `src/antigravity_tool/repositories/container_repo.py` (add `get_by_id`, `delete_by_id`)
-3. Updates to `src/antigravity_tool/server/api_schemas.py` (container create/update request models)
-4. Updates to `src/antigravity_tool/server/app.py` (register containers router)
-5. Updates to `src/antigravity_tool/repositories/event_sourcing_repo.py` (add `get_branches`, `get_events_for_branch`, `compare_branches`)
-6. Updates to `src/antigravity_tool/server/routers/timeline.py` (add `/branches`, `/branch`, `/branch/{id}/events`, `/compare`, `/stream`)
+1. `src/showrunner_tool/server/routers/containers.py` (new file — container CRUD + reorder)
+2. Updates to `src/showrunner_tool/repositories/container_repo.py` (add `get_by_id`, `delete_by_id`)
+3. Updates to `src/showrunner_tool/server/api_schemas.py` (container create/update request models)
+4. Updates to `src/showrunner_tool/server/app.py` (register containers router)
+5. Updates to `src/showrunner_tool/repositories/event_sourcing_repo.py` (add `get_branches`, `get_events_for_branch`, `compare_branches`)
+6. Updates to `src/showrunner_tool/server/routers/timeline.py` (add `/branches`, `/branch`, `/branch/{id}/events`, `/compare`, `/stream`)
 7. Updates to `src/web/src/components/timeline/StoryStructureTree.tsx` (add create, delete, open-in-Zen, fix reorder, completion colors)
 8. `src/web/src/components/timeline/BranchList.tsx` (new file)
 9. `src/web/src/components/timeline/BranchComparison.tsx` (new file)

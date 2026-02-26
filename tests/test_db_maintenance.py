@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from antigravity_tool.commands.db import _find_consistency_issues
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.schemas.dal import ConsistencyIssue
+from showrunner_tool.commands.db import _find_consistency_issues
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.schemas.dal import ConsistencyIssue
 
 
 # ═══════════════════════════════════════════════════════════════════

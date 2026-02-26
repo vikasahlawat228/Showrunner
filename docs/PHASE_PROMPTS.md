@@ -52,7 +52,7 @@ The test suite (26 files in tests/) cannot run. The .venv uses Python 3.13 but .
 ## Prompt 2: Phase 1 — Quick Wins (Slash Command, Chat Context, Create Tool)
 
 ```
-You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/antigravity_tool/) and Next.js frontend (src/web/).
+You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/showrunner_tool/) and Next.js frontend (src/web/).
 
 ## Context
 Showrunner has 22 Critical User Journeys (CUJs). This phase fixes 3 high-impact gaps affecting CUJs 1, 3, 10, 11, 13, 14.
@@ -70,14 +70,14 @@ The /brainstorm command is defined in src/web/src/components/zen/SlashCommandLis
    - Gets the active scene context from useZenStore (activeSceneId, activeChapterId)
    - Calls the backend: POST /api/v1/director/brainstorm with { text, scene_id, chapter_id }
    - Displays result in the ContextSidebar or as an inline suggestion
-4. If the backend endpoint doesn't exist, check src/antigravity_tool/server/routers/director.py for a brainstorm endpoint. If missing, add one that delegates to the AgentDispatcher or DirectorService.
+4. If the backend endpoint doesn't exist, check src/showrunner_tool/server/routers/director.py for a brainstorm endpoint. If missing, add one that delegates to the AgentDispatcher or DirectorService.
 
 ### Key files
 - src/web/src/components/zen/ZenEditor.tsx — slash command execution
 - src/web/src/components/zen/SlashCommandList.tsx — command definitions
 - src/web/src/lib/store/zenSlice.ts — Zen state store
-- src/antigravity_tool/server/routers/director.py — director router
-- src/antigravity_tool/services/director_service.py — director service
+- src/showrunner_tool/server/routers/director.py — director router
+- src/showrunner_tool/services/director_service.py — director service
 
 ---
 
@@ -97,7 +97,7 @@ The ChatSidebar (src/web/src/components/chat/ChatSidebar.tsx) is globally availa
    - Pass these as context_payload in the API call:
      api.sendChatMessage(sessionId, { content, context_payload: { zen_context: { scene_id, chapter_id, current_text, entities } } })
 
-2. In the backend src/antigravity_tool/services/chat_orchestrator.py:
+2. In the backend src/showrunner_tool/services/chat_orchestrator.py:
    - In handle_message() (around line 68-170), extract context_payload
    - If context_payload has "zen_context", include it in the system prompt sent to LLM
    - Specifically, in _generate_llm_response() or _build_system_prompt(), append:
@@ -110,8 +110,8 @@ The ChatSidebar (src/web/src/components/chat/ChatSidebar.tsx) is globally availa
 ### Key files
 - src/web/src/components/chat/ChatSidebar.tsx — chat UI
 - src/web/src/lib/store/zenSlice.ts — has activeSceneId, contextEntries, etc.
-- src/antigravity_tool/services/chat_orchestrator.py — handle_message(), _build_system_prompt()
-- src/antigravity_tool/services/chat_context_manager.py — context assembly
+- src/showrunner_tool/services/chat_orchestrator.py — handle_message(), _build_system_prompt()
+- src/showrunner_tool/services/chat_context_manager.py — context assembly
 - tests/test_chat_orchestrator.py — existing tests
 
 ---
@@ -119,10 +119,10 @@ The ChatSidebar (src/web/src/components/chat/ChatSidebar.tsx) is globally availa
 ## Task 1.3: Harden create_tool Reliability
 
 ### Problem
-The create_tool() in src/antigravity_tool/services/chat_tool_registry.py (lines 70-190) uses LLM to parse natural language into structured entity creation. It sometimes fails with "automatic scaffolding failed" because the LLM returns malformed JSON.
+The create_tool() in src/showrunner_tool/services/chat_tool_registry.py (lines 70-190) uses LLM to parse natural language into structured entity creation. It sometimes fails with "automatic scaffolding failed" because the LLM returns malformed JSON.
 
 ### What to do
-1. Open src/antigravity_tool/services/chat_tool_registry.py, find create_tool() (line 70-190)
+1. Open src/showrunner_tool/services/chat_tool_registry.py, find create_tool() (line 70-190)
 2. Add 3-layer JSON parsing fallback:
    ```python
    # Layer 1: Direct JSON parse
@@ -159,7 +159,7 @@ The create_tool() in src/antigravity_tool/services/chat_tool_registry.py (lines 
    - Test with completely malformed response (should return friendly error)
 
 ### Key files
-- src/antigravity_tool/services/chat_tool_registry.py — create_tool() function
+- src/showrunner_tool/services/chat_tool_registry.py — create_tool() function
 - tests/test_chat_tool_registry.py — existing tests to extend
 
 ## Success Criteria
@@ -174,7 +174,7 @@ The create_tool() in src/antigravity_tool/services/chat_tool_registry.py (lines 
 ## Prompt 3: Phase 2 — Session Intelligence (Welcome-Back, Dashboard)
 
 ```
-You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/antigravity_tool/) and Next.js frontend (src/web/).
+You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/showrunner_tool/) and Next.js frontend (src/web/).
 
 ## Context
 When writers return after a break, the app doesn't recognize the time gap — no "welcome back" message, no session summary, no "Previously..." context. This affects CUJs 9 ("Returning After a Week Away") and 17 ("What Happened While I Was Gone?").
@@ -183,7 +183,7 @@ When writers return after a break, the app doesn't recognize the time gap — no
 
 ### Backend Changes
 
-1. In src/antigravity_tool/services/chat_orchestrator.py:
+1. In src/showrunner_tool/services/chat_orchestrator.py:
    - Add method `_check_session_gap(self, session_id: str)`:
      ```python
      async def _check_session_gap(self, session_id):
@@ -236,8 +236,8 @@ When writers return after a break, the app doesn't recognize the time gap — no
    - Data source: existing api.getContainers() filtered by modified time, or a new lightweight endpoint
 
 ### Key files
-- src/antigravity_tool/services/chat_orchestrator.py — handle_message(), new _check_session_gap()
-- src/antigravity_tool/services/chat_session_service.py — session data access
+- src/showrunner_tool/services/chat_orchestrator.py — handle_message(), new _check_session_gap()
+- src/showrunner_tool/services/chat_session_service.py — session data access
 - src/web/src/components/chat/ChatSidebar.tsx — session loading
 - src/web/src/components/chat/WelcomeBackBanner.tsx — NEW
 - src/web/src/components/command-center/ProgressOverview.tsx — dashboard card
@@ -261,7 +261,7 @@ When writers return after a break, the app doesn't recognize the time gap — no
 ## Prompt 4: Phase 3 — Intelligence Upgrades (Continuity, Voice, Branches)
 
 ```
-You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/antigravity_tool/) and Next.js frontend (src/web/).
+You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/showrunner_tool/) and Next.js frontend (src/web/).
 
 ## Context
 Three intelligence features need upgrades: continuity checking should suggest fixes (not just flag issues), style enforcement should target individual characters' dialogue, and writing should be branch-aware.
@@ -269,7 +269,7 @@ Three intelligence features need upgrades: continuity checking should suggest fi
 ## Task 3.1: Continuity Analyst — Auto-Suggest Resolutions
 
 ### Problem
-src/antigravity_tool/services/continuity_service.py flags contradictions but returns no resolution suggestions.
+src/showrunner_tool/services/continuity_service.py flags contradictions but returns no resolution suggestions.
 
 ### Changes
 
@@ -290,7 +290,7 @@ src/antigravity_tool/services/continuity_service.py flags contradictions but ret
        # Use LiteLLM to generate, parse JSON response
    ```
 
-2. In src/antigravity_tool/server/routers/analysis.py:
+2. In src/showrunner_tool/server/routers/analysis.py:
    - Add endpoint: POST /api/v1/analysis/continuity/suggest-resolutions
    - Request body: { issue_id: str } or { issue: object }
    - Returns: List of resolution options
@@ -308,7 +308,7 @@ The style enforcer in pipeline_service.py operates on full text. CUJ 20 needs "r
 
 ### Changes
 
-1. In src/antigravity_tool/services/style_service.py, add:
+1. In src/showrunner_tool/services/style_service.py, add:
    ```python
    async def extract_dialogue_by_speaker(self, text: str, speaker_name: str) -> list:
        """Use LLM to identify lines of dialogue attributed to a specific character.
@@ -319,7 +319,7 @@ The style enforcer in pipeline_service.py operates on full text. CUJ 20 needs "r
        voice_profile contains: tone, vocabulary_level, speech_patterns, forbidden_words"""
    ```
 
-2. In src/antigravity_tool/services/pipeline_service.py:
+2. In src/showrunner_tool/services/pipeline_service.py:
    - In _execute_step(), add a new step type handler: "style_enforce_dialogue"
    - Step config expects: { speaker_name, voice_profile_bucket_id }
    - Handler: loads voice profile from bucket → calls style_service.enforce_style_on_dialogue()
@@ -341,11 +341,11 @@ Zen editor saves fragments without branch context. Writing on a branch isn't iso
    - Read activeBranch from zenStore
    - Include branch_id in the save API call payload
 
-3. In src/antigravity_tool/services/writing_service.py:
+3. In src/showrunner_tool/services/writing_service.py:
    - Accept optional branch_id in save_fragment() and save_scene()
    - Store branch_id as metadata on the saved container
 
-4. In src/antigravity_tool/services/continuity_service.py:
+4. In src/showrunner_tool/services/continuity_service.py:
    - Accept optional branch_id parameter in check methods
    - Filter KG queries to only include entities/fragments tagged with that branch
 
@@ -354,11 +354,11 @@ Zen editor saves fragments without branch context. Writing on a branch isn't iso
    - Show active branch indicator in Zen header
 
 ### Key files
-- src/antigravity_tool/services/continuity_service.py
-- src/antigravity_tool/services/style_service.py
-- src/antigravity_tool/services/pipeline_service.py
-- src/antigravity_tool/services/writing_service.py
-- src/antigravity_tool/server/routers/analysis.py
+- src/showrunner_tool/services/continuity_service.py
+- src/showrunner_tool/services/style_service.py
+- src/showrunner_tool/services/pipeline_service.py
+- src/showrunner_tool/services/writing_service.py
+- src/showrunner_tool/server/routers/analysis.py
 - src/web/src/components/zen/ContinuityPanel.tsx
 - src/web/src/lib/store/zenSlice.ts
 - src/web/src/components/zen/ZenEditor.tsx
@@ -376,7 +376,7 @@ Zen editor saves fragments without branch context. Writing on a branch isn't iso
 ## Prompt 5: Phase 4 — Advanced Chat & Pipeline Features
 
 ```
-You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/antigravity_tool/) and Next.js frontend (src/web/).
+You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/showrunner_tool/) and Next.js frontend (src/web/).
 
 ## Context
 The agentic chat system (Phase J) has plan/execute mode and pipeline control from chat. This phase adds mid-plan modification, runtime model switching, and research auto-injection.
@@ -388,7 +388,7 @@ ChatOrchestrator has /plan, /approve, /execute commands but no way to modify a p
 
 ### Changes
 
-1. In src/antigravity_tool/services/chat_orchestrator.py:
+1. In src/showrunner_tool/services/chat_orchestrator.py:
    - Add /replan to the command detection in _handle_command() (around line 174-202)
    - Add _handle_replan(self, session_id, new_instructions, start):
      ```python
@@ -418,7 +418,7 @@ Users can launch pipelines from chat but can't change the model mid-execution wh
 
 ### Changes
 
-1. In src/antigravity_tool/services/pipeline_service.py:
+1. In src/showrunner_tool/services/pipeline_service.py:
    - Add method:
      ```python
      def set_step_model_override(self, run_id: str, step_id: str, model_name: str):
@@ -430,12 +430,12 @@ Users can launch pipelines from chat but can't change the model mid-execution wh
      ```
    - In _execute_step(), before calling LiteLLM, check run.step_overrides for the current step
 
-2. In src/antigravity_tool/services/chat_tool_registry.py:
+2. In src/showrunner_tool/services/chat_tool_registry.py:
    - Extend pipeline_tool() to detect model-switching intent:
      - Pattern: "use {model} for this step" or "switch to {model}"
      - Extract model name, find the currently paused run and step, call set_step_model_override()
 
-3. In src/antigravity_tool/server/routers/pipeline.py:
+3. In src/showrunner_tool/server/routers/pipeline.py:
    - Add endpoint: PATCH /api/v1/pipeline/runs/{run_id}/steps/{step_id}/model
    - Body: { model: str }
 
@@ -446,13 +446,13 @@ Research buckets exist but aren't automatically surfaced when writing about rese
 
 ### Changes
 
-1. In src/antigravity_tool/services/context_engine.py:
+1. In src/showrunner_tool/services/context_engine.py:
    - In assemble_context() or get_context_for_entities():
      - After assembling entity context, also query containers where container_type="research"
      - If any research bucket's topic keywords overlap with entity names or scene text, include its summary
      - Add to returned context under a "Research Notes" section
 
-2. In src/antigravity_tool/services/chat_tool_registry.py:
+2. In src/showrunner_tool/services/chat_tool_registry.py:
    - Add plausibility_check_tool():
      ```python
      def plausibility_check_tool(content, entity_ids, **kwargs):
@@ -464,17 +464,17 @@ Research buckets exist but aren't automatically surfaced when writing about rese
      ```
    - Register as "plausibility_check" in the tool registry
 
-3. In the chat intent classifier (src/antigravity_tool/services/intent_classifier.py):
+3. In the chat intent classifier (src/showrunner_tool/services/intent_classifier.py):
    - Add "PLAUSIBILITY_CHECK" intent for queries like "is this realistic?", "does this make sense?", "fact check this"
 
 ### Key files
-- src/antigravity_tool/services/chat_orchestrator.py — /replan handler
-- src/antigravity_tool/services/pipeline_service.py — model override
-- src/antigravity_tool/services/chat_tool_registry.py — pipeline_tool extension + plausibility tool
-- src/antigravity_tool/services/context_engine.py — research injection
-- src/antigravity_tool/services/intent_classifier.py — new intent
+- src/showrunner_tool/services/chat_orchestrator.py — /replan handler
+- src/showrunner_tool/services/pipeline_service.py — model override
+- src/showrunner_tool/services/chat_tool_registry.py — pipeline_tool extension + plausibility tool
+- src/showrunner_tool/services/context_engine.py — research injection
+- src/showrunner_tool/services/intent_classifier.py — new intent
 - src/web/src/components/chat/PlanViewer.tsx — modify plan UI
-- src/antigravity_tool/server/routers/pipeline.py — model override endpoint
+- src/showrunner_tool/server/routers/pipeline.py — model override endpoint
 
 ## Success Criteria
 - /replan modifies existing plan, preserving completed steps
@@ -488,7 +488,7 @@ Research buckets exist but aren't automatically surfaced when writing about rese
 ## Prompt 6: Phase 5 — Multi-Season State Versioning
 
 ```
-You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/antigravity_tool/) and Next.js frontend (src/web/).
+You are working on the Showrunner project at /Users/vikasahlawat/Documents/writing_tool, a creative writing tool with a FastAPI backend (src/showrunner_tool/) and Next.js frontend (src/web/).
 
 ## Context
 Writers working on multi-season stories need entity versioning — "Zara in Season 1" vs "Zara in Season 2" should be distinct states. Currently, a character bucket is a single document with no temporal versioning.
@@ -498,16 +498,16 @@ Writers working on multi-season stories need entity versioning — "Zara in Seas
 ## Task 5.1: Entity State Versioning (era_id)
 
 ### Background
-Entities are stored as GenericContainer objects (see src/antigravity_tool/schemas/ for the schema). They're managed by ContainerRepository (src/antigravity_tool/repositories/) and linked via KnowledgeGraphService.
+Entities are stored as GenericContainer objects (see src/showrunner_tool/schemas/ for the schema). They're managed by ContainerRepository (src/showrunner_tool/repositories/) and linked via KnowledgeGraphService.
 
 ### Changes
 
-1. Schema changes — find the GenericContainer model in src/antigravity_tool/schemas/:
+1. Schema changes — find the GenericContainer model in src/showrunner_tool/schemas/:
    - Add field: era_id: Optional[str] = None  # "season_1", "season_2", etc.
    - Add field: parent_version_id: Optional[str] = None  # links to the previous era's version
    - A None era_id means "global / all eras"
 
-2. In src/antigravity_tool/services/knowledge_graph_service.py:
+2. In src/showrunner_tool/services/knowledge_graph_service.py:
    - Add method: get_entity_at_era(entity_id: str, era_id: str) -> Optional[GenericContainer]
      - First look for a version with matching era_id
      - If not found, fall back to the era_id=None (global) version
@@ -516,19 +516,19 @@ Entities are stored as GenericContainer objects (see src/antigravity_tool/schema
      - Set era_id = new_era_id, parent_version_id = original entity's id
      - Save as a new container
 
-3. In src/antigravity_tool/services/context_engine.py:
+3. In src/showrunner_tool/services/context_engine.py:
    - Add active_era_id parameter to context assembly
    - When resolving entity references, use get_entity_at_era() instead of direct get()
    - This ensures that when writing Season 2, "Zara" resolves to the Season 2 version
 
-4. In the chat tool registry (src/antigravity_tool/services/chat_tool_registry.py):
+4. In the chat tool registry (src/showrunner_tool/services/chat_tool_registry.py):
    - The create_tool should accept era_id context
    - When user says "Create Season 2 version of Zara as the leader", it should:
      - Detect existing Zara entity
      - Call create_era_fork() with new era
      - Update the forked version with new attributes
 
-5. API endpoint in src/antigravity_tool/server/routers/containers.py:
+5. API endpoint in src/showrunner_tool/server/routers/containers.py:
    - POST /api/v1/containers/{container_id}/fork-era
    - Body: { era_id: str, updates: dict }
 
@@ -536,24 +536,24 @@ Entities are stored as GenericContainer objects (see src/antigravity_tool/schema
 
 ### Changes
 
-1. In the KG relationship model (find in src/antigravity_tool/schemas/ or knowledge_graph_service.py):
+1. In the KG relationship model (find in src/showrunner_tool/schemas/ or knowledge_graph_service.py):
    - Add field to relationship edges: resolved: bool = False
    - Add field: resolved_in_era: Optional[str] = None
 
-2. In src/antigravity_tool/services/knowledge_graph_service.py:
+2. In src/showrunner_tool/services/knowledge_graph_service.py:
    - Add method: get_unresolved_threads(era_id: Optional[str] = None) -> List[dict]
      - Query all relationship edges where resolved=False
      - If era_id provided, filter to edges created in or before that era
      - Return: [{"source": entity_name, "target": entity_name, "relationship": type, "created_in": era, "description": "..."}]
    - Add method: resolve_thread(edge_id: str, resolved_in_era: str)
 
-3. In src/antigravity_tool/services/chat_tool_registry.py:
+3. In src/showrunner_tool/services/chat_tool_registry.py:
    - Add unresolved_threads_tool():
      - Queries get_unresolved_threads()
      - Formats as readable list for chat display
    - Register in build_tool_registry()
 
-4. In src/antigravity_tool/services/intent_classifier.py:
+4. In src/showrunner_tool/services/intent_classifier.py:
    - Add "UNRESOLVED_THREADS" intent for: "show unresolved threads", "what plots are open", "unfinished storylines"
 
 5. Frontend — in Timeline page or Dashboard:
@@ -561,11 +561,11 @@ Entities are stored as GenericContainer objects (see src/antigravity_tool/schema
    - Shows list of unresolved relationships with "Mark Resolved" button
 
 ### Key files to READ FIRST before coding
-- src/antigravity_tool/schemas/ — ALL schema files, especially container and relationship schemas
-- src/antigravity_tool/repositories/ — ContainerRepository, how entities are stored
-- src/antigravity_tool/services/knowledge_graph_service.py — KG operations
-- src/antigravity_tool/services/context_engine.py — context assembly
-- src/antigravity_tool/services/chat_tool_registry.py — tool registration pattern
+- src/showrunner_tool/schemas/ — ALL schema files, especially container and relationship schemas
+- src/showrunner_tool/repositories/ — ContainerRepository, how entities are stored
+- src/showrunner_tool/services/knowledge_graph_service.py — KG operations
+- src/showrunner_tool/services/context_engine.py — context assembly
+- src/showrunner_tool/services/chat_tool_registry.py — tool registration pattern
 
 ## Testing
 - Create character "Zara" with era_id=None (global)

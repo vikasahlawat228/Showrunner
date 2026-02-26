@@ -11,14 +11,14 @@ This session adds two features:
 
 **Read these files first** (essential context):
 - `docs/PRD.md` §13 — Phase Next-C description
-- `src/antigravity_tool/schemas/storyboard.py` — Panel model with duration_seconds
-- `src/antigravity_tool/schemas/character.py` — Legacy CharacterDNA, FacialFeatures, HairDescription, BodyDescription, OutfitCanon
-- `src/antigravity_tool/services/storyboard_service.py` — Panel CRUD + generation (314 lines)
-- `src/antigravity_tool/services/knowledge_graph_service.py` — KG queries for character-scene relationships
+- `src/showrunner_tool/schemas/storyboard.py` — Panel model with duration_seconds
+- `src/showrunner_tool/schemas/character.py` — Legacy CharacterDNA, FacialFeatures, HairDescription, BodyDescription, OutfitCanon
+- `src/showrunner_tool/services/storyboard_service.py` — Panel CRUD + generation (314 lines)
+- `src/showrunner_tool/services/knowledge_graph_service.py` — KG queries for character-scene relationships
 - `src/web/src/components/workbench/CharacterInspector.tsx` — Current character detail view (187 lines, includes Voice Scorecard at bottom)
 - `src/web/src/lib/api.ts` — API client (follow existing patterns)
 - `src/web/src/app/storyboard/page.tsx` — Storyboard page (reference for panel data)
-- `src/antigravity_tool/server/deps.py` — DI graph
+- `src/showrunner_tool/server/deps.py` — DI graph
 
 ---
 
@@ -186,7 +186,7 @@ getDNAAtChapter: (characterId: string, chapter: number) =>
 
 ### Backend
 
-**7. Create `src/antigravity_tool/services/reader_sim_service.py`**
+**7. Create `src/showrunner_tool/services/reader_sim_service.py`**
 
 ```python
 @dataclass
@@ -234,7 +234,7 @@ GET /api/v1/preview/scene/{scene_id}    → ReadingSimResponse
 GET /api/v1/preview/chapter/{chapter}   → list[ReadingSimResponse]
 ```
 
-Create `src/antigravity_tool/server/routers/preview.py` with prefix `/api/v1/preview`.
+Create `src/showrunner_tool/server/routers/preview.py` with prefix `/api/v1/preview`.
 
 ### Frontend
 
@@ -319,11 +319,11 @@ Also add to the main Canvas.tsx header nav (where Zen/Pipelines/Storyboard links
 
 Provide the complete code for:
 1. Updates to character handling — progression CRUD (backend endpoints + service logic)
-2. Updates to `src/antigravity_tool/server/api_schemas.py` (progression + preview models)
-3. `src/antigravity_tool/services/reader_sim_service.py` (new file)
-4. `src/antigravity_tool/server/routers/preview.py` (new file)
-5. Updates to `src/antigravity_tool/server/deps.py` (add get_reader_sim_service)
-6. Updates to `src/antigravity_tool/server/app.py` (register preview router)
+2. Updates to `src/showrunner_tool/server/api_schemas.py` (progression + preview models)
+3. `src/showrunner_tool/services/reader_sim_service.py` (new file)
+4. `src/showrunner_tool/server/routers/preview.py` (new file)
+5. Updates to `src/showrunner_tool/server/deps.py` (add get_reader_sim_service)
+6. Updates to `src/showrunner_tool/server/app.py` (register preview router)
 7. `src/web/src/components/workbench/CharacterProgressionTimeline.tsx` (new file)
 8. Updates to `src/web/src/components/workbench/CharacterInspector.tsx` (integrate timeline)
 9. `src/web/src/app/preview/page.tsx` (new file)

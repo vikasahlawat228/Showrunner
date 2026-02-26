@@ -1,8 +1,8 @@
-# Antigravity -- Design Document
+# Showrunner -- Design Document
 
 ## 1. Project Overview
 
-**Antigravity** is an agentic AI platform for creating manga, manhwa, and webtoon comics. It combines a Python CLI, a FastAPI backend, and a Next.js web studio to orchestrate a 7-step creative pipeline -- from world-building through character creation, story structure, scene writing, screenplay generation, panel division, to final image prompt generation.
+**Showrunner** is an agentic AI platform for creating manga, manhwa, and webtoon comics. It combines a Python CLI, a FastAPI backend, and a Next.js web studio to orchestrate a 7-step creative pipeline -- from world-building through character creation, story structure, scene writing, screenplay generation, panel division, to final image prompt generation.
 
 ### Vision
 
@@ -14,7 +14,7 @@ A single author (or a small team) can produce publication-quality visual storyte
 |-----------|------|------|
 | Claude Code | Free (subscription) | Orchestration, reasoning, content generation, evaluation |
 | Gemini API | Paid (GEMINI_API_KEY) | Image generation only (Imagen 4) |
-| Antigravity CLI | Free (local Python) | Context compilation, file management, no API calls |
+| Showrunner CLI | Free (local Python) | Context compilation, file management, no API calls |
 
 ---
 
@@ -85,9 +85,9 @@ Project (root aggregate)
 
 ### Schema Base Class
 
-All domain entities inherit from `AntigravityBase`:
+All domain entities inherit from `ShowrunnerBase`:
 ```
-AntigravityBase
+ShowrunnerBase
   id: str (ULID -- sortable, unique)
   schema_version: str ("1.0.0")
   created_at: datetime (UTC)
@@ -230,7 +230,7 @@ This is the **most critical architectural constraint**. The creative room contai
 
 3. **Project.load_world_rules(filter_hidden=True)** -- removes rules where `known_to_reader=False`.
 
-4. **CreativeRoomManager.is_isolated()** -- checks `.antigravity-secret` marker file exists.
+4. **CreativeRoomManager.is_isolated()** -- checks `.showrunner-secret` marker file exists.
 
 5. **ReaderKnowledgeState** -- positive-list filtering. Tracks what the reader KNOWS at each scene checkpoint. Scene prompts include this state so the AI only references known information.
 
@@ -266,14 +266,14 @@ This is the primary user flow. Claude Code acts as the Director Agent, running C
 User (via Claude Code)
   |
   v
-antigravity <command> [args]
+showrunner <command> [args]
   |
   v
 Typer CLI -> Command handler
   |
   v
 Service Layer
-  +-- Project.find()              # Walk up from cwd to find antigravity.yaml
+  +-- Project.find()              # Walk up from cwd to find showrunner.yaml
   +-- ServiceContext.from_project()
   +-- service.compile_*_prompt()
   |     +-- ContextCompiler.compile_for_step()
@@ -293,7 +293,7 @@ Rich Console Output
   +-- User saves YAML to project files
   |
   v
-antigravity status  # Verify progress
+showrunner status  # Verify progress
 ```
 
 ### 5.2 Web Studio Flow (Target)
@@ -324,7 +324,7 @@ JSON Response -> Browser renders UI
 ```
 API: POST /api/v1/director/act
   OR
-CLI: antigravity director action
+CLI: showrunner director action
   |
   v
 DirectorService.act()
@@ -353,12 +353,12 @@ DirectorResult
 
 ```
 Session N ends:
-  antigravity session end "Built world and characters" --next "Write first scene"
+  showrunner session end "Built world and characters" --next "Write first scene"
     +-- SessionLog.save_session()
     +-- Records: summary, actions, decisions, next_steps
 
 Session N+1 starts:
-  antigravity brief show
+  showrunner brief show
     +-- BriefingGenerator.generate()
     |     +-- Scans: WorkflowState, characters, story structure
     |     +-- Loads: last SessionEntry, active Decisions
@@ -371,7 +371,7 @@ Session N+1 starts:
     |     +-- Last session summary + next steps
     |     +-- Suggested next command
     |
-  antigravity brief update
+  showrunner brief update
     +-- Writes briefing to CLAUDE.md between <!-- DYNAMIC:START --> and <!-- DYNAMIC:END -->
     +-- New Claude Code session reads CLAUDE.md automatically
 ```
@@ -383,7 +383,7 @@ Session N+1 starts:
 ### Step 1: World Building
 
 ```
-Command:   antigravity world build
+Command:   showrunner world build
 Template:  world/build_setting.md.j2
 Context:   project_name, project_variables, narrative_style, existing_world, author_decisions
 Output:    WorldSettings YAML (name, genre, time_period, tone, locations, rules)
@@ -393,13 +393,13 @@ Saves to:  world/settings.yaml
 ### Step 2: Character Creation
 
 ```
-Command:   antigravity character create "Name" --role protagonist
+Command:   showrunner character create "Name" --role protagonist
 Template:  character/create_character.md.j2
 Context:   project_name, world_summary, existing_characters, narrative_style, author_decisions
 Output:    Character YAML (name, personality, backstory, arc)
 Saves to:  characters/{slug}.yaml
 
-Follow-up: antigravity character generate-dna "Name"
+Follow-up: showrunner character generate-dna "Name"
 Template:  character/generate_dna_block.md.j2
 Output:    CharacterDNA YAML (face, hair, body, outfits)
 ```
@@ -407,7 +407,7 @@ Output:    CharacterDNA YAML (face, hair, body, outfits)
 ### Step 3: Story Structure
 
 ```
-Command:   antigravity story outline --structure save_the_cat
+Command:   showrunner story outline --structure save_the_cat
 Template:  story/outline_beats.md.j2
 Context:   project_name, world_summary, characters (name, role, one_line), narrative_style, author_decisions
 Output:    StoryStructure YAML (beats, character_arcs, act_summaries)
@@ -417,7 +417,7 @@ Saves to:  story/structure.yaml
 ### Step 4: Scene Writing
 
 ```
-Command:   antigravity scene write --chapter 1 --scene 1
+Command:   showrunner scene write --chapter 1 --scene 1
 Template:  scene/write_scene.md.j2
 Context:   project_name, world_summary, characters (FILTERED), story_structure, reader_knowledge,
            previous_scenes, narrative_style, author_decisions (scoped to chapter/scene)
@@ -430,7 +430,7 @@ Auto-runs:  Knowledge extraction -> updates reader_knowledge state
 ### Step 5: Screenplay Writing
 
 ```
-Command:   antigravity screenplay convert --chapter 1 --scene 1
+Command:   showrunner screenplay convert --chapter 1 --scene 1
 Template:  screenplay/scene_to_screenplay.md.j2
 Context:   project_name, scene (full), characters (with speech_patterns, verbal_tics),
            narrative_style, author_decisions
@@ -441,7 +441,7 @@ Saves to:  chapters/chapter-01/screenplay/scene-01.yaml
 ### Step 6: Panel Division
 
 ```
-Command:   antigravity panel divide --chapter 1 --scene 1
+Command:   showrunner panel divide --chapter 1 --scene 1
 Template:  panel/divide_panels.md.j2
 Context:   project_name, screenplay, character_dna_blocks, visual_style, author_decisions
 Output:    Panel[] YAML (composition, content, text, image_generation hints)
@@ -457,7 +457,7 @@ Rules enforced by template:
 ### Step 7: Image Prompt Generation
 
 ```
-Command:   antigravity prompt generate --chapter 1
+Command:   showrunner prompt generate --chapter 1
 Template:  panel/panel_to_image_prompt.md.j2
 Context:   panels, character_dna_blocks, visual_style
 Output:    Updated Panel.image_generation (prompt, negative_prompt, style_tokens)
@@ -471,7 +471,7 @@ Saves to:  panel files updated in-place
 ### Decision Log
 
 ```
-File:       .antigravity/decisions.yaml
+File:       .showrunner/decisions.yaml
 Schema:     Decision[]
 Scoping:    Each decision has a DecisionScope:
               global    -- applies everywhere
@@ -491,7 +491,7 @@ Example:
 ### Session Log
 
 ```
-Directory:  .antigravity/sessions/
+Directory:  .showrunner/sessions/
 Files:      session-{YYYY-MM-DD}-{seq}.yaml
 Schema:     SessionEntry
 Contains:   session_date, summary, workflow_step_start/end,
@@ -518,7 +518,7 @@ Used for:   Dynamic CLAUDE.md injection between
 
 ```
 {project_name}/
-+-- antigravity.yaml                    # Project manifest (name, version, template, structure)
++-- showrunner.yaml                    # Project manifest (name, version, template, structure)
 +-- CLAUDE.md                           # Static instructions + dynamic state section
 +-- .env                                # API keys (git-ignored)
 |
@@ -556,7 +556,7 @@ Used for:   Dynamic CLAUDE.md injection between
 |       +-- ...
 |
 +-- creative_room/                      # ISOLATED: author-only data
-|   +-- .antigravity-secret             # Isolation marker file
+|   +-- .showrunner-secret             # Isolation marker file
 |   +-- plot_twists.yaml                # PlotTwist[]
 |   +-- character_secrets.yaml          # CharacterSecret[]
 |   +-- foreshadowing_map.yaml          # ForeshadowingEntry[]
@@ -571,7 +571,7 @@ Used for:   Dynamic CLAUDE.md injection between
 |
 +-- exports/                            # Generated output
 |
-+-- .antigravity/                       # Project metadata
++-- .showrunner/                       # Project metadata
     +-- workflow_state.yaml             # WorkflowState (7 steps)
     +-- decisions.yaml                  # Decision[]
     +-- sessions/
@@ -645,7 +645,7 @@ Used for:   Dynamic CLAUDE.md injection between
 
 Templates are resolved with a Jinja2 `ChoiceLoader`:
 1. **User overrides** (`{project_path}/prompts/`) -- checked first
-2. **Built-in templates** (`src/antigravity_tool/prompts/`) -- fallback
+2. **Built-in templates** (`src/showrunner_tool/prompts/`) -- fallback
 
 This allows per-project customization of any prompt without modifying the package.
 
@@ -702,7 +702,7 @@ Status code mapping:
 
 ## 11. Knowledge Base
 
-The project includes an embedded knowledge base at `src/antigravity_tool/knowledge/` with markdown articles organized by category:
+The project includes an embedded knowledge base at `src/showrunner_tool/knowledge/` with markdown articles organized by category:
 
 | Category | Articles | Purpose |
 |----------|----------|---------|
@@ -725,7 +725,7 @@ Genre presets provide a one-command setup for common genres. Each preset configu
 
 Available presets: `dark_fantasy`, `shonen_action`, `romance`, `slice_of_life`, `sci_fi`, `horror`, `isekai`
 
-Applied via: `antigravity init "Name" --genre dark_fantasy`
+Applied via: `showrunner init "Name" --genre dark_fantasy`
 
 ---
 

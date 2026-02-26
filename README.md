@@ -1,4 +1,4 @@
-# Showrunner (Antigravity Studio)
+# Showrunner (Showrunner Studio)
 
 **Agentic AI-Powered Writing Tool for Complex Narratives**
 
@@ -147,7 +147,7 @@ This starts both the backend (port 8000) and frontend (port 3000) simultaneously
 ```bash
 # Terminal 1: Backend
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
-.venv_clean/bin/python -c "import uvicorn; uvicorn.run('antigravity_tool.server.app:app', host='0.0.0.0', port=8000)"
+.venv_clean/bin/python -c "import uvicorn; uvicorn.run('showrunner_tool.server.app:app', host='0.0.0.0', port=8000)"
 
 # Terminal 2: Frontend
 cd src/web && npm run dev
@@ -162,7 +162,7 @@ After the app is running:
 1. Open the app at `http://localhost:3000`
 2. Click the **cloud sync icon** in the navbar (or find "Connect Google Drive")
 3. Complete the Google OAuth flow in the browser popup
-4. Once authenticated, a `token.json` is saved at `.antigravity/token.json`
+4. Once authenticated, a `token.json` is saved at `.showrunner/token.json`
 5. Your projects from Drive will now be accessible
 
 > **Important:** `credentials.json` is the *app-level* OAuth client config. The *user-level* access token (`token.json`) is generated fresh through the browser OAuth flow and cannot be simply copied between machines — **you must re-authenticate on each new machine.**
@@ -173,7 +173,7 @@ After the app is running:
 
 ```
 showrunner/
-├── antigravity.yaml          # Project manifest (name, schema version)
+├── showrunner.yaml          # Project manifest (name, schema version)
 ├── .env                      # API keys & secrets (GITIGNORED)
 ├── credentials.json          # Google OAuth client config (GITIGNORED)
 ├── pyproject.toml            # Python package definition & dependencies
@@ -182,7 +182,7 @@ showrunner/
 ├── run_tests.sh              # Test runner script
 │
 ├── src/
-│   ├── antigravity_tool/     # Python backend
+│   ├── showrunner_tool/     # Python backend
 │   │   ├── core/             #   Project model, errors, constants
 │   │   ├── schemas/          #   Pydantic models (containers, sync, etc.)
 │   │   ├── repositories/     #   Data access (SQLite, ChromaDB, file-based)
@@ -208,7 +208,7 @@ showrunner/
 ### Gitignored Data Directories (created at runtime)
 
 ```
-.antigravity/                 # App data (chat.db, token.json)
+.showrunner/                 # App data (chat.db, token.json)
 .chroma/                      # ChromaDB vector store
 characters/                   # Character YAML files
 containers/                   # Generic container entities
@@ -226,12 +226,12 @@ event_log.db                  # Event sourcing database
 
 | File | Tracked in Git? | Purpose |
 |------|:-:|---------|
-| `antigravity.yaml` | ✅ | Project manifest — identifies this as a Showrunner project |
+| `showrunner.yaml` | ✅ | Project manifest — identifies this as a Showrunner project |
 | `pyproject.toml` | ✅ | Python dependencies & build config |
 | `src/web/package.json` | ✅ | Frontend dependencies |
 | `.env` | ❌ | API keys (`GEMINI_API_KEY`) and Google OAuth client config |
 | `credentials.json` | ❌ | Google Cloud OAuth 2.0 client secrets JSON |
-| `.antigravity/token.json` | ❌ | User's Google Drive access/refresh token (generated via OAuth flow) |
+| `.showrunner/token.json` | ❌ | User's Google Drive access/refresh token (generated via OAuth flow) |
 | `src/web/.env.local` | ❌ | Frontend API URL config (`NEXT_PUBLIC_API_URL`) |
 
 ---
@@ -243,7 +243,7 @@ When you start the server on a fresh clone, these are **rebuilt automatically**:
 | Data | How |
 |------|-----|
 | `knowledge_graph.db` | Full sync runs on startup (`kg_service.sync_all()`) |
-| `.antigravity/` directory | Created automatically on startup |
+| `.showrunner/` directory | Created automatically on startup |
 | `.chroma/` | Rebuilt as entities are indexed |
 
 ---
@@ -255,7 +255,7 @@ If you want to preserve project **content** (not just code) across machines:
 | Data | How to Migrate |
 |------|---------------|
 | Character/World/Chapter YAML files | Copy the `characters/`, `world/`, `containers/` directories manually, or re-sync from Google Drive |
-| Chat history | Copy `.antigravity/chat.db` |
+| Chat history | Copy `.showrunner/chat.db` |
 | Event log | Copy `event_log.db` |
 | Pipeline definitions | Copy `pipeline_def/` |
 | Google Drive connection | Re-authenticate via OAuth on the new machine (cannot be copied) |
@@ -277,7 +277,7 @@ PYTHONPATH=src pytest tests/ -v
 
 ## Troubleshooting
 
-### `ModuleNotFoundError: No module named 'antigravity_tool'`
+### `ModuleNotFoundError: No module named 'showrunner_tool'`
 
 Make sure `PYTHONPATH` includes the `src/` directory:
 
@@ -285,9 +285,9 @@ Make sure `PYTHONPATH` includes the `src/` directory:
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
 ```
 
-### `No antigravity.yaml found`
+### `No showrunner.yaml found`
 
-You must run the server from the project root directory (where `antigravity.yaml` lives). The server discovers the project by walking up from the current working directory.
+You must run the server from the project root directory (where `showrunner.yaml` lives). The server discovers the project by walking up from the current working directory.
 
 ### Google Drive OAuth fails
 

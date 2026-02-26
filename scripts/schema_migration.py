@@ -1,6 +1,6 @@
 """Schema migration script for Showrunner.
 
-This script parses a legacy Antigravity project and converts the
+This script parses a legacy Showrunner project and converts the
 hardcoded YAML files (Characters, Scenes, etc.) into the new
 Generic Container format, saving them to a new output directory.
 """
@@ -8,8 +8,8 @@ Generic Container format, saving them to a new output directory.
 import argparse
 from pathlib import Path
 
-from antigravity_tool.core.project import Project
-from antigravity_tool.schemas.container import GenericContainer
+from showrunner_tool.core.project import Project
+from showrunner_tool.schemas.container import GenericContainer
 
 
 def migrate_characters(project: Project, output_dir: Path) -> None:
@@ -37,7 +37,7 @@ def migrate_characters(project: Project, output_dir: Path) -> None:
         char_dir.mkdir(parents=True, exist_ok=True)
         file_name = f"{char.name.lower().replace(' ', '_')}.yaml"
         
-        from antigravity_tool.utils.io import write_yaml
+        from showrunner_tool.utils.io import write_yaml
         write_yaml(char_dir / file_name, container.model_dump(mode="json"))
         print(f"  Migrated: {char.name}")
 
@@ -62,13 +62,13 @@ def migrate_world(project: Project, output_dir: Path) -> None:
     loc_dir = output_dir / "location"
     loc_dir.mkdir(parents=True, exist_ok=True)
     
-    from antigravity_tool.utils.io import write_yaml
+    from showrunner_tool.utils.io import write_yaml
     write_yaml(loc_dir / f"{settings.name.lower().replace(' ', '_')}.yaml", container.model_dump(mode="json"))
     print(f"  Migrated: {settings.name}")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Migrate legacy Antigravity project to Showrunner Containers.")
+    parser = argparse.ArgumentParser(description="Migrate legacy Showrunner project to Showrunner Containers.")
     parser.add_argument("--project-dir", type=Path, default=Path.cwd(), help="Path to project directory.")
     parser.add_argument("--output-dir", type=Path, default=Path.cwd() / "containers", help="Path to output directory.")
     args = parser.parse_args()

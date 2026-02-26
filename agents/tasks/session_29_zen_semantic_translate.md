@@ -12,10 +12,10 @@ Showrunner is a CLI + FastAPI + Next.js platform for AI-assisted manga/manhwa cr
 - `src/web/src/components/zen/MentionList.tsx` — Mention suggestion dropdown
 - `src/web/src/components/zen/SlashCommandList.tsx` — Slash command registry (161+ lines, may have /check-style from Session 27)
 - `src/web/src/components/zen/ContextSidebar.tsx` — May have Continuity + Style tabs from Session 27
-- `src/antigravity_tool/server/routers/writing.py` — Writing router endpoints
-- `src/antigravity_tool/services/writing_service.py` — WritingService with search methods
-- `src/antigravity_tool/services/knowledge_graph_service.py` — Has `semantic_search()` method
-- `src/antigravity_tool/server/routers/graph.py` — Has `GET /search?q=` (semantic search endpoint)
+- `src/showrunner_tool/server/routers/writing.py` — Writing router endpoints
+- `src/showrunner_tool/services/writing_service.py` — WritingService with search methods
+- `src/showrunner_tool/services/knowledge_graph_service.py` — Has `semantic_search()` method
+- `src/showrunner_tool/server/routers/graph.py` — Has `GET /search?q=` (semantic search endpoint)
 - `src/web/src/lib/api.ts` — API client (may have translation methods from Session 28)
 - `src/web/src/lib/store/zenSlice.ts` — Zen Mode store
 - `src/web/src/components/translation/TranslationPanel.tsx` — Translation panel (from Session 28)
@@ -28,7 +28,7 @@ Showrunner is a CLI + FastAPI + Next.js platform for AI-assisted manga/manhwa cr
 
 **1. Add semantic search endpoint to writing router**
 
-Add to `src/antigravity_tool/server/routers/writing.py`:
+Add to `src/showrunner_tool/server/routers/writing.py`:
 
 ```python
 @router.get("/semantic-search")
@@ -233,7 +233,7 @@ type SidebarTab = "context" | "continuity" | "style" | "translation";
 ## Output Specification
 
 Provide the complete code for:
-1. Updates to `src/antigravity_tool/server/routers/writing.py` (add semantic-search endpoint)
+1. Updates to `src/showrunner_tool/server/routers/writing.py` (add semantic-search endpoint)
 2. Updates to `src/web/src/components/zen/ZenEditor.tsx` (semantic @mentions + translate action handler)
 3. Updates to `src/web/src/components/zen/MentionList.tsx` (relevance indicator)
 4. Updates to `src/web/src/components/zen/SlashCommandList.tsx` (add /translate command)

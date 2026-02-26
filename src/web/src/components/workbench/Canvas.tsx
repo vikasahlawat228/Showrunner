@@ -91,7 +91,7 @@ export function Canvas() {
           )}
           <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-              Antigravity Studio
+              Showrunner Studio
             </h1>
             {project && (
               <p className="text-gray-500 text-xs">{project.name}</p>

@@ -20,7 +20,7 @@ We currently have 5 agent skill files in `agents/skills/*.md` (Schema Architect,
 
 **Output Specification**:
 Provide the Python code for:
-1. `src/antigravity_tool/services/agent_dispatcher.py`
-2. `src/antigravity_tool/server/routers/director.py` (updated to use the dispatcher)
+1. `src/showrunner_tool/services/agent_dispatcher.py`
+2. `src/showrunner_tool/server/routers/director.py` (updated to use the dispatcher)
 
 *Note: The skill files are located at `agents/skills/`. The dispatcher should read these files from disk at boot or runtime to construct the `system_prompt` for LiteLLM calls.*

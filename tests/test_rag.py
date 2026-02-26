@@ -15,10 +15,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from antigravity_tool.repositories.container_repo import ContainerRepository, SchemaRepository
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.services.context_engine import ContextEngine
-from antigravity_tool.services.knowledge_graph_service import KnowledgeGraphService
+from showrunner_tool.repositories.container_repo import ContainerRepository, SchemaRepository
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.services.context_engine import ContextEngine
+from showrunner_tool.services.knowledge_graph_service import KnowledgeGraphService
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -59,7 +59,7 @@ skip_no_chromadb = pytest.mark.skipif(
 @pytest.fixture
 def chroma(tmp_path: Path):
     """ChromaIndexer backed by a temp directory (requires chromadb)."""
-    from antigravity_tool.repositories.chroma_indexer import ChromaIndexer
+    from showrunner_tool.repositories.chroma_indexer import ChromaIndexer
     return ChromaIndexer(tmp_path / ".chroma")
 
 
@@ -88,7 +88,7 @@ def schema_repo(tmp_path: Path) -> SchemaRepository:
 class TestChromaIndexerEmbedding:
     """Verify upsert_embedding stores LiteLLM-powered vectors."""
 
-    @patch("antigravity_tool.repositories.chroma_indexer._litellm_embed")
+    @patch("showrunner_tool.repositories.chroma_indexer._litellm_embed")
     def test_upsert_embedding_stores_vector(self, mock_embed, chroma):
         """upsert_embedding should call litellm and store the result."""
         mock_embed.return_value = [FAKE_VECTOR_A]
@@ -100,7 +100,7 @@ class TestChromaIndexerEmbedding:
         args = mock_embed.call_args
         assert args[0][0] == ["Zara is the protagonist"]
 
-    @patch("antigravity_tool.repositories.chroma_indexer._litellm_embed")
+    @patch("showrunner_tool.repositories.chroma_indexer._litellm_embed")
     def test_upsert_embedding_fallback_on_failure(self, mock_embed, chroma):
         """upsert_embedding falls back to built-in embeddings on failure."""
         mock_embed.side_effect = RuntimeError("API key missing")
@@ -109,7 +109,7 @@ class TestChromaIndexerEmbedding:
         chroma.upsert_embedding("c1", "Zara is the protagonist")
         assert chroma.count == 1
 
-    @patch("antigravity_tool.repositories.chroma_indexer._litellm_embed")
+    @patch("showrunner_tool.repositories.chroma_indexer._litellm_embed")
     def test_upsert_embedding_multiple_containers(self, mock_embed, chroma):
         """Multiple containers can be upserted with distinct vectors."""
         mock_embed.side_effect = [
@@ -129,7 +129,7 @@ class TestChromaIndexerEmbedding:
 class TestChromaIndexerSemanticSearch:
     """Verify semantic_search returns correct container IDs."""
 
-    @patch("antigravity_tool.repositories.chroma_indexer._litellm_embed")
+    @patch("showrunner_tool.repositories.chroma_indexer._litellm_embed")
     def test_semantic_search_returns_ids(self, mock_embed, chroma):
         """semantic_search should return container IDs ordered by similarity."""
         mock_embed.side_effect = [
@@ -150,14 +150,14 @@ class TestChromaIndexerSemanticSearch:
         # The query vector matches c1 exactly, so it should be first
         assert results[0] == "c1"
 
-    @patch("antigravity_tool.repositories.chroma_indexer._litellm_embed")
+    @patch("showrunner_tool.repositories.chroma_indexer._litellm_embed")
     def test_semantic_search_empty_collection(self, mock_embed, chroma):
         """semantic_search on an empty collection returns an empty list."""
         mock_embed.return_value = [FAKE_QUERY_VECTOR]
         results = chroma.semantic_search("anything")
         assert results == []
 
-    @patch("antigravity_tool.repositories.chroma_indexer._litellm_embed")
+    @patch("showrunner_tool.repositories.chroma_indexer._litellm_embed")
     def test_semantic_search_fallback_on_failure(self, mock_embed, chroma):
         """semantic_search falls back to built-in search on API failure."""
         # First add a document with built-in embeddings

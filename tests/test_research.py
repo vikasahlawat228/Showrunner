@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from antigravity_tool.repositories.container_repo import ContainerRepository
-from antigravity_tool.repositories.event_sourcing_repo import EventService
-from antigravity_tool.services.agent_dispatcher import AgentResult, AgentSkill
-from antigravity_tool.services.research_service import ResearchService
+from showrunner_tool.repositories.container_repo import ContainerRepository
+from showrunner_tool.repositories.event_sourcing_repo import EventService
+from showrunner_tool.services.agent_dispatcher import AgentResult, AgentSkill
+from showrunner_tool.services.research_service import ResearchService
 
 
 # ═══════════════════════════════════════════════════════════════════

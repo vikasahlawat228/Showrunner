@@ -12,12 +12,12 @@ This session adds two features:
 **Read these files first** (essential context):
 - `agents/skills/continuity_analyst.md` — Full system prompt for continuity analysis (64 lines)
 - `agents/skills/style_enforcer.md` — Full system prompt for style evaluation (81 lines)
-- `src/antigravity_tool/services/agent_dispatcher.py` — AgentDispatcher with execute() method (700+ lines)
-- `src/antigravity_tool/services/analysis_service.py` — Existing analysis service pattern (484 lines)
-- `src/antigravity_tool/services/context_engine.py` — ContextEngine for token-budgeted assembly (312 lines)
-- `src/antigravity_tool/server/routers/analysis.py` — Existing analysis endpoints (50 lines)
-- `src/antigravity_tool/server/deps.py` — DI graph (219 lines)
-- `src/antigravity_tool/repositories/event_sourcing_repo.py` — EventService with branching (256 lines)
+- `src/showrunner_tool/services/agent_dispatcher.py` — AgentDispatcher with execute() method (700+ lines)
+- `src/showrunner_tool/services/analysis_service.py` — Existing analysis service pattern (484 lines)
+- `src/showrunner_tool/services/context_engine.py` — ContextEngine for token-budgeted assembly (312 lines)
+- `src/showrunner_tool/server/routers/analysis.py` — Existing analysis endpoints (50 lines)
+- `src/showrunner_tool/server/deps.py` — DI graph (219 lines)
+- `src/showrunner_tool/repositories/event_sourcing_repo.py` — EventService with branching (256 lines)
 - `src/web/src/components/zen/ContextSidebar.tsx` — Zen sidebar with context cards (187 lines)
 - `src/web/src/components/zen/SlashCommandList.tsx` — Slash commands registry (161 lines)
 - `src/web/src/components/zen/ZenEditor.tsx` — TipTap editor (381 lines)
@@ -31,7 +31,7 @@ This session adds two features:
 
 ### Backend
 
-**1. Create `src/antigravity_tool/services/continuity_service.py`**
+**1. Create `src/showrunner_tool/services/continuity_service.py`**
 
 ```python
 class ContinuityVerdict:
@@ -89,10 +89,10 @@ Implementation notes:
 - The `continuity_analyst` agent expects { proposed_events, graph_context, future_dependencies } — build this from the KG
 - Cache verdicts in `self._recent_issues: dict[str, ContinuityVerdict]` (TTL: clear on next check)
 
-**2. Add continuity endpoints to `src/antigravity_tool/server/routers/analysis.py`**
+**2. Add continuity endpoints to `src/showrunner_tool/server/routers/analysis.py`**
 
 ```python
-from antigravity_tool.services.continuity_service import ContinuityService, ContinuityVerdict
+from showrunner_tool.services.continuity_service import ContinuityService, ContinuityVerdict
 
 @router.post("/continuity-check")
 async def check_continuity(
@@ -137,7 +137,7 @@ class ContinuityCheckResponse(BaseModel):
 **3. Add DI provider to `deps.py`**
 
 ```python
-from antigravity_tool.services.continuity_service import ContinuityService
+from showrunner_tool.services.continuity_service import ContinuityService
 
 def get_continuity_service(
     kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
@@ -233,7 +233,7 @@ Pass the current scene ID from `useZenStore` (via URL params or store state).
 
 ### Backend
 
-**6. Create `src/antigravity_tool/services/style_service.py`**
+**6. Create `src/showrunner_tool/services/style_service.py`**
 
 ```python
 class StyleIssue:
@@ -280,10 +280,10 @@ Implementation notes:
 - The `style_enforcer` agent expects { text, style_guide, scene_context } — build this from KG lookups
 - Parse the JSON output matching the style_enforcer.md output format
 
-**7. Add style endpoints to `src/antigravity_tool/server/routers/analysis.py`**
+**7. Add style endpoints to `src/showrunner_tool/server/routers/analysis.py`**
 
 ```python
-from antigravity_tool.services.style_service import StyleService, StyleEvaluation
+from showrunner_tool.services.style_service import StyleService, StyleEvaluation
 
 @router.post("/style-check")
 async def check_style(
@@ -325,7 +325,7 @@ class StyleCheckResponse(BaseModel):
 **8. Add DI provider to `deps.py`**
 
 ```python
-from antigravity_tool.services.style_service import StyleService
+from showrunner_tool.services.style_service import StyleService
 
 def get_style_service(
     kg_service: KnowledgeGraphService = Depends(get_knowledge_graph_service),
@@ -494,11 +494,11 @@ export interface StyleCheckResponse {
 ## Output Specification
 
 Provide the complete code for:
-1. `src/antigravity_tool/services/continuity_service.py` (new file)
-2. `src/antigravity_tool/services/style_service.py` (new file)
-3. Updates to `src/antigravity_tool/server/routers/analysis.py` (add 4 new endpoints)
-4. Updates to `src/antigravity_tool/server/deps.py` (add 2 new providers)
-5. Updates to `src/antigravity_tool/server/api_schemas.py` (add request/response models — or inline in analysis.py)
+1. `src/showrunner_tool/services/continuity_service.py` (new file)
+2. `src/showrunner_tool/services/style_service.py` (new file)
+3. Updates to `src/showrunner_tool/server/routers/analysis.py` (add 4 new endpoints)
+4. Updates to `src/showrunner_tool/server/deps.py` (add 2 new providers)
+5. Updates to `src/showrunner_tool/server/api_schemas.py` (add request/response models — or inline in analysis.py)
 6. `src/web/src/components/zen/ContinuityPanel.tsx` (new file)
 7. `src/web/src/components/zen/StyleScorecard.tsx` (new file)
 8. Updates to `src/web/src/components/zen/ContextSidebar.tsx` (add tab system + Continuity + Style tabs)

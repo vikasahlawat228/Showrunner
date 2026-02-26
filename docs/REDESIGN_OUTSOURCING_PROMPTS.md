@@ -13,7 +13,7 @@ You are working on the Showrunner project at /Users/vikasahlawat/Documents/writi
 We are implementing "Phase 3: Multi-Agent Orchestration & Glass Box Trace" from the UX & Architecture Redesign Proposal. The goal is to evolve the `ChatOrchestrator` into a multi-agent routing system (Planner Agent → Subagents) and surface their execution tree transparently to the user via the Glass Box Action Trace UI.
 
 ## Backend Tasks
-1. **Modify `src/antigravity_tool/services/chat_orchestrator.py`:**
+1. **Modify `src/showrunner_tool/services/chat_orchestrator.py`:**
    - Implement a new routing layer for complex queries (e.g., "Build Chapter 5").
    - Instead of a single LLM call, the Orchestrator should act as a "Planner Agent" that breaks the prompt into steps and delegates them to specialized Subagents (e.g., Story Architect, Writing Agent, Continuity Analyst).
    - Ensure every subagent invocation yields a `ChatEvent` of type `action_trace` with a parent-child relationship so the frontend can render a nested execution tree.
@@ -25,8 +25,8 @@ We are implementing "Phase 3: Multi-Agent Orchestration & Glass Box Trace" from 
    - Allow the user to click on sub-bullets to open a modal or inline block showing the exact raw JSON or prompt string (satisfying the Glass Box vision).
 
 ## Key Files
-- `src/antigravity_tool/services/chat_orchestrator.py`
-- `src/antigravity_tool/schemas/chat.py` (to update the `ChatActionTrace` schema for nesting)
+- `src/showrunner_tool/services/chat_orchestrator.py`
+- `src/showrunner_tool/schemas/chat.py` (to update the `ChatActionTrace` schema for nesting)
 - `src/web/src/components/chat/ChatMessage.tsx`
 
 ## Success Criteria
@@ -58,8 +58,8 @@ We are implementing "Phase 4: Asynchrony and The Background Queue" from the UX &
    - Free up the ChatSidebar so the user can continue talking to the AI while the background processing happens.
 
 ## Key Files
-- `src/antigravity_tool/server/routers/pipeline.py` or new `jobs.py`
-- `src/antigravity_tool/services/pipeline_service.py`
+- `src/showrunner_tool/server/routers/pipeline.py` or new `jobs.py`
+- `src/showrunner_tool/services/pipeline_service.py`
 - `src/web/src/components/ui/Navbar.tsx` or new `BackgroundJobsWidget.tsx`
 
 ## Success Criteria
@@ -92,7 +92,7 @@ We are implementing "Phase 5: Non-Destructive Branching (Timeline Slider)" from 
 ## Key Files
 - `src/web/src/components/zen/ZenEditor.tsx`
 - `src/web/src/lib/store/zenSlice.ts`
-- `src/antigravity_tool/services/writing_service.py` (if backend changes are needed)
+- `src/showrunner_tool/services/writing_service.py` (if backend changes are needed)
 
 ## Success Criteria
 - The frontend displays a Timeline Ribbon for branch management.

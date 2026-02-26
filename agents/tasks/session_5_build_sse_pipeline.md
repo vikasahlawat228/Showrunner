@@ -3,7 +3,7 @@
 **Context:** We are building "Showrunner", a node-based AI co-writer. The architecture dictates an Event-Driven backend where complex AI workflows (like generating a scene) are broken down into a state-machine pipeline (Context -> Prompt -> User_Intercept -> Execute). We use FastAPI and need to stream these state changes to the frontend using Server-Sent Events (SSE).
 
 **Your Objective: Write the Python Backend Code**
-You need to implement the core streaming engine in `src/antigravity_tool/services/pipeline_service.py` and the FastAPI router in `src/antigravity_tool/server/routers/pipeline.py`.
+You need to implement the core streaming engine in `src/showrunner_tool/services/pipeline_service.py` and the FastAPI router in `src/showrunner_tool/server/routers/pipeline.py`.
 
 **Requirements:**
 1. **Pydantic Models:** 

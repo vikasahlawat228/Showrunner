@@ -11,15 +11,15 @@ This session completes two features:
 
 **Read these files first** (essential context):
 - `docs/PRD.md` §13 — Phase Next-D description
-- `src/antigravity_tool/services/pipeline_service.py` — Pipeline execution (1273 lines). Pay attention to step handlers and how definitions are saved/run.
-- `src/antigravity_tool/schemas/pipeline_steps.py` — StepType enum (14 types), STEP_REGISTRY, PipelineStepDef, PipelineDefinition (298 lines)
+- `src/showrunner_tool/services/pipeline_service.py` — Pipeline execution (1273 lines). Pay attention to step handlers and how definitions are saved/run.
+- `src/showrunner_tool/schemas/pipeline_steps.py` — StepType enum (14 types), STEP_REGISTRY, PipelineStepDef, PipelineDefinition (298 lines)
 - `src/web/src/components/pipeline-builder/TemplateGallery.tsx` — Current gallery component (136 lines)
 - `src/web/src/components/pipeline-builder/PipelineBuilder.tsx` — Pipeline builder layout
-- `src/antigravity_tool/services/research_service.py` — Current research service (191 lines)
-- `src/antigravity_tool/server/routers/research.py` — Research endpoints (49 lines)
+- `src/showrunner_tool/services/research_service.py` — Current research service (191 lines)
+- `src/showrunner_tool/server/routers/research.py` — Research endpoints (49 lines)
 - `src/web/src/lib/api.ts` — API client patterns
 - `src/web/src/app/pipelines/page.tsx` — Pipeline page
-- `src/antigravity_tool/server/routers/pipeline.py` — Pipeline run/definition endpoints
+- `src/showrunner_tool/server/routers/pipeline.py` — Pipeline run/definition endpoints
 
 ---
 
@@ -27,7 +27,7 @@ This session completes two features:
 
 ### Backend
 
-**1. Create `src/antigravity_tool/templates/workflow_templates.py`**
+**1. Create `src/showrunner_tool/templates/workflow_templates.py`**
 
 Define 5 ready-to-use PipelineDefinition objects as Python data:
 
@@ -357,15 +357,15 @@ Add `/research` link in the Canvas.tsx header nav bar (alongside Zen, Pipelines,
 ## Output Specification
 
 Provide the complete code for:
-1. `src/antigravity_tool/templates/workflow_templates.py` (new file — 5 templates)
-2. Updates to `src/antigravity_tool/server/routers/pipeline.py` (add templates + create-from-template endpoints)
+1. `src/showrunner_tool/templates/workflow_templates.py` (new file — 5 templates)
+2. Updates to `src/showrunner_tool/server/routers/pipeline.py` (add templates + create-from-template endpoints)
 3. Updates to `src/web/src/components/pipeline-builder/TemplateGallery.tsx` (fetch from API)
 4. Updates to `src/web/src/lib/api.ts` (add template + research methods + interfaces)
 5. `src/web/src/app/research/page.tsx` (new file)
 6. `src/web/src/components/research/ResearchTopicCard.tsx` (new file)
 7. `src/web/src/components/research/ResearchDetailPanel.tsx` (new file)
 8. Updates to `src/web/src/components/workbench/Canvas.tsx` (add Research nav link)
-9. Any necessary updates to `src/antigravity_tool/server/api_schemas.py` for template response types
+9. Any necessary updates to `src/showrunner_tool/server/api_schemas.py` for template response types
 
 ---
 

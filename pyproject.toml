@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "antigravity"
+name = "showrunner"
 version = "0.1.0"
 description = "CLI tool for creating manga/manhwa/comic panels with agentic AI workflows"
 readme = {text = "CLI tool for creating manga/manhwa/comic panels with agentic AI workflows", content-type = "text/plain"}
@@ -28,10 +28,10 @@ dependencies = [
 ]
 
 [project.scripts]
-antigravity = "antigravity_tool.cli:app"
+showrunner = "showrunner_tool.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/antigravity_tool"]
+packages = ["src/showrunner_tool"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

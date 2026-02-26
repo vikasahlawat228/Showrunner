@@ -55,7 +55,7 @@ You must rewrite the data flow traces to prove the new architecture works. Focus
 4. **The Research Agent Flow** — Trace auto-detection of a concept → Agent Execution → Knowledge Bucket Creation → Auto-linking.
 
 ### Quality Standards
-- **Be Concrete:** Use actual file names (`src/antigravity_tool/services/event_service.py`), actual classes, and precise API paths.
+- **Be Concrete:** Use actual file names (`src/showrunner_tool/services/event_service.py`), actual classes, and precise API paths.
 - **Traceability:** Every new concept in `DESIGN.md` must have a corresponding concrete implementation home in `LOW_LEVEL_DESIGN.md`.
 - **Formatting:** Use tables for module lists and clean text-based traces (not Mermaid, just indented text like the existing document) for the Data Flow section to ensure readability.
 

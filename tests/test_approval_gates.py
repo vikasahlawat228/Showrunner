@@ -5,17 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from antigravity_tool.schemas.pipeline_steps import (
+from showrunner_tool.schemas.pipeline_steps import (
     PipelineDefinition,
     PipelineStepDef,
     PipelineEdge,
     StepType,
 )
-from antigravity_tool.schemas.pipeline import PipelineState
-from antigravity_tool.repositories.container_repo import ContainerRepository
-from antigravity_tool.repositories.event_sourcing_repo import EventService
-from antigravity_tool.services.pipeline_service import PipelineService
-from antigravity_tool.schemas.model_config import ModelConfig, ProjectModelConfig
+from showrunner_tool.schemas.pipeline import PipelineState
+from showrunner_tool.repositories.container_repo import ContainerRepository
+from showrunner_tool.repositories.event_sourcing_repo import EventService
+from showrunner_tool.services.pipeline_service import PipelineService
+from showrunner_tool.schemas.model_config import ModelConfig, ProjectModelConfig
 
 class DummyModelConfigRegistry:
     def resolve(self, step_config, bucket_model_preference, agent_id):
@@ -24,7 +24,7 @@ class DummyModelConfigRegistry:
 @pytest.fixture
 def tmp_project(tmp_path: Path) -> Path:
     (tmp_path / "schemas").mkdir()
-    (tmp_path / "antigravity.yaml").write_text(
+    (tmp_path / "showrunner.yaml").write_text(
         "name: Test Project\nversion: 0.1.0\ndefault_model: dummy-default-model\n"
     )
     return tmp_path

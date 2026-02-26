@@ -15,16 +15,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from antigravity_tool.schemas.pipeline_steps import (
+from showrunner_tool.schemas.pipeline_steps import (
     PipelineDefinition,
     PipelineStepDef,
     PipelineEdge,
     StepType,
 )
-from antigravity_tool.repositories.container_repo import ContainerRepository
-from antigravity_tool.repositories.event_sourcing_repo import EventService
-from antigravity_tool.services.pipeline_service import PipelineService
-from antigravity_tool.services.agent_dispatcher import AgentDispatcher, AgentSkill, AgentResult
+from showrunner_tool.repositories.container_repo import ContainerRepository
+from showrunner_tool.repositories.event_sourcing_repo import EventService
+from showrunner_tool.services.pipeline_service import PipelineService
+from showrunner_tool.services.agent_dispatcher import AgentDispatcher, AgentSkill, AgentResult
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -35,7 +35,7 @@ from antigravity_tool.services.agent_dispatcher import AgentDispatcher, AgentSki
 @pytest.fixture
 def tmp_project(tmp_path: Path) -> Path:
     (tmp_path / "schemas").mkdir()
-    (tmp_path / "antigravity.yaml").write_text(
+    (tmp_path / "showrunner.yaml").write_text(
         "name: Test Project\nversion: 0.1.0\n"
     )
     return tmp_path
@@ -298,7 +298,7 @@ class TestGeneratePipelineEndpoint:
     async def test_generate_pipeline_api_endpoint(self, tmp_project: Path):
         """POST /api/pipeline/definitions/generate returns 201 with valid pipeline."""
         from fastapi import FastAPI
-        from antigravity_tool.server.routers import pipeline as pipeline_router
+        from showrunner_tool.server.routers import pipeline as pipeline_router
 
         app = FastAPI()
         app.include_router(pipeline_router.router, prefix="/api")
@@ -318,7 +318,7 @@ class TestGeneratePipelineEndpoint:
             )
         }
 
-        from antigravity_tool.server.deps import get_pipeline_service, get_agent_dispatcher
+        from showrunner_tool.server.deps import get_pipeline_service, get_agent_dispatcher
         app.dependency_overrides[get_pipeline_service] = lambda: svc
         app.dependency_overrides[get_agent_dispatcher] = lambda: dispatcher
 

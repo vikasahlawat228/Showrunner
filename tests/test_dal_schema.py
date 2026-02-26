@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from antigravity_tool.schemas.dal import (
+from showrunner_tool.schemas.dal import (
     CacheEntry,
     CacheStats,
     ConsistencyIssue,

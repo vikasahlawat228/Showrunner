@@ -17,13 +17,13 @@ from typing import List
 
 import pytest
 
-from antigravity_tool.repositories.chat_session_repo import ChatSessionRepository
-from antigravity_tool.services.chat_session_service import ChatSessionService
-from antigravity_tool.services.chat_orchestrator import ChatOrchestrator
-from antigravity_tool.services.project_memory_service import ProjectMemoryService
-from antigravity_tool.services.chat_context_manager import ChatContextManager
-from antigravity_tool.services.intent_classifier import IntentClassifier
-from antigravity_tool.schemas.chat import (
+from showrunner_tool.repositories.chat_session_repo import ChatSessionRepository
+from showrunner_tool.services.chat_session_service import ChatSessionService
+from showrunner_tool.services.chat_orchestrator import ChatOrchestrator
+from showrunner_tool.services.project_memory_service import ProjectMemoryService
+from showrunner_tool.services.chat_context_manager import ChatContextManager
+from showrunner_tool.services.intent_classifier import IntentClassifier
+from showrunner_tool.schemas.chat import (
     AutonomyLevel,
     ChatEvent,
     SessionState,
@@ -35,8 +35,8 @@ from antigravity_tool.schemas.chat import (
 
 @pytest.fixture
 def tmp_dir(tmp_path):
-    """Create a temp directory with .antigravity/ subdirectory."""
-    ag_dir = tmp_path / ".antigravity"
+    """Create a temp directory with .showrunner/ subdirectory."""
+    ag_dir = tmp_path / ".showrunner"
     ag_dir.mkdir()
     return tmp_path
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from antigravity_tool.services.chat_tool_registry import build_tool_registry
+from showrunner_tool.services.chat_tool_registry import build_tool_registry
 
 
 # ── Fixtures ──────────────────────────────────────────────────────

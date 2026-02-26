@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
 
 
 # ═══════════════════════════════════════════════════════════════════

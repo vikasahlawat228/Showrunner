@@ -13,12 +13,12 @@ from pathlib import Path
 
 import pytest
 
-from antigravity_tool.schemas.container import GenericContainer
-from antigravity_tool.schemas.model_config import ModelConfig, ProjectModelConfig
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.repositories.container_repo import ContainerRepository
-from antigravity_tool.repositories.event_sourcing_repo import EventService
-from antigravity_tool.services.model_config_registry import (
+from showrunner_tool.schemas.container import GenericContainer
+from showrunner_tool.schemas.model_config import ModelConfig, ProjectModelConfig
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.repositories.container_repo import ContainerRepository
+from showrunner_tool.repositories.event_sourcing_repo import EventService
+from showrunner_tool.services.model_config_registry import (
     AGENT_DEFAULT_MODELS,
     ModelConfigRegistry,
 )
@@ -31,9 +31,9 @@ from antigravity_tool.services.model_config_registry import (
 
 @pytest.fixture
 def tmp_project(tmp_path: Path) -> Path:
-    """Create a minimal project directory with antigravity.yaml."""
+    """Create a minimal project directory with showrunner.yaml."""
     (tmp_path / "schemas").mkdir()
-    (tmp_path / "antigravity.yaml").write_text(
+    (tmp_path / "showrunner.yaml").write_text(
         "name: Test Project\n"
         "version: 0.1.0\n"
         "default_model: gemini/gemini-2.0-flash\n"
@@ -316,11 +316,11 @@ class TestUnifiedMutationPath:
 
     def test_indexer_syncs_on_save(self, tmp_path: Path):
         """ContainerRepository callbacks trigger SQLiteIndexer upsert."""
-        from antigravity_tool.repositories.container_repo import (
+        from showrunner_tool.repositories.container_repo import (
             ContainerRepository,
             SchemaRepository,
         )
-        from antigravity_tool.services.knowledge_graph_service import KnowledgeGraphService
+        from showrunner_tool.services.knowledge_graph_service import KnowledgeGraphService
 
         container_repo = ContainerRepository(tmp_path)
         schema_repo = SchemaRepository(tmp_path / "schemas")
@@ -374,7 +374,7 @@ class TestModelConfigRegistry:
         assert result.model == "gemini/gemini-2.0-flash"
 
     def test_agent_default_from_yaml(self, tmp_project: Path):
-        """Agent override in antigravity.yaml takes priority over built-in."""
+        """Agent override in showrunner.yaml takes priority over built-in."""
         registry = ModelConfigRegistry(tmp_project)
         result = registry.resolve(agent_id="writing_agent")
         # The YAML has writing_agent: anthropic/claude-3.5-sonnet
@@ -467,7 +467,7 @@ class TestModelConfigRegistry:
         assert result.model == "openai/gpt-4o-mini"
 
     def test_missing_yaml_uses_defaults(self, tmp_path: Path):
-        """When no antigravity.yaml exists, use built-in defaults."""
+        """When no showrunner.yaml exists, use built-in defaults."""
         registry = ModelConfigRegistry(tmp_path)
         result = registry.resolve()
         assert result.model == "gemini/gemini-2.0-flash"

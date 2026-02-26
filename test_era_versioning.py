@@ -4,10 +4,10 @@ import uuid
 import pytest
 from pathlib import Path
 
-from antigravity_tool.schemas.container import GenericContainer
-from antigravity_tool.repositories.container_repo import ContainerRepository, SchemaRepository
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.services.knowledge_graph_service import KnowledgeGraphService
+from showrunner_tool.schemas.container import GenericContainer
+from showrunner_tool.repositories.container_repo import ContainerRepository, SchemaRepository
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.services.knowledge_graph_service import KnowledgeGraphService
 
 @pytest.fixture
 def setup_services(tmp_path):

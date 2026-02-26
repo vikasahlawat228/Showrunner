@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from antigravity_tool.schemas.chat import ToolIntent
-from antigravity_tool.services.intent_classifier import IntentClassifier
+from showrunner_tool.schemas.chat import ToolIntent
+from showrunner_tool.services.intent_classifier import IntentClassifier
 
 
 # ═══════════════════════════════════════════════════════════════════

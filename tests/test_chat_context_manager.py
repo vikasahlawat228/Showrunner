@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from antigravity_tool.repositories.chat_session_repo import ChatSessionRepository
-from antigravity_tool.services.chat_context_manager import ChatContextManager
-from antigravity_tool.services.chat_session_service import ChatSessionService
-from antigravity_tool.services.project_memory_service import ProjectMemoryService
+from showrunner_tool.repositories.chat_session_repo import ChatSessionRepository
+from showrunner_tool.services.chat_context_manager import ChatContextManager
+from showrunner_tool.services.chat_session_service import ChatSessionService
+from showrunner_tool.services.project_memory_service import ProjectMemoryService
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -162,7 +162,7 @@ class TestCompaction:
         assert result.token_reduction > 0
 
     def test_compact_preserves_entity_mentions(self, ctx_mgr, active_session, session_service):
-        from antigravity_tool.schemas.chat import ChatMessage
+        from showrunner_tool.schemas.chat import ChatMessage
 
         # Add messages with mentioned entities
         msg = ChatMessage(

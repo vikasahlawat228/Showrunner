@@ -21,7 +21,7 @@ This session adds:
 
 ## Feature 1: HTML Export (Backend)
 
-### Modify `src/antigravity_tool/services/export_service.py`
+### Modify `src/showrunner_tool/services/export_service.py`
 
 Add a new method `export_html() -> str` that renders the manuscript as a styled HTML document.
 
@@ -79,7 +79,7 @@ def _wrap_html(self, body: str) -> str:
 </html>"""
 ```
 
-### Modify `src/antigravity_tool/server/routers/export.py`
+### Modify `src/showrunner_tool/server/routers/export.py`
 
 Add a new endpoint:
 
@@ -317,8 +317,8 @@ useEffect(() => {
 1. `src/web/src/components/ui/ExportModal.tsx` — Export format selector, preview, download modal
 
 ### Files to MODIFY:
-2. `src/antigravity_tool/services/export_service.py` — Add `export_html()` method + helpers
-3. `src/antigravity_tool/server/routers/export.py` — Add `POST /html` and `POST /preview` endpoints
+2. `src/showrunner_tool/services/export_service.py` — Add `export_html()` method + helpers
+3. `src/showrunner_tool/server/routers/export.py` — Add `POST /html` and `POST /preview` endpoints
 4. `src/web/src/lib/api.ts` — Add 5 export API methods + `ExportFormat` type
 5. `src/web/src/components/command-center/ProgressOverview.tsx` — Add export button + modal integration
 
@@ -330,8 +330,8 @@ useEffect(() => {
 - `src/web/src/lib/store.ts` or any store slice files
 - `src/web/src/components/ui/Navbar.tsx` (may not exist yet — created by parallel session)
 - `src/web/src/components/ui/CommandPalette.tsx` (may not exist yet)
-- `src/antigravity_tool/server/deps.py`
-- `src/antigravity_tool/server/app.py`
+- `src/showrunner_tool/server/deps.py`
+- `src/showrunner_tool/server/app.py`
 
 ## Existing Code Reference
 

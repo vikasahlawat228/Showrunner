@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from antigravity_tool.repositories.mtime_cache import MtimeCache
+from showrunner_tool.repositories.mtime_cache import MtimeCache
 
 
 # ═══════════════════════════════════════════════════════════════════

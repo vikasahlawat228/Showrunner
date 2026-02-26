@@ -23,8 +23,8 @@ Showrunner's source-of-truth is the local YAML files. Currently, `KnowledgeGraph
 
 **Output Specification**:
 Provide the Python code for:
-1. `src/antigravity_tool/services/file_watcher_service.py`
-2. `src/antigravity_tool/server/routers/project.py` (with the new SSE broadcast endpoint)
-3. Modified `src/antigravity_tool/server/app.py` linking the lifespan events.
+1. `src/showrunner_tool/services/file_watcher_service.py`
+2. `src/showrunner_tool/server/routers/project.py` (with the new SSE broadcast endpoint)
+3. Modified `src/showrunner_tool/server/app.py` linking the lifespan events.
 
 *Note: Ensure the file watcher uses a small debounce (e.g., 0.5s) to avoid spamming updates when a file is saved multiple times in rapid succession.*

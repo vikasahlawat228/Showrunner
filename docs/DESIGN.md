@@ -67,7 +67,7 @@ graph TB
         SQLite1[knowledge_graph.db — Universal Entity Index]
         SQLite2[event_log.db — Event Sourcing DAG]
         Chroma[.chroma/ — Vector Embeddings]
-        SESSIONS[.antigravity/sessions/ — Chat Sessions]
+        SESSIONS[.showrunner/sessions/ — Chat Sessions]
     end
 
     CS --> ZS --> API
@@ -148,7 +148,7 @@ graph TB
 Every piece of data in Showrunner — characters, scenes, seasons, research topics, pipeline definitions — is a `GenericContainer`. The Phase F evolution adds new properties to support hierarchical story structures, model preferences, and automatic context routing.
 
 ```python
-class GenericContainer(AntigravityBase):
+class GenericContainer(ShowrunnerBase):
     """A polymorphic container instance that holds dynamic attributes."""
 
     container_type: str                       # References a ContainerSchema.name
@@ -170,13 +170,13 @@ class GenericContainer(AntigravityBase):
 `ContainerSchema` defines the template for a bucket type. The runtime generates Pydantic models via `create_model()`:
 
 ```python
-class ContainerSchema(AntigravityBase):
+class ContainerSchema(ShowrunnerBase):
     name: str                                 # e.g., "Character", "Season", "ResearchTopic"
     display_name: str
     description: Optional[str] = None
     fields: List[FieldDefinition] = []
 
-    def to_pydantic_model(self) -> type[AntigravityBase]:
+    def to_pydantic_model(self) -> type[ShowrunnerBase]:
         """Generate a runtime Pydantic class for validation."""
         # Maps FieldType enum → Python types
         # Supports: string, integer, float, boolean, list[string],
@@ -349,7 +349,7 @@ class ModelConfigRegistry:
     """Resolves the correct model for any execution context."""
 
     def __init__(self, project_path: Path):
-        self._project_config: ModelConfig = ...     # From antigravity.yaml
+        self._project_config: ModelConfig = ...     # From showrunner.yaml
         self._agent_configs: Dict[str, ModelConfig] = {}   # Per-agent overrides
         self._load_configs(project_path)
 
@@ -392,10 +392,10 @@ class ModelConfigRegistry:
 | 🎭 Style Enforcer | Configurable | Depends on writer style |
 | 🌍 Translator Agent | Configurable | Language-specific |
 
-### 5.4 Project-Level Configuration (antigravity.yaml)
+### 5.4 Project-Level Configuration (showrunner.yaml)
 
 ```yaml
-# antigravity.yaml — extended
+# showrunner.yaml — extended
 name: "Midnight Chronicle"
 default_model: "gemini/gemini-2.0-flash"
 
@@ -950,7 +950,7 @@ graph TD
 def get_model_config_registry(
     project: Project = Depends(get_project),
 ) -> ModelConfigRegistry:
-    """LRU cached model config registry, loaded from antigravity.yaml."""
+    """LRU cached model config registry, loaded from showrunner.yaml."""
     return ModelConfigRegistry(project.path)
 
 def get_context_engine(
@@ -1263,7 +1263,7 @@ flowchart LR
 - **Track 2 — MtimeCache + Batch Loading:** `MtimeCache` with LRU eviction and mtime invalidation, `ProjectSnapshotFactory` for single-pass context loading, integration into `YAMLRepository._load_file()`
 - **Track 3 — Unit of Work:** `UnitOfWork` pattern for atomic YAML + SQLite + Event writes, temp-file + atomic-rename commit strategy, context manager API
 - **Track 4 — Unified Context Assembler:** Merge `ContextCompiler` (CLI) + `ContextEngine` (Web) into single `ContextAssembler`, token budgeting for all paths, Glass Box metadata for all paths, `ContextScope` model for routing
-- **Track 5 — DB Maintenance:** `antigravity db check|reindex|compact|stats` CLI commands, `/api/v1/db/*` maintenance endpoints, consistency verification and self-healing
+- **Track 5 — DB Maintenance:** `showrunner db check|reindex|compact|stats` CLI commands, `/api/v1/db/*` maintenance endpoints, consistency verification and self-healing
 - **Track 6 — Legacy Repo Migration:** Wire all typed repos (Character, World, Chapter, Story, Style) into SQLite index via existing `subscribe_save`/`subscribe_delete` callbacks, migrate services from direct repo calls to UnitOfWork
 
 ---
@@ -1293,13 +1293,13 @@ flowchart LR
 | **Non-Atomic Writes** | YAML + SQLite + EventService writes are convention-based, not transactional | `UnitOfWork` pattern: temp-write → SQLite txn → event → atomic rename | 🟠 | K |
 | **Expensive Startup** | `sync_all()` full crawls project directory on every server start | Incremental sync via `sync_metadata` table — only reindex changed files | 🟠 | K |
 | **Split Prompt Assembly** | CLI uses ContextCompiler + Jinja2; Web uses ContextEngine + token budget. No shared abstraction | `ContextAssembler` unifies both with token budgeting and Glass Box for all paths | 🟠 | K |
-| **DB Self-Healing** | No tools to verify or repair YAML ↔ SQLite consistency | `antigravity db check|reindex|compact|stats` CLI + API endpoints | 🟡 | K |
+| **DB Self-Healing** | No tools to verify or repair YAML ↔ SQLite consistency | `showrunner db check|reindex|compact|stats` CLI + API endpoints | 🟡 | K |
 
 ---
 
 ## 15. Appendix: Existing Source Map
 
-### Backend (`src/antigravity_tool/`)
+### Backend (`src/showrunner_tool/`)
 
 | Directory | Key Files | Count |
 |-----------|----------|:-----:|
@@ -1453,7 +1453,7 @@ Every chat message is processed with intelligently assembled context:
 ├─────────────────────────────────────────────────────────────────┤
 │  LAYER 2: SESSION CONTEXT (Ephemeral, Compactable)              │
 │  ──────────────────────────────────────                         │
-│  Source: ChatSessionService → .antigravity/sessions/{id}/       │
+│  Source: ChatSessionService → .showrunner/sessions/{id}/       │
 │  Contents: Conversation history, working drafts,                │
 │            agent results, approval decisions                    │
 │  Token budget: Configurable per session (default 100K)          │
@@ -1566,7 +1566,7 @@ stateDiagram-v2
 
 **Session persistence structure:**
 ```
-.antigravity/sessions/{session_id}/
+.showrunner/sessions/{session_id}/
 ├── manifest.yaml         # ChatSession metadata (name, state, stats)
 ├── messages/             # Individual message YAML files
 │   ├── msg_001.yaml
@@ -1895,10 +1895,10 @@ New CLI command group and API endpoints for index health monitoring, consistency
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
-| `antigravity db check` | Compare every YAML file against SQLite index. Report mismatches, orphaned indexes, un-indexed files. | After `git pull`, manual file edits, or suspected corruption |
-| `antigravity db reindex` | Full rebuild of SQLite `entities` + `sync_metadata` tables from YAML. Also rebuilds ChromaDB. | Nuclear option when incremental sync isn't enough |
-| `antigravity db compact` | Prune orphaned index entries, compress event log (remove tombstoned events), clean stale sync_metadata | Periodic maintenance for large projects |
-| `antigravity db stats` | Display entity counts by type, index health, disk usage, cache hit rates | Debugging and monitoring |
+| `showrunner db check` | Compare every YAML file against SQLite index. Report mismatches, orphaned indexes, un-indexed files. | After `git pull`, manual file edits, or suspected corruption |
+| `showrunner db reindex` | Full rebuild of SQLite `entities` + `sync_metadata` tables from YAML. Also rebuilds ChromaDB. | Nuclear option when incremental sync isn't enough |
+| `showrunner db compact` | Prune orphaned index entries, compress event log (remove tombstoned events), clean stale sync_metadata | Periodic maintenance for large projects |
+| `showrunner db stats` | Display entity counts by type, index health, disk usage, cache hit rates | Debugging and monitoring |
 
 **API Endpoints (for Web Studio):**
 
@@ -1909,7 +1909,7 @@ New CLI command group and API endpoints for index health monitoring, consistency
 | `/api/v1/db/check` | POST | Consistency report with actionable fixes |
 | `/api/v1/db/stats` | GET | Cache stats, query performance, index metrics |
 
-**Self-healing:** When `antigravity db check` detects a mismatch (e.g., YAML file exists but isn't indexed), it offers to auto-fix by re-indexing the affected files. This is the "pit of success" — the tool naturally guides toward consistency.
+**Self-healing:** When `showrunner db check` detects a mismatch (e.g., YAML file exists but isn't indexed), it offers to auto-fix by re-indexing the affected files. This is the "pit of success" — the tool naturally guides toward consistency.
 
 ---
 

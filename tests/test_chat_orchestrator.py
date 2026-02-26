@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from antigravity_tool.repositories.chat_session_repo import ChatSessionRepository
-from antigravity_tool.schemas.chat import ChatEvent, ChatSession, SessionState
-from antigravity_tool.services.chat_orchestrator import ChatOrchestrator
-from antigravity_tool.services.chat_session_service import ChatSessionService
+from showrunner_tool.repositories.chat_session_repo import ChatSessionRepository
+from showrunner_tool.schemas.chat import ChatEvent, ChatSession, SessionState
+from showrunner_tool.services.chat_orchestrator import ChatOrchestrator
+from showrunner_tool.services.chat_session_service import ChatSessionService
 
 
 # ═══════════════════════════════════════════════════════════════════

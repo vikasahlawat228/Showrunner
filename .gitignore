@@ -121,7 +121,7 @@ Thumbs.db
 # App Data & Buckets
 *.db
 .chroma/
-.antigravity/
+.showrunner/
 
 # Google Drive OAuth secrets
 credentials.json

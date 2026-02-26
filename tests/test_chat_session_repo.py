@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from antigravity_tool.repositories.chat_session_repo import ChatSessionRepository
-from antigravity_tool.schemas.chat import (
+from showrunner_tool.repositories.chat_session_repo import ChatSessionRepository
+from showrunner_tool.schemas.chat import (
     AutonomyLevel,
     ChatActionTrace,
     ChatArtifact,

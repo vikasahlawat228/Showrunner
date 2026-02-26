@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Antigravity Studio",
+  title: "Showrunner Studio",
   description: "Visual studio for manga/manhwa creation with AI workflows",
 };
 

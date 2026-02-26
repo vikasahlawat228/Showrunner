@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from antigravity_tool.services.agent_dispatcher import (
+from showrunner_tool.services.agent_dispatcher import (
     AgentDispatcher,
     AgentResult,
     AgentSkill,
@@ -93,7 +93,7 @@ async def test_react_loop_with_tool_call(dispatcher: AgentDispatcher):
 
     skill = dispatcher.skills["test_skill"]
 
-    with patch("antigravity_tool.services.agent_dispatcher.litellm") as mock_litellm:
+    with patch("showrunner_tool.services.agent_dispatcher.litellm") as mock_litellm:
         mock_litellm.acompletion = mock_acompletion
         result = await dispatcher.execute(skill, "describe the spaceship")
 
@@ -124,7 +124,7 @@ async def test_react_loop_max_iterations(dispatcher: AgentDispatcher):
     skill = dispatcher.skills["test_skill"]
     max_iter = 3
 
-    with patch("antigravity_tool.services.agent_dispatcher.litellm") as mock_litellm:
+    with patch("showrunner_tool.services.agent_dispatcher.litellm") as mock_litellm:
         mock_litellm.acompletion = mock_acompletion
         result = await dispatcher.execute(
             skill, "loop forever", max_iterations=max_iter
@@ -153,7 +153,7 @@ async def test_execute_without_react(dispatcher: AgentDispatcher):
 
     skill = dispatcher.skills["test_skill"]
 
-    with patch("antigravity_tool.services.agent_dispatcher.litellm") as mock_litellm:
+    with patch("showrunner_tool.services.agent_dispatcher.litellm") as mock_litellm:
         mock_litellm.acompletion = mock_acompletion
         result = await dispatcher.execute(skill, "create spaceship schema")
 

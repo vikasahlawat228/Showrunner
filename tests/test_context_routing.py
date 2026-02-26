@@ -6,19 +6,19 @@ from unittest.mock import patch
 
 import pytest
 
-from antigravity_tool.repositories.container_repo import ContainerRepository, SchemaRepository
-from antigravity_tool.repositories.event_sourcing_repo import EventService
-from antigravity_tool.repositories.sqlite_indexer import SQLiteIndexer
-from antigravity_tool.schemas.container import GenericContainer
-from antigravity_tool.services.knowledge_graph_service import KnowledgeGraphService
-from antigravity_tool.services.writing_service import WritingService
+from showrunner_tool.repositories.container_repo import ContainerRepository, SchemaRepository
+from showrunner_tool.repositories.event_sourcing_repo import EventService
+from showrunner_tool.repositories.sqlite_indexer import SQLiteIndexer
+from showrunner_tool.schemas.container import GenericContainer
+from showrunner_tool.services.knowledge_graph_service import KnowledgeGraphService
+from showrunner_tool.services.writing_service import WritingService
 
 
 @pytest.fixture
 def tmp_project(tmp_path: Path) -> Path:
-    """Create a minimal project directory with antigravity.yaml."""
+    """Create a minimal project directory with showrunner.yaml."""
     (tmp_path / "schemas").mkdir()
-    (tmp_path / "antigravity.yaml").write_text(
+    (tmp_path / "showrunner.yaml").write_text(
         "name: Test Project\n"
         "version: 0.1.0\n"
         "default_model: gemini/gemini-2.0-flash\n"
