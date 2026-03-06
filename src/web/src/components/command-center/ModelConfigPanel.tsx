@@ -94,7 +94,7 @@ export function ModelConfigPanel() {
         );
     }
 
-    const modelOptions = availableModels.length > 0 ? availableModels : [defaultModel].filter(Boolean);
+    const modelOptions = (availableModels && availableModels.length > 0) ? availableModels : [defaultModel].filter(Boolean);
 
     return (
         <div className="rounded-xl border border-gray-800 bg-gray-900/60 backdrop-blur-sm overflow-hidden">
@@ -110,8 +110,8 @@ export function ModelConfigPanel() {
                     onClick={handleSave}
                     disabled={!dirty || modelConfigSaving}
                     className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${dirty && !modelConfigSaving
-                            ? "bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
-                            : "bg-gray-800 text-gray-600 cursor-not-allowed"
+                        ? "bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                        : "bg-gray-800 text-gray-600 cursor-not-allowed"
                         }`}
                 >
                     {modelConfigSaving ? (

@@ -8,6 +8,7 @@ import type { StructureNode } from "@/lib/api";
 
 function countByType(nodes: StructureNode[]): Record<string, number> {
     const counts: Record<string, number> = {};
+    if (!nodes) return counts;
     function walk(list: StructureNode[]) {
         for (const n of list) {
             counts[n.container_type] = (counts[n.container_type] || 0) + 1;

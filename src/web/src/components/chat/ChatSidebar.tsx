@@ -10,8 +10,8 @@ import { WelcomeBackBanner } from "./WelcomeBackBanner";
 import { useChatStream } from "../../hooks/useChatStream";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useZenStore } from "../../lib/store/zenSlice";
-import { useRecorderStore } from "../../lib/store/recorderSlice";
+import { useZenStore } from "@/lib/store/zenSlice";
+
 import { PlanViewer } from "./PlanViewer";
 
 interface ChatSidebarProps {
@@ -170,15 +170,7 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
                 setStreaming(true);
                 clearStreamingContent();
 
-                // Record chat message if recording is active
-                const { isRecording: recOn, recordAction: recAct } = useRecorderStore.getState();
-                if (recOn) {
-                    recAct({
-                        type: "chat_message",
-                        description: content.slice(0, 100),
-                        payload: { message: content, mentioned_entity_ids: mentionedEntityIds },
-                    });
-                }
+
 
                 sendMessage(newId, content, mentionedEntityIds, contextPayload);
                 return;
@@ -200,15 +192,7 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
             clearStreamingContent();
             setWelcomeBack(null); // dismiss banner on send
 
-            // Record chat message if recording is active
-            const { isRecording: recOn2, recordAction: recAct2 } = useRecorderStore.getState();
-            if (recOn2) {
-                recAct2({
-                    type: "chat_message",
-                    description: content.slice(0, 100),
-                    payload: { message: content, mentioned_entity_ids: mentionedEntityIds },
-                });
-            }
+
 
             sendMessage(activeSessionId, content, mentionedEntityIds, contextPayload);
         },
@@ -363,26 +347,10 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
                             <ApprovalBanner
                                 data={pendingApproval}
                                 onApprove={() => {
-                                    const { isRecording: ra, recordAction: rec } = useRecorderStore.getState();
-                                    if (ra) {
-                                        rec({
-                                            type: "approval",
-                                            description: `Approved: ${pendingApproval.intent}`,
-                                            payload: { decision: "approve", intent: pendingApproval.intent },
-                                        });
-                                    }
                                     setPendingApproval(null);
                                     handleSend(`Approve action ${pendingApproval.intent}`, []);
                                 }}
                                 onReject={() => {
-                                    const { isRecording: ra2, recordAction: rec2 } = useRecorderStore.getState();
-                                    if (ra2) {
-                                        rec2({
-                                            type: "approval",
-                                            description: `Rejected: ${pendingApproval.intent}`,
-                                            payload: { decision: "reject", intent: pendingApproval.intent },
-                                        });
-                                    }
                                     setPendingApproval(null);
                                     handleSend("Reject action", []);
                                 }}

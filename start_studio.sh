@@ -36,6 +36,12 @@ echo -e "${GREEN}[Backend] Starting Server on port 8000...${NC}"
 $PYTHON_CMD -m showrunner_tool.server.app &
 BACKEND_PID=$!
 
+echo -e "${GREEN}[Backend] Waiting for server to initialize...${NC}"
+while ! curl -s http://localhost:8000/api/v1/project/health > /dev/null; do
+    sleep 1
+done
+echo -e "${GREEN}[Backend] Server is up and running!${NC}"
+
 # 3. Start Frontend
 echo -e "${GREEN}[Frontend] Starting Next.js on port 3000...${NC}"
 cd src/web
