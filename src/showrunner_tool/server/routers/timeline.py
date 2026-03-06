@@ -84,6 +84,64 @@ async def compare_branches(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+@router.post("/undo")
+async def undo(
+    branch_id: str = "main",
+    svc: EventService = Depends(get_event_service),
+) -> Dict[str, Any]:
+    """Undo the last action (move branch pointer back one event)."""
+    try:
+        reverted_to = svc.undo(branch_id)
+        if reverted_to is None:
+            raise HTTPException(status_code=400, detail="Already at root, cannot undo further")
+
+        stack = svc.get_undo_redo_stack(branch_id)
+        return {
+            "status": "success",
+            "message": "Reverted to previous event",
+            "reverted_to": reverted_to,
+            "can_undo": stack["can_undo"],
+            "can_redo": stack["can_redo"],
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/redo")
+async def redo(
+    branch_id: str = "main",
+    svc: EventService = Depends(get_event_service),
+) -> Dict[str, Any]:
+    """Redo the last undone action (move branch pointer forward one event)."""
+    try:
+        moved_to = svc.redo(branch_id)
+        if moved_to is None:
+            raise HTTPException(status_code=400, detail="Already at head, nothing to redo")
+
+        stack = svc.get_undo_redo_stack(branch_id)
+        return {
+            "status": "success",
+            "message": "Reapplied next event",
+            "moved_to": moved_to,
+            "can_undo": stack["can_undo"],
+            "can_redo": stack["can_redo"],
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/undo-redo-stack")
+async def get_undo_redo_stack(
+    branch_id: str = "main",
+    svc: EventService = Depends(get_event_service),
+) -> Dict[str, Any]:
+    """Get the undo/redo stack for the current branch."""
+    try:
+        return svc.get_undo_redo_stack(branch_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.get("/stream")
 async def stream_timeline_events(
     request: Request,

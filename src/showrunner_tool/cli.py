@@ -34,6 +34,8 @@ from showrunner_tool.commands import (
     analytics,
     server,
     db,
+    cascade,
+    git_cmd,
 )
 from showrunner_tool.core.project import Project, ProjectError
 from showrunner_tool.core.workflow import WorkflowState, STEP_LABELS
@@ -75,6 +77,8 @@ app.add_typer(pacing.app, name="pacing")
 app.add_typer(analytics.app, name="analytics")
 app.add_typer(server.app, name="server")
 app.add_typer(db.app, name="db")
+app.add_typer(cascade.app, name="cascade")
+app.add_typer(git_cmd.app, name="git")
 
 
 @app.command("status")

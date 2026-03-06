@@ -288,6 +288,146 @@ class EventService:
             "same_count": len(same),
         }
 
+    def undo(self, branch_id: str) -> Optional[str]:
+        """Move the branch pointer back one event (undo).
+
+        Returns the event ID we reverted to, or None if already at root.
+        """
+        try:
+            cursor = self.conn.execute(
+                "SELECT head_event_id FROM branches WHERE id = ?",
+                (branch_id,)
+            )
+            row = cursor.fetchone()
+            if not row or not row['head_event_id']:
+                return None  # Already at root
+
+            current_head = row['head_event_id']
+
+            # Find the parent of the current head
+            cursor = self.conn.execute(
+                "SELECT parent_event_id FROM events WHERE id = ?",
+                (current_head,)
+            )
+            parent_row = cursor.fetchone()
+            if not parent_row:
+                return None
+
+            parent_event_id = parent_row['parent_event_id']
+
+            # Move the branch pointer to the parent
+            with self.conn:
+                self.conn.execute(
+                    "UPDATE branches SET head_event_id = ? WHERE id = ?",
+                    (parent_event_id, branch_id)
+                )
+
+            return parent_event_id
+
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during undo: {e}")
+
+    def redo(self, branch_id: str) -> Optional[str]:
+        """Move the branch pointer forward one event (redo).
+
+        Returns the event ID we moved to, or None if at the head already.
+        """
+        try:
+            cursor = self.conn.execute(
+                "SELECT head_event_id FROM branches WHERE id = ?",
+                (branch_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError(f"Branch '{branch_id}' not found.")
+
+            current_head = row['head_event_id']
+
+            # Find an event whose parent is the current head
+            cursor = self.conn.execute(
+                "SELECT id FROM events WHERE parent_event_id = ? AND branch_id = ? LIMIT 1",
+                (current_head, branch_id)
+            )
+            next_row = cursor.fetchone()
+            if not next_row:
+                return None  # No next event on this branch
+
+            next_event_id = next_row['id']
+
+            # Move the branch pointer to the next event
+            with self.conn:
+                self.conn.execute(
+                    "UPDATE branches SET head_event_id = ? WHERE id = ?",
+                    (next_event_id, branch_id)
+                )
+
+            return next_event_id
+
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during redo: {e}")
+
+    def get_undo_redo_stack(self, branch_id: str) -> Dict[str, Any]:
+        """Get the undo/redo stack for a branch.
+
+        Returns:
+            {
+                "can_undo": bool,
+                "can_redo": bool,
+                "undo_steps": List of events from current to root,
+                "redo_steps": List of events from current to leaf,
+            }
+        """
+        try:
+            cursor = self.conn.execute(
+                "SELECT head_event_id FROM branches WHERE id = ?",
+                (branch_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError(f"Branch '{branch_id}' not found.")
+
+            current_head = row['head_event_id']
+
+            # Get undo stack (backwards to root)
+            undo_steps = []
+            if current_head:
+                cursor = self.conn.execute("""
+                    WITH RECURSIVE EventChain AS (
+                        SELECT id, parent_event_id, event_type, container_id, timestamp
+                        FROM events WHERE id = ?
+                        UNION ALL
+                        SELECT e.id, e.parent_event_id, e.event_type, e.container_id, e.timestamp
+                        FROM events e
+                        JOIN EventChain ec ON e.id = ec.parent_event_id
+                    )
+                    SELECT id, event_type, container_id, timestamp
+                    FROM EventChain ORDER BY timestamp DESC
+                """, (current_head,))
+
+                undo_steps = [dict(r) for r in cursor.fetchall()]
+
+            # Get redo stack (forwards from current)
+            redo_steps = []
+            if current_head:
+                cursor = self.conn.execute(
+                    "SELECT id, event_type, container_id, timestamp FROM events "
+                    "WHERE parent_event_id = ? AND branch_id = ? "
+                    "ORDER BY timestamp ASC",
+                    (current_head, branch_id)
+                )
+                redo_steps = [dict(r) for r in cursor.fetchall()]
+
+            return {
+                "can_undo": len(undo_steps) > 1,  # More than just current
+                "can_redo": len(redo_steps) > 0,
+                "undo_steps": undo_steps,
+                "redo_steps": redo_steps,
+                "current_event_id": current_head,
+            }
+
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during get_undo_redo_stack: {e}")
+
     def close(self) -> None:
         """Close the local database connection."""
         self.conn.close()

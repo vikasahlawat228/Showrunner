@@ -224,3 +224,88 @@ class BriefingGenerator:
         lines.append("")
 
         return "\n".join(lines)
+
+    def to_ide_context(self, brief: ProjectBrief | None = None) -> dict:
+        """Convert briefing to machine-readable JSON for IDE agent consumption.
+
+        Returns a compact JSON object with:
+        - Project metadata (name, template, structure)
+        - Current position (chapter, scene, step)
+        - Character names + file paths (so Claude Code knows where to read)
+        - Research topics + file paths
+        - Recent decisions
+        - Recent sessions
+        """
+        if brief is None:
+            brief = self.generate()
+
+        # Build character file paths
+        character_files = {}
+        characters = self.project.load_all_characters(filter_secrets=True)
+        for char in characters:
+            char_id = getattr(char, "id", char.name)
+            # Construct YAML path
+            file_path = f"characters/{char.name.lower().replace(' ', '-')}.yaml"
+            character_files[char.name] = {
+                "id": char_id,
+                "file_path": file_path,
+            }
+
+        # Build research topics from containers
+        research_topics = []
+        containers_dir = self.project.path / "containers"
+        if containers_dir.exists():
+            import yaml
+            for yaml_file in containers_dir.glob("*.yaml"):
+                try:
+                    with open(yaml_file) as f:
+                        container = yaml.safe_load(f)
+                    if container and container.get("container_type") == "research_topic":
+                        research_topics.append({
+                            "name": container.get("name"),
+                            "id": container.get("id"),
+                            "file_path": str(yaml_file.relative_to(self.project.path)),
+                        })
+                except Exception:
+                    pass
+
+        return {
+            "project": {
+                "name": brief.project_name,
+                "template": brief.template,
+                "structure": brief.structure_type,
+                "one_line": brief.one_line,
+            },
+            "current_position": {
+                "step": brief.current_step,
+                "step_label": brief.current_step_label,
+                "chapter": brief.current_chapter,
+                "scene": brief.current_scene,
+            },
+            "progress": {
+                "total_characters": brief.total_characters,
+                "story_beats_filled": brief.story_beats_filled,
+                "chapters": [
+                    {
+                        "number": ch.chapter_number,
+                        "title": ch.title,
+                        "status": ch.status,
+                        "scenes": ch.scene_count,
+                        "screenplays": ch.screenplay_count,
+                        "panels": ch.panel_count,
+                    }
+                    for ch in brief.chapter_summaries
+                ],
+            },
+            "characters": character_files,
+            "research": research_topics,
+            "decisions": brief.active_decisions,
+            "last_session": {
+                "summary": brief.last_session_summary,
+                "next_steps": brief.last_session_next_steps,
+            },
+            "next_action": {
+                "description": brief.suggested_next_action,
+                "command": brief.suggested_command,
+            },
+        }

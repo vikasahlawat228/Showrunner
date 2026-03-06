@@ -20,6 +20,14 @@ from showrunner_tool.server.routers import (
     research,
     # Phase I Track 4
     export,
+    # Phase L IDE integration
+    git_router,
+    search_router,
+    chat,
+    db,
+    sync,
+    containers,
+    analysis,
 )
 
 __all__ = [
@@ -42,4 +50,12 @@ __all__ = [
     "research",
     # Phase I Track 4
     "export",
+    # Phase L IDE integration
+    "git_router",
+    "search_router",
+    "chat",
+    "db",
+    "sync",
+    "containers",
+    "analysis",
 ]

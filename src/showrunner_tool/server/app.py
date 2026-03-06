@@ -30,11 +30,13 @@ from showrunner_tool.server.routers import (
     timeline,
     writing,
     storyboard,
+    git_router,
 )
 from showrunner_tool.server.routers import projects as projects_router
 from showrunner_tool.server.routers import containers as containers_router
 from showrunner_tool.server.routers import models as models_router
 from showrunner_tool.server.routers import research as research_router
+from showrunner_tool.server.routers import search_router
 from showrunner_tool.server.routers import export as export_router
 from showrunner_tool.server.routers import analysis as analysis_router
 from showrunner_tool.server.routers import preview as preview_router
@@ -142,13 +144,26 @@ async def lifespan(app: FastAPI):
 
     # Build tool registry from existing services
     from showrunner_tool.repositories.event_sourcing_repo import EventService
+    from showrunner_tool.services.continuity_service import ContinuityService
+    from showrunner_tool.services.style_service import StyleService
+    from showrunner_tool.services.context_engine import ContextEngine
+
     event_service = EventService(proj.path / "event_log.db")
+
+    # Initialize continuity and style services
+    context_engine = ContextEngine(kg_service)
+    continuity_service = ContinuityService(kg_service, context_engine, event_service, agent_dispatcher)
+    style_service = StyleService(kg_service)
+
     tool_registry = build_tool_registry(
         kg_service=kg_service,
         container_repo=container_repo,
         project_memory_service=project_memory_service,
         pipeline_service=PipelineService(container_repo, event_service),
         project_path=proj.path,
+        agent_dispatcher=agent_dispatcher,
+        continuity_service=continuity_service,
+        style_service=style_service,
     )
 
     # ── Phase L: Cloud Sync System ──────────────────
@@ -239,6 +254,9 @@ app.include_router(models_router.router)
 # Phase G Track 2
 app.include_router(research_router.router)
 
+# Phase 3 (UX Polish) — Full-text search
+app.include_router(search_router.router)
+
 # Phase I Track 4
 app.include_router(export_router.router)
 
@@ -258,6 +276,9 @@ app.include_router(db_router.router)
 # Phase L (Cloud Sync)
 from showrunner_tool.server.routers import sync as sync_router
 app.include_router(sync_router.router)
+
+# Phase 2 (IDE Integration) — Git operations
+app.include_router(git_router.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -19,6 +19,18 @@ logger = logging.getLogger(__name__)
 
 # Keyword patterns for each intent
 _INTENT_PATTERNS: Dict[str, List[str]] = {
+    "WRITE": [
+        r"\bwrite\b", r"\bdraft\b", r"\bcontinue\b", r"\bexpand\b",
+        r"\bprose\b", r"\bscene\b.*\bwrite\b", r"\bcompose\b",
+    ],
+    "BRAINSTORM": [
+        r"\bbrainstorm\b", r"\bidea\b", r"\bwhat\s+if\b", r"\bpossibility\b",
+        r"\bexplore\b", r"\bgenerate\b.*\bidea\b", r"\bplot\s+twist\b",
+    ],
+    "OUTLINE": [
+        r"\boutline\b", r"\bstructure\b.*\bstory\b", r"\barc\b", r"\bact\b",
+        r"\bchapter\b.*\bplan\b", r"\bstory.*\barch\b", r"\bplan.*\bstory\b",
+    ],
     "SEARCH": [
         r"\bfind\b", r"\bsearch\b", r"\blook\s+(?:up|for)\b",
         r"\bwhere\s+is\b", r"\bwhat\s+is\b", r"\bshow\s+me\b",

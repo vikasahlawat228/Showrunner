@@ -58,41 +58,59 @@ def show_context(
     step: str = typer.Option(None, "--step", "-s", help="Workflow step to show context for"),
     chapter: int = typer.Option(None, "--chapter", "-c", help="Chapter number"),
     scene: int = typer.Option(None, "--scene", help="Scene number"),
+    format: str = typer.Option("md", "--format", "-f", help="Output format: 'md' or 'json'"),
 ) -> None:
-    """Show what context would be compiled for a given step."""
+    """Show what context would be compiled for a given step.
+
+    Formats:
+      md (default) — Human-readable markdown
+      json — Machine-readable JSON (for IDE agents)
+    """
     project = Project.find()
-    from showrunner_tool.core.context_compiler import ContextCompiler
-    from showrunner_tool.core.workflow import WorkflowState
 
-    compiler = ContextCompiler(project)
-    step_name = step or WorkflowState(project.path).get_current_step()
+    if format == "json":
+        # Output IDE context as JSON
+        gen = BriefingGenerator(project)
+        brief = gen.generate()
+        ide_context = gen.to_ide_context(brief)
 
-    ctx = compiler.compile_for_step(step_name, chapter_num=chapter, scene_num=scene)
-
-    console.print(f"\n[bold]Context for step: {step_name}[/]\n")
-
-    # Show context keys and sizes
-    from showrunner_tool.utils.display import create_table
-    table = create_table("Compiled Context", [("Key", ""), ("Type", ""), ("Size", "")])
-    for key, value in ctx.items():
-        if isinstance(value, list):
-            size = f"{len(value)} items"
-        elif isinstance(value, dict):
-            size = f"{len(value)} keys"
-        elif isinstance(value, str):
-            size = f"{len(value)} chars"
-        else:
-            size = str(type(value).__name__)
-        table.add_row(key, type(value).__name__, size)
-
-    console.print(table)
-
-    # Show decisions that would be injected
-    from showrunner_tool.core.session_manager import DecisionLog
-    dl = DecisionLog(project.path)
-    decisions_text = dl.format_for_prompt(chapter=chapter, scene=scene)
-    if decisions_text:
-        console.print(f"\n[bold]Decisions injected:[/]\n")
-        console.print(decisions_text)
+        import json
+        json_output = json.dumps(ide_context, indent=2)
+        console.print(json_output)
     else:
-        print_info("No active decisions for this context.")
+        # Original markdown output
+        from showrunner_tool.core.context_compiler import ContextCompiler
+        from showrunner_tool.core.workflow import WorkflowState
+
+        compiler = ContextCompiler(project)
+        step_name = step or WorkflowState(project.path).get_current_step()
+
+        ctx = compiler.compile_for_step(step_name, chapter_num=chapter, scene_num=scene)
+
+        console.print(f"\n[bold]Context for step: {step_name}[/]\n")
+
+        # Show context keys and sizes
+        from showrunner_tool.utils.display import create_table
+        table = create_table("Compiled Context", [("Key", ""), ("Type", ""), ("Size", "")])
+        for key, value in ctx.items():
+            if isinstance(value, list):
+                size = f"{len(value)} items"
+            elif isinstance(value, dict):
+                size = f"{len(value)} keys"
+            elif isinstance(value, str):
+                size = f"{len(value)} chars"
+            else:
+                size = str(type(value).__name__)
+            table.add_row(key, type(value).__name__, size)
+
+        console.print(table)
+
+        # Show decisions that would be injected
+        from showrunner_tool.core.session_manager import DecisionLog
+        dl = DecisionLog(project.path)
+        decisions_text = dl.format_for_prompt(chapter=chapter, scene=scene)
+        if decisions_text:
+            console.print(f"\n[bold]Decisions injected:[/]\n")
+            console.print(decisions_text)
+        else:
+            print_info("No active decisions for this context.")

@@ -11,7 +11,13 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from typing import Any, Callable, Dict, List
+
+import ulid
+
+from showrunner_tool.schemas.chat import ChatEvent, ChatArtifact
+from showrunner_tool.schemas.container import GenericContainer
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +29,9 @@ def build_tool_registry(
     pipeline_service=None,
     writing_service=None,
     project_path=None,
+    agent_dispatcher=None,
+    continuity_service=None,
+    style_service=None,
 ) -> Dict[str, Callable]:
     """Build the intent → tool function mapping.
 
@@ -332,39 +341,570 @@ def build_tool_registry(
 
     registry["navigate"] = navigate_tool
 
-    # ── EVALUATE: run quality checks ─────────────────────────────
-    if kg_service:
-        def evaluate_tool(content: str, entity_ids: List[str], **kwargs) -> str:
-            # List what can be evaluated
-            checks = [
-                "Scene quality (pacing, dialogue, tension)",
-                "Character consistency (across scenes)",
-                "Panel composition (visual storytelling)",
-                "Dramatic irony (reader vs character knowledge)",
-                "Continuity (timeline, facts, details)",
-            ]
-            lines = ["Available evaluations:\n"]
-            for i, check in enumerate(checks, 1):
-                lines.append(f"  {i}. {check}")
-            lines.append(
-                "\nSpecify what to evaluate and @mention the target entity, "
-                "or use `/plan evaluate all` for a comprehensive review."
+    # ── EVALUATE: run quality checks via ContinuityService ──────────────────────────────
+    if kg_service and continuity_service:
+        async def evaluate_tool(content: str, entity_ids: List[str], **kwargs) -> str:
+            """Evaluate story quality using ContinuityService."""
+            import re
+
+            # If no specific entity was mentioned, offer options
+            if not entity_ids:
+                checks = [
+                    "Scene quality (pacing, dialogue, tension)",
+                    "Character consistency (across scenes)",
+                    "Panel composition (visual storytelling)",
+                    "Dramatic irony (reader vs character knowledge)",
+                    "Continuity (timeline, facts, details)",
+                ]
+                lines = ["Available evaluations:\n"]
+                for i, check in enumerate(checks, 1):
+                    lines.append(f"  {i}. {check}")
+                lines.append(
+                    "\nSpecify what to evaluate and @mention the target entity, "
+                    "or describe the scene/content you want evaluated."
+                )
+                yield ChatEvent(
+                    event_type="token",
+                    data={"text": "\n".join(lines)}
+                )
+                return
+
+            yield ChatEvent(
+                event_type="action_trace",
+                data={
+                    "tool_name": "continuity_analyst",
+                    "context_summary": f"Evaluating: {content[:60]}..."
+                }
             )
-            return "\n".join(lines)
+
+            try:
+                # Run continuity check on the mentioned entities
+                evaluation_results = []
+
+                for entity_id in entity_ids:
+                    verdict = await continuity_service.check_continuity(entity_id)
+                    evaluation_results.append({
+                        "entity_id": entity_id,
+                        "status": verdict.status,
+                        "severity": verdict.severity,
+                        "reasoning": verdict.reasoning,
+                        "suggestions": verdict.suggestions,
+                        "affected_entities": verdict.affected_entities,
+                    })
+
+                # Format results
+                evaluation_text = "## Evaluation Results\n\n"
+
+                for result in evaluation_results:
+                    evaluation_text += f"**Entity:** {result['entity_id']}\n"
+                    evaluation_text += f"**Status:** {result['status']} ({result['severity']})\n"
+                    evaluation_text += f"**Reasoning:** {result['reasoning']}\n"
+                    if result['suggestions']:
+                        evaluation_text += f"**Suggestions:** {result['suggestions']}\n"
+                    evaluation_text += "\n"
+
+                for word in re.findall(r'\S+\s*', evaluation_text):
+                    yield ChatEvent(event_type="token", data={"text": word})
+
+                # Emit as artifact
+                yield ChatEvent(
+                    event_type="artifact",
+                    data=ChatArtifact(
+                        artifact_type="outline",
+                        title="Evaluation Report",
+                        content=evaluation_text
+                    ).model_dump()
+                )
+
+                yield ChatEvent(
+                    event_type="complete",
+                    data={"type": "evaluation"}
+                )
+
+            except Exception as e:
+                logger.error(f"Evaluate tool error: {e}", exc_info=True)
+                yield ChatEvent(
+                    event_type="token",
+                    data={"text": f"Evaluation error: {str(e)}"}
+                )
 
         registry["evaluate"] = evaluate_tool
 
-    # ── RESEARCH: look up reference material ─────────────────────
-    if kg_service:
-        def research_tool(content: str, entity_ids: List[str], **kwargs) -> str:
-            return (
-                f"Research request noted: {content}\n\n"
-                "I can research topics using the knowledge base and project context. "
-                "Results will include relevant world-building details, "
-                "character backgrounds, and narrative references."
+    # ── RESEARCH: look up reference material via Research Agent ─────────────────────
+    if kg_service and agent_dispatcher and container_repo:
+        async def research_tool(content: str, entity_ids: List[str], **kwargs):
+            """Execute research using the Research Agent skill."""
+            import uuid
+
+            session_id = kwargs.get("session_id")
+            context_manager = kwargs.get("context_manager")
+
+            # Build context from chat history if available
+            context = {}
+            if session_id and context_manager:
+                try:
+                    ctx = context_manager.build_context(session_id)
+                    if ctx.get("system_context"):
+                        context["chat_history_summary"] = ctx.get("system_context", "")[:500]
+                except Exception:
+                    pass
+
+            # Yield action trace
+            yield ChatEvent(
+                event_type="action_trace",
+                data={
+                    "tool_name": "research_agent",
+                    "context_summary": f"Researching: {content}"
+                }
             )
 
+            try:
+                # Get the research agent skill
+                research_skill = agent_dispatcher.skills.get("research_agent")
+                if not research_skill:
+                    yield ChatEvent(
+                        event_type="token",
+                        data={"text": "Research agent skill not found. Please check agents/skills/research_agent.md exists."}
+                    )
+                    return
+
+                # Execute the skill via ReAct loop
+                result = await agent_dispatcher.execute(
+                    skill=research_skill,
+                    intent=content,
+                    context=context,
+                )
+
+                if not result.success or not result.response:
+                    yield ChatEvent(
+                        event_type="token",
+                        data={"text": f"Research failed: {result.error}"}
+                    )
+                    return
+
+                # Parse the JSON response from the research agent
+                import json
+                import re
+
+                response_text = result.response.strip()
+
+                # Try to extract JSON from the response
+                research_data = None
+                try:
+                    # First try direct JSON parse
+                    research_data = json.loads(response_text)
+                except json.JSONDecodeError:
+                    # Try to find JSON in markdown code block
+                    match = re.search(r'```(?:json)?\n(.*?)\n```', response_text, re.DOTALL)
+                    if match:
+                        try:
+                            research_data = json.loads(match.group(1))
+                        except json.JSONDecodeError:
+                            pass
+
+                if not research_data:
+                    yield ChatEvent(
+                        event_type="token",
+                        data={"text": f"Could not parse research output as JSON. Raw response: {response_text[:200]}"}
+                    )
+                    return
+
+                # Create a research container and save it
+                container_id = str(uuid.uuid4())
+                research_container = GenericContainer(
+                    id=container_id,
+                    name=f"Research: {content[:50]}",
+                    container_type="research_topic",
+                    attributes={
+                        "original_query": content,
+                        "summary": research_data.get("summary", ""),
+                        "confidence_score": research_data.get("confidence_score", 0.5),
+                        "sources": research_data.get("sources", []),
+                        "key_facts": research_data.get("key_facts", {}),
+                    },
+                    project_path=project_path,
+                )
+
+                # Save to file and index in KG
+                container_repo.save_container(research_container)
+                kg_service.add_or_update_container(research_container)
+
+                # Emit artifact with the research data
+                yield ChatEvent(
+                    event_type="artifact",
+                    data=ChatArtifact(
+                        artifact_type="research",
+                        title=f"Research: {content[:40]}",
+                        content=json.dumps(research_data, indent=2)
+                    ).model_dump()
+                )
+
+                # Stream the summary as tokens
+                summary = research_data.get("summary", "No summary available")
+                for word in re.findall(r'\S+\s*', summary):
+                    yield ChatEvent(event_type="token", data={"text": word})
+
+                # Add sources as final note
+                sources = research_data.get("sources", [])
+                if sources:
+                    sources_text = "\n\n**Sources:**\n" + "\n".join(f"- {s}" for s in sources)
+                    for word in re.findall(r'\S+\s*', sources_text):
+                        yield ChatEvent(event_type="token", data={"text": word})
+
+                yield ChatEvent(
+                    event_type="complete",
+                    data={"container_id": container_id}
+                )
+
+            except Exception as e:
+                logger.error(f"Research tool error: {e}", exc_info=True)
+                yield ChatEvent(
+                    event_type="token",
+                    data={"text": f"Research tool error: {str(e)}"}
+                )
+
         registry["research"] = research_tool
+
+    # ── WRITE: prose drafting via Writing Agent ──────────────────────
+    if agent_dispatcher and container_repo:
+        async def write_tool(content: str, entity_ids: List[str], **kwargs):
+            """Generate prose using the Writing Agent (writing_agent.md if available, else fallback)."""
+            import uuid
+            import re
+
+            session_id = kwargs.get("session_id")
+            context_manager = kwargs.get("context_manager")
+
+            # Build context from chat history and mentioned entities
+            context = {}
+            if session_id and context_manager:
+                try:
+                    ctx = context_manager.build_context(session_id)
+                    context["chat_history"] = ctx.get("messages", [])[:5]  # Last 5 messages for context
+                    context["system_context"] = ctx.get("system_context", "")[:300]
+                except Exception:
+                    pass
+
+            # Add mentioned entity context
+            if entity_ids and kg_service:
+                mentioned = []
+                for eid in entity_ids:
+                    nodes = kg_service.find_containers(filters={"id": eid})
+                    if nodes:
+                        mentioned.append({
+                            "name": nodes[0].get("name"),
+                            "type": nodes[0].get("container_type"),
+                            "attributes": nodes[0].get("attributes", {})
+                        })
+                if mentioned:
+                    context["mentioned_entities"] = mentioned
+
+            yield ChatEvent(
+                event_type="action_trace",
+                data={
+                    "tool_name": "writing_agent",
+                    "context_summary": f"Drafting prose: {content[:60]}..."
+                }
+            )
+
+            try:
+                # Check if writing_agent.md skill exists
+                writing_skill = agent_dispatcher.skills.get("writing_agent")
+
+                if not writing_skill:
+                    # Fallback: use litellm directly with a generic writing prompt
+                    import litellm
+
+                    system_prompt = (
+                        "You are an expert prose writer for fiction. Write compelling, vivid prose "
+                        "that brings scenes to life with sensory details, dialogue, and emotional depth. "
+                        "Match the tone and style of the provided context if available."
+                    )
+
+                    user_message = content
+                    if context.get("system_context"):
+                        user_message = f"Context:\n{context['system_context']}\n\nWrite:\n{content}"
+
+                    response = await litellm.acompletion(
+                        model="claude-3.5-sonnet",  # Use Claude for prose writing
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message}
+                        ],
+                        stream=True,
+                    )
+
+                    prose_chunks = []
+                    async for chunk in response:
+                        if chunk.choices[0].delta.content:
+                            text = chunk.choices[0].delta.content
+                            prose_chunks.append(text)
+                            for word in re.findall(r'\S+\s*', text):
+                                yield ChatEvent(event_type="token", data={"text": word})
+
+                    prose_text = "".join(prose_chunks)
+                else:
+                    # Use the writing agent skill
+                    result = await agent_dispatcher.execute(
+                        skill=writing_skill,
+                        intent=content,
+                        context=context,
+                    )
+
+                    if not result.success or not result.response:
+                        yield ChatEvent(
+                            event_type="token",
+                            data={"text": f"Writing failed: {result.error}"}
+                        )
+                        return
+
+                    prose_text = result.response
+                    for word in re.findall(r'\S+\s*', prose_text):
+                        yield ChatEvent(event_type="token", data={"text": word})
+
+                # Save the generated prose as a fragment container
+                fragment_id = str(uuid.uuid4())
+                fragment_container = GenericContainer(
+                    id=fragment_id,
+                    name=f"Fragment: {content[:40]}",
+                    container_type="fragment",
+                    attributes={
+                        "prompt": content,
+                        "prose": prose_text,
+                    },
+                    project_path=project_path,
+                )
+
+                container_repo.save_container(fragment_container)
+                if kg_service:
+                    kg_service.add_or_update_container(fragment_container)
+
+                # Emit as artifact
+                yield ChatEvent(
+                    event_type="artifact",
+                    data=ChatArtifact(
+                        artifact_type="prose",
+                        title="Generated Prose",
+                        content=prose_text
+                    ).model_dump()
+                )
+
+                yield ChatEvent(
+                    event_type="complete",
+                    data={"fragment_id": fragment_id}
+                )
+
+            except Exception as e:
+                logger.error(f"Write tool error: {e}", exc_info=True)
+                yield ChatEvent(
+                    event_type="token",
+                    data={"text": f"Write tool error: {str(e)}"}
+                )
+
+        registry["write"] = write_tool
+
+    # ── BRAINSTORM: generate ideas via Brainstorm Agent ──────────────────────
+    if agent_dispatcher:
+        async def brainstorm_tool(content: str, entity_ids: List[str], **kwargs):
+            """Generate creative ideas using the Brainstorm Agent skill."""
+            import re
+
+            session_id = kwargs.get("session_id")
+            context_manager = kwargs.get("context_manager")
+
+            # Build context from chat history
+            context = {}
+            if session_id and context_manager:
+                try:
+                    ctx = context_manager.build_context(session_id)
+                    context["system_context"] = ctx.get("system_context", "")[:300]
+                except Exception:
+                    pass
+
+            yield ChatEvent(
+                event_type="action_trace",
+                data={
+                    "tool_name": "brainstorm_agent",
+                    "context_summary": f"Brainstorming: {content[:60]}..."
+                }
+            )
+
+            try:
+                # Try to use brainstorm_agent skill
+                brainstorm_skill = agent_dispatcher.skills.get("brainstorm_agent")
+
+                if not brainstorm_skill:
+                    # Fallback: use litellm directly
+                    import litellm
+
+                    system_prompt = (
+                        "You are a creative brainstorming agent for fiction writers. "
+                        "Generate 5-7 creative, engaging ideas that explore the user's prompt. "
+                        "Each idea should be a 1-2 sentence concept that could drive a story forward. "
+                        "Be imaginative, surprising, and considerate of the story context if provided."
+                    )
+
+                    user_message = content
+                    if context.get("system_context"):
+                        user_message = f"Story context:\n{context['system_context']}\n\nBrainstorm:\n{content}"
+
+                    response = await litellm.acompletion(
+                        model="gemini/gemini-2.0-flash",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message}
+                        ],
+                        stream=True,
+                    )
+
+                    ideas_text = ""
+                    async for chunk in response:
+                        if chunk.choices[0].delta.content:
+                            text = chunk.choices[0].delta.content
+                            ideas_text += text
+                            for word in re.findall(r'\S+\s*', text):
+                                yield ChatEvent(event_type="token", data={"text": word})
+                else:
+                    # Use the brainstorm agent skill
+                    result = await agent_dispatcher.execute(
+                        skill=brainstorm_skill,
+                        intent=content,
+                        context=context,
+                    )
+
+                    if not result.success or not result.response:
+                        yield ChatEvent(
+                            event_type="token",
+                            data={"text": f"Brainstorm failed: {result.error}"}
+                        )
+                        return
+
+                    ideas_text = result.response
+                    for word in re.findall(r'\S+\s*', ideas_text):
+                        yield ChatEvent(event_type="token", data={"text": word})
+
+                # Emit as artifact
+                yield ChatEvent(
+                    event_type="artifact",
+                    data=ChatArtifact(
+                        artifact_type="outline",
+                        title="Brainstorm Ideas",
+                        content=ideas_text
+                    ).model_dump()
+                )
+
+                yield ChatEvent(
+                    event_type="complete",
+                    data={"type": "brainstorm"}
+                )
+
+            except Exception as e:
+                logger.error(f"Brainstorm tool error: {e}", exc_info=True)
+                yield ChatEvent(
+                    event_type="token",
+                    data={"text": f"Brainstorm tool error: {str(e)}"}
+                )
+
+        registry["brainstorm"] = brainstorm_tool
+
+    # ── OUTLINE: hierarchical story structure ──────────────────────
+    if agent_dispatcher and kg_service and container_repo:
+        from showrunner_tool.schemas.chat import ChatEvent, ChatArtifact
+        import json
+
+        async def outline_tool(content: str, entity_ids: List[str], **kwargs):
+            """Generate a hierarchical story outline (Season → Arc → Chapter → Scene)."""
+            try:
+                yield ChatEvent(
+                    event_type="action_trace",
+                    data={"step": "outline_tool", "action": "Starting outline generation"}
+                )
+
+                # Try agent_dispatcher first (story_architect skill)
+                outline_text = ""
+                try:
+                    result = await agent_dispatcher.execute(
+                        content,
+                        skill_hint="story_architect"
+                    )
+                    if isinstance(result, dict):
+                        outline_text = result.get("outline", str(result))
+                    else:
+                        outline_text = str(result)
+                except Exception as e:
+                    logger.warning(f"Story architect skill failed: {e}. Using fallback.")
+
+                # Fallback to direct LLM call
+                if not outline_text:
+                    from litellm import acompletion
+                    response = await acompletion(
+                        model="gemini/gemini-2.0-flash",
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": """You are a Story Architect. Generate a hierarchical outline for a story/narrative.
+Structure: Season → Arc → Chapter → Scene.
+Format: Use markdown with # for Season, ## for Arc, ### for Chapter, #### for Scene.
+Include brief descriptions (1-2 lines) for each section.
+Be creative but follow the user's intent."""
+                            },
+                            {"role": "user", "content": content}
+                        ],
+                        max_tokens=2000,
+                    )
+                    outline_text = response.choices[0].message.content
+
+                # Stream the outline text as tokens
+                for word in outline_text.split():
+                    yield ChatEvent(
+                        event_type="token",
+                        data={"text": word}
+                    )
+
+                # Create a container for the outline
+                outline_id = str(ulid.ULID())
+                outline_container = GenericContainer(
+                    id=outline_id,
+                    name=f"Story Outline {datetime.utcnow().strftime('%Y-%m-%d')}",
+                    container_type="outline",
+                    schema_version=1,
+                    attributes={
+                        "outline_text": outline_text,
+                        "created_from": content[:200],  # Store partial context
+                    }
+                )
+
+                # Save to repo
+                container_repo.write(outline_container)
+                kg_service.index_container(outline_container)
+
+                yield ChatEvent(
+                    event_type="artifact",
+                    data={
+                        "type": "outline",
+                        "title": outline_container.name,
+                        "content": outline_text,
+                        "container_id": outline_id,
+                    }
+                )
+
+                yield ChatEvent(
+                    event_type="complete",
+                    data={
+                        "status": "success",
+                        "message": f"Outline saved as {outline_container.name}",
+                        "container_id": outline_id,
+                    }
+                )
+
+            except Exception as e:
+                logger.error(f"Outline tool error: {e}", exc_info=True)
+                yield ChatEvent(
+                    event_type="token",
+                    data={"text": f"Outline tool error: {str(e)}"}
+                )
+
+        registry["outline"] = outline_tool
 
     # ── RELATIONSHIP: analyze relationships ──────────────────────
     if kg_service:
