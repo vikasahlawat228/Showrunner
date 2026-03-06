@@ -35,7 +35,7 @@ export function ModelConfigPanel() {
             setOverrides(
                 Object.entries(modelConfig.model_overrides).map(([agentId, config]) => ({
                     agentId,
-                    config: { ...config },
+                    config: { ...(config as any) },
                 }))
             );
             setDirty(false);

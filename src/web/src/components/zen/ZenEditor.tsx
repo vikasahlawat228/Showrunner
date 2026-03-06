@@ -600,7 +600,7 @@ export function ZenEditor() {
             }
             if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
                 e.preventDefault();
-                setFocusMode(prev => !prev);
+                setFocusMode((prev: any) => !prev);
                 return;
             }
             if ((e.metaKey || e.ctrlKey) && e.key === '/') {

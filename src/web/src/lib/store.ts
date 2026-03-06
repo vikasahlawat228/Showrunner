@@ -38,6 +38,8 @@ export interface ChatSessionSummary {
   updated_at: string | number;
   last_message_preview?: string;
   tags: string[];
+  token_usage: number;
+  context_budget: number;
 }
 
 export interface ChatSlice {

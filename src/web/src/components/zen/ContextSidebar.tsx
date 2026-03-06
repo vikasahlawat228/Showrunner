@@ -434,7 +434,7 @@ export function ContextSidebar() {
                             </div>
                         )}
 
-                        {contextEntries.map((entry) => (
+                        {contextEntries.map((entry: any) => (
                             <ContextCard key={entry.containerId} entry={entry} />
                         ))}
                     </div>

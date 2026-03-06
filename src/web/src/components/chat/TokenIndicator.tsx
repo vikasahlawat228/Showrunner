@@ -1,5 +1,5 @@
 import React from "react";
-import { ChatSessionSummary } from "../../lib/store/chatSlice";
+import type { ChatSessionSummary } from "@/lib/store";
 import { Activity } from "lucide-react";
 
 interface TokenIndicatorProps {

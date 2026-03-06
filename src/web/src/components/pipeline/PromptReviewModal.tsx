@@ -57,8 +57,8 @@ export const PromptReviewModal: React.FC<PromptReviewModalProps> = ({
     const [temperature, setTemperature] = useState<number>(0.7);
     const [pinnedContextIds, setPinnedContextIds] = useState<string[]>([]);
 
-    const agent = getAgentConfig(agentId);
-    const AgentIcon = agent.icon;
+    const agent = getAgentConfig(agentId || "");
+    const AgentIcon = agent.icon as React.ElementType;
 
     useEffect(() => {
         setPromptText(initialPrompt);

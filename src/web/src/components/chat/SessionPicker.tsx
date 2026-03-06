@@ -169,7 +169,7 @@ function SessionRow({
 
             {session.tags.length > 0 && (
                 <div className="flex gap-1 mt-1.5">
-                    {session.tags.map((tag) => (
+                    {session.tags.map((tag: string) => (
                         <span
                             key={tag}
                             className="text-xs bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded"
