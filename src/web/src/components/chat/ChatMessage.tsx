@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useStudioStore } from "@/lib/store";
-import type { ChatMessage as ChatMessageType, ChatActionTrace, ChatArtifact } from "../../lib/store/chatSlice";
+import type { ChatMessage as ChatMessageType, ChatActionTrace, ChatArtifact } from "@/lib/store";
 import { PlanViewer } from "./PlanViewer";
 import { PipelineRunViewer } from "./PipelineRunViewer";
 import ReactMarkdown from 'react-markdown';
@@ -43,7 +43,7 @@ export function ChatMessage({ message, onSend }: ChatMessageProps) {
                 {/* Action traces (Glass Box) */}
                 {message.action_traces.length > 0 && (
                     <div className="mt-2 border-t border-gray-600 pt-2 space-y-1">
-                        {message.action_traces.filter(t => !t.parent_id).map((trace, i) => (
+                        {message.action_traces.filter((t: ChatActionTrace) => !t.parent_id).map((trace: ChatActionTrace, i: number) => (
                             <ActionTraceBlock key={trace.id || i} trace={trace} allTraces={message.action_traces} depth={0} />
                         ))}
                     </div>
@@ -52,7 +52,7 @@ export function ChatMessage({ message, onSend }: ChatMessageProps) {
                 {/* Artifacts */}
                 {message.artifacts.length > 0 && (
                     <div className="mt-2 space-y-1 w-full">
-                        {message.artifacts.map((artifact, i) => (
+                        {message.artifacts.map((artifact: ChatArtifact, i: number) => (
                             <ArtifactCard key={i} artifact={artifact} />
                         ))}
                     </div>
@@ -94,8 +94,8 @@ export function ActionTraceBlock({ trace, allTraces = [], depth = 0 }: { trace: 
             {expanded && (
                 <div className="ml-4 mt-1 mb-2 space-y-1 border-l border-gray-700 pl-2">
                     {trace.context_summary && <div>{trace.context_summary}</div>}
-                    {trace.containers_used?.length > 0 && (
-                        <div>Containers: {trace.containers_used.join(", ")}</div>
+                    {(trace.containers_used?.length ?? 0) > 0 && (
+                        <div>Containers: {trace.containers_used!.join(", ")}</div>
                     )}
                     {trace.result_preview && (
                         <div className="text-gray-500 truncate">{trace.result_preview}</div>
@@ -129,7 +129,7 @@ export function ActionTraceBlock({ trace, allTraces = [], depth = 0 }: { trace: 
                     {/* Render Children Recursively */}
                     {children.length > 0 && (
                         <div className="mt-2 space-y-1 pt-1 border-t border-gray-800">
-                            {children.map((child, i) => (
+                            {children.map((child: ChatActionTrace, i: number) => (
                                 <ActionTraceBlock key={child.id || i} trace={child} allTraces={allTraces} depth={0} />
                             ))}
                         </div>

@@ -28,6 +28,7 @@ from showrunner_tool.server.routers import (
     sync,
     containers,
     analysis,
+    cascade,
 )
 
 __all__ = [
@@ -58,4 +59,5 @@ __all__ = [
     "sync",
     "containers",
     "analysis",
+    "cascade",
 ]

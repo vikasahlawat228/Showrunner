@@ -569,6 +569,8 @@ export const api = {
     request<FragmentResponse>(`/api/v1/writing/fragments/latest?branch_id=${encodeURIComponent(branchId)}`),
   saveFragment: (data: FragmentCreateRequest) =>
     post<FragmentResponse>("/api/v1/writing/fragments", data),
+  cascadeUpdate: (body: { file_path: string; dry_run?: boolean }) =>
+    post<any>("/api/v1/cascade/update", body),
   detectEntities: (text: string) =>
     post<EntityDetectionResponse>("/api/v1/writing/detect-entities", { text }),
   getContainerContext: (containerId: string) =>

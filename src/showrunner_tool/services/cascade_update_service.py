@@ -75,8 +75,20 @@ class CascadeUpdateService:
             # 1. Read the changed file
             logger.info(f"Analyzing changes in {changed_file_path}")
 
-            file_relative = changed_file_path.relative_to(self.container_repo.path)
-            container = self.container_repo.read(file_relative)
+            file_relative = changed_file_path.relative_to(self.container_repo.base_dir)
+            
+            # Using private _load_file_optional or find by ID
+            # If the path is relative to base_dir, we can load it directly
+            try:
+                # We can't access read(), but base class has _load_file_optional
+                container = self.container_repo._load_file_optional(self.container_repo.base_dir / file_relative)
+            except AttributeError:
+                # Fallback implementation
+                import yaml
+                from showrunner_tool.schemas.container import GenericContainer
+                with open(self.container_repo.base_dir / file_relative, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f)
+                    container = GenericContainer(**data)
 
             if not container:
                 result["status"] = "error"

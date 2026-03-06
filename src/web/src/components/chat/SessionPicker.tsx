@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useStudioStore } from "../../lib/store";
-import type { ChatSessionSummary } from "../../lib/store/chatSlice";
+import type { ChatSessionSummary } from "@/lib/store";
 
 interface SessionPickerProps {
     isOpen: boolean;
@@ -78,8 +78,8 @@ export function SessionPicker({ isOpen, onClose, onSelect }: SessionPickerProps)
                             key={f}
                             onClick={() => setFilter(f)}
                             className={`px-2 py-1 text-xs rounded transition-colors ${filter === f
-                                    ? "bg-blue-600 text-white"
-                                    : "text-gray-400 hover:text-gray-200 hover:bg-gray-800"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-400 hover:text-gray-200 hover:bg-gray-800"
                                 }`}
                         >
                             {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -136,8 +136,8 @@ function SessionRow({
         <button
             onClick={onSelect}
             className={`w-full text-left p-3 rounded-lg transition-colors group ${isActive
-                    ? "bg-blue-600/20 border border-blue-600/40"
-                    : "hover:bg-gray-800 border border-transparent"
+                ? "bg-blue-600/20 border border-blue-600/40"
+                : "hover:bg-gray-800 border border-transparent"
                 }`}
         >
             <div className="flex items-center justify-between">

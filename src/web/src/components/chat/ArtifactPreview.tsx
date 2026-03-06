@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import type { ChatArtifact } from "../../lib/store/chatSlice";
+import type { ChatArtifact } from "../../lib/store";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -98,7 +98,7 @@ function PreviewContent({ artifact }: { artifact: ChatArtifact }) {
         case "outline":
             return (
                 <div className="text-sm text-gray-200 space-y-1">
-                    {artifact.content.split("\n").map((line, i) => {
+                    {artifact.content.split("\n").map((line: string, i: number) => {
                         const indent = line.search(/\S/);
                         const isHeader = line.trim().startsWith("#");
                         return (
@@ -117,7 +117,7 @@ function PreviewContent({ artifact }: { artifact: ChatArtifact }) {
         case "diff":
             return (
                 <pre className="text-xs font-mono">
-                    {artifact.content.split("\n").map((line, i) => {
+                    {artifact.content.split("\n").map((line: string, i: number) => {
                         const color = line.startsWith("+")
                             ? "text-green-400"
                             : line.startsWith("-")

@@ -5,7 +5,7 @@
  * characters, locations, scenes, fragments, research, etc.
  */
 
-import { apiClient } from '@/lib/api-client';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 export interface SearchResult {
   id: string;
@@ -41,7 +41,7 @@ export async function searchAll(
     ...(options?.offset && { offset: options.offset.toString() }),
   });
 
-  const response = await apiClient.get(`/api/v1/search?${params}`);
+  const response = await fetch(`${API_BASE}/api/v1/search?${params}`);
   return response.json();
 }
 
@@ -84,8 +84,8 @@ export async function getSearchSuggestions(query: string): Promise<string[]> {
   if (query.length < 2) return [];
 
   try {
-    const response = await apiClient.get(
-      `/api/v1/search/suggestions?q=${encodeURIComponent(query)}&limit=10`
+    const response = await fetch(
+      `${API_BASE}/api/v1/search/suggestions?q=${encodeURIComponent(query)}&limit=10`
     );
     const data = await response.json();
     return data.suggestions || [];

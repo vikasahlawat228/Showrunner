@@ -43,6 +43,7 @@ from showrunner_tool.server.routers import preview as preview_router
 from showrunner_tool.server.routers import translation as translation_router
 from showrunner_tool.server.routers import chat as chat_router
 from showrunner_tool.server.routers import db as db_router
+from showrunner_tool.server.routers import cascade as cascade_router
 
 logger = logging.getLogger(__name__)
 
@@ -151,9 +152,9 @@ async def lifespan(app: FastAPI):
     event_service = EventService(proj.path / "event_log.db")
 
     # Initialize continuity and style services
-    context_engine = ContextEngine(kg_service)
+    context_engine = ContextEngine(kg_service, container_repo)
     continuity_service = ContinuityService(kg_service, context_engine, event_service, agent_dispatcher)
-    style_service = StyleService(kg_service)
+    style_service = StyleService(kg_service, context_engine, agent_dispatcher)
 
     tool_registry = build_tool_registry(
         kg_service=kg_service,
@@ -202,6 +203,7 @@ async def lifespan(app: FastAPI):
     app.state.project_memory_service = project_memory_service
     app.state.chat_context_manager = chat_context_manager
     app.state.cloud_sync_service = cloud_sync_service
+    app.state.agent_dispatcher = agent_dispatcher
 
     yield  # ---- application is running ----
 
@@ -279,6 +281,9 @@ app.include_router(sync_router.router)
 
 # Phase 2 (IDE Integration) — Git operations
 app.include_router(git_router.router)
+
+# Phase L (Cascade Update)
+app.include_router(cascade_router.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -2,6 +2,44 @@ import { create } from "zustand";
 import { api } from "@/lib/api";
 // ── Dummy Slices ─────────────────────────────────────────
 
+export interface ChatArtifact {
+  artifact_type: string;
+  title: string;
+  content: string;
+  is_saved?: boolean;
+  container_id?: string;
+}
+
+export interface ChatActionTrace {
+  id?: string;
+  parent_id?: string | null;
+  tool_name: string;
+  duration_ms: number;
+  context_summary?: string;
+  containers_used?: string[];
+  result_preview?: string;
+  prompt?: string;
+  raw_json?: string;
+}
+
+export interface ChatMessage {
+  role: string;
+  content: string;
+  created_at: string | number;
+  action_traces: ChatActionTrace[];
+  artifacts: ChatArtifact[];
+}
+
+export interface ChatSessionSummary {
+  id: string;
+  name?: string;
+  state: string;
+  message_count: number;
+  updated_at: string | number;
+  last_message_preview?: string;
+  tags: string[];
+}
+
 export interface ChatSlice {
   chatSessions: any[];
   activeSessionId: string | null;
@@ -114,6 +152,10 @@ export interface GraphDataSlice {
   edges: any[];
   setNodes: (nodes: any[]) => void;
   setEdges: (edges: any[]) => void;
+  onNodesChange: (changes: any) => void;
+  onEdgesChange: (changes: any) => void;
+  onConnect: (connection: any) => void;
+  buildGraph: () => void;
   fetchAll: () => void;
   characters: any[];
   scenes: any[];
@@ -122,6 +164,7 @@ export interface GraphDataSlice {
   fetchCharacters: () => void;
   fetchScenes: (chapter: number) => void;
   fetchWorld: () => void;
+  linkCharacterToScene: (characterId: string, sceneId: string) => void;
 }
 
 const createGraphDataSlice = (set: any): GraphDataSlice => ({
@@ -133,6 +176,10 @@ const createGraphDataSlice = (set: any): GraphDataSlice => ({
   workflow: null,
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
+  onNodesChange: (changes) => { },
+  onEdgesChange: (changes) => { },
+  onConnect: (connection) => { },
+  buildGraph: () => { },
   fetchAll: async () => {
     try {
       const data = await api.getGraph();
@@ -165,16 +212,23 @@ const createGraphDataSlice = (set: any): GraphDataSlice => ({
       console.error("Failed to fetch world:", err);
     }
   },
+  linkCharacterToScene: async (characterId: string, sceneId: string) => {
+    console.log("Linking", characterId, "to", sceneId);
+  },
 });
 
 export interface CanvasUISlice {
   selectedNodeId: string | null;
   setSelectedNode: (id: string | null) => void;
+  selectedItem: any | null;
+  setSelectedItem: (item: any | null) => void;
 }
 
 const createCanvasUISlice = (set: any): CanvasUISlice => ({
   selectedNodeId: null,
   setSelectedNode: (id) => set({ selectedNodeId: id }),
+  selectedItem: null,
+  setSelectedItem: (item) => set({ selectedItem: item }),
 });
 
 export interface ReactFlowSlice {
@@ -286,7 +340,7 @@ export interface Selection {
 
 // ── Main Store Definition ───────────────────────────────────
 
-export type StudioState = GraphDataSlice & CanvasUISlice & ReactFlowSlice & ProjectSlice & ModelConfigSlice & ChatSlice;
+export type StudioState = GraphDataSlice & CanvasUISlice & ReactFlowSlice & ProjectSlice & ModelConfigSlice & ChatSlice & Record<string, any>;
 
 export const useStudioStore = create<StudioState>()((set) => ({
   ...createGraphDataSlice(set),

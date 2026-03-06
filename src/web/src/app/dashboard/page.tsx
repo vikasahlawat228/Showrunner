@@ -10,6 +10,7 @@ import { ProgressOverview } from "@/components/command-center/ProgressOverview";
 import { PendingApprovals } from "@/components/command-center/PendingApprovals";
 import { ModelConfigPanel } from "@/components/command-center/ModelConfigPanel";
 import { DatabaseStats } from "@/components/command-center/DatabaseStats";
+import { GitPanel } from "@/components/command-center/GitPanel";
 
 // Canvas & Layout Components
 import { Canvas } from "@/components/workbench/Canvas";
@@ -51,6 +52,7 @@ export default function DashboardPage() {
             <ProgressOverview />
             <PendingApprovals />
             <ModelConfigPanel />
+            <GitPanel />
             <DatabaseStats />
           </div>
         </div>
