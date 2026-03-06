@@ -29,6 +29,10 @@ from showrunner_tool.server.routers import (
     containers,
     analysis,
     cascade,
+    # Phase H / Next-C
+    translation,
+    preview,
+    jobs,
 )
 
 __all__ = [
@@ -60,4 +64,8 @@ __all__ = [
     "containers",
     "analysis",
     "cascade",
+    # Phase H / Next-C
+    "translation",
+    "preview",
+    "jobs",
 ]

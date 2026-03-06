@@ -800,156 +800,156 @@ Scene card shows updated character count, inspector shows linked characters
 
 ### Implementation Status
 
-| Feature                                                                          | Status             |
-| -------------------------------------------------------------------------------- | ------------------ |
-| **Dashboard / Workbench**                                                        |                    |
-| 3-pane layout (sidebar + canvas + inspector)                                     | Done               |
-| Asset sidebar with 3 tabs                                                        | Done               |
-| Collapsible sidebar                                                              | Done               |
-| Character inspector (DNA, personality, arc)                                      | Done               |
-| Scene inspector (tension bar, linked characters)                                 | Done               |
-| World inspector (locations, rules, factions)                                     | Done               |
-| Workflow progress bar                                                            | Done               |
-| Director act button + result display                                             | Done               |
-| Character → scene drag-drop linking                                              | Done               |
-| Chapter navigation                                                               | Done               |
-| DragOverlay ghost card                                                           | Done               |
-| Toast notifications (sonner)                                                     | Done               |
-| Loading skeletons (all views)                                                    | Done               |
-| Confirmation dialogs (destructive actions)                                       | Done               |
-| Context Inspector / Glass Box UI                                                 | Done               |
-| **Zen Mode (/zen)**                                                              |                    |
-| TipTap rich text editor                                                          | Done               |
-| @-mention entity detection                                                       | Done               |
-| /slash command palette                                                           | Done               |
-| Slash commands wired to agent dispatch                                           | Done               |
-| Context sidebar with Glass Box                                                   | Done               |
-| Auto-save with debounce                                                          | Done               |
-| **Pipeline Builder (/pipelines)**                                                |                    |
-| Visual DAG editor (ReactFlow)                                                    | Done               |
-| Step library with categories                                                     | Done               |
-| Step config panels                                                               | Done               |
-| Template gallery (hardcoded stubs)                                               | Done               |
-| Pipeline SSE streaming                                                           | Done               |
-| PromptReviewModal (Edit/Refine/Paste/Skip)                                       | Done               |
-| Model selector per pipeline run                                                  | Done               |
-| **Storyboard (/storyboard)**                                                     |                    |
-| Scene strip view with drag-reorder                                               | Done               |
-| Semantic canvas view (ReactFlow)                                                 | Done               |
-| Panel generation via AI                                                          | Done               |
-| Panel CRUD + editor                                                              | Done               |
-| **Timeline (/timeline)**                                                         |                    |
-| Real-time SSE event stream                                                       | Done               |
-| Event type visual differentiation                                                | Done               |
-| Branch creation modal                                                            | Done               |
-| Story structure tree (basic)                                                     | Done               |
-| **Schema Builder (/schemas)**                                                    |                    |
-| NL-to-schema wizard                                                              | Done               |
-| Field editor with type selector                                                  | Done               |
-| Schema preview                                                                   | Done               |
-| **Command Center (/dashboard)**                                                  |                    |
-| Project switcher                                                                 | Done               |
-| Progress overview                                                                | Done               |
-| Model config panel                                                               | Done               |
-| **Agent System**                                                                 |                    |
-| Agent dispatcher with keyword routing                                            | Done               |
-| ReAct loop execution                                                             | Done               |
-| 6 agent skill files                                                              | Done               |
-| Agent dispatch API + Glass Box metadata                                          | Done               |
-| **Backend Infrastructure**                                                       |                    |
-| Knowledge Graph (SQLite + ReactFlow)                                             | Done               |
-| ChromaDB vector embeddings (RAG)                                                 | Done               |
-| Event sourcing (append-only + branching)                                         | Done               |
-| File watcher (watchdog + SSE)                                                    | Done               |
-| Context Engine (token budgeting)                                                 | Done               |
-| Model cascade resolution                                                         | Done               |
-| 3-format export (MD, JSON, Fountain)                                             | Done               |
-| **Analysis / Intelligence (Phase Next-B)**                                       |                    |
-| Emotional Arc Dashboard (recharts)                                               | Done               |
-| Character Voice Scorecard (stylometric)                                          | Done               |
-| Story Ribbons visualization (SVG)                                                | Done               |
-| AnalysisService (3 analysis methods)                                             | Done               |
-| Analysis API router (3 endpoints)                                                | Done               |
-| **Panel Intelligence (Phase Next-C)**                                            |                    |
-| Panel Layout Intelligence (beat analysis → layout suggestion)                    | Done               |
-| LayoutSuggestionPanel.tsx (visual preview + Apply & Generate)                    | Done               |
-| Character Progressions (DNA timeline with deep-merge)                            | Done               |
-| CharacterProgressionTimeline.tsx (horizontal timeline in Inspector)              | Done               |
-| Reader Scroll Simulation (heuristic pacing analysis)                             | Done               |
-| ReaderSimService + preview.py router (2 endpoints)                               | Done               |
-| `/preview` page (vertical scroll + pacing sidebar + auto-scroll)                 | Done               |
-| **Workflow Power (Phase Next-D)**                                                |                    |
-| Workflow Templates Library (5 wired end-to-end templates)                        | Done               |
-| TemplateGallery fetches from API (not hardcoded)                                 | Done               |
-| Enhanced Approval Gate (temperature slider, context pinning, regenerate)         | Done               |
-| Pipeline resume supports temperature_override + pinned_context_ids               | Done               |
-| Research Agent UI Surface (`/research` page)                                     | Done               |
-| ResearchDetailPanel.tsx + ResearchTopicCard.tsx                                  | Done               |
-| **Spatial & Structural (Phase Next-E)**                                          |                    |
-| Containers CRUD router (`containers.py` — create/get/update/delete/reorder)      | Done               |
-| ContainerRepository `get_by_id()` + `delete_by_id()`                             | Done               |
-| StoryStructureTree.tsx (add child/delete/open-in-Zen/reorder fix/status colors)  | Done               |
-| Fix `getProjectStructure()` API URL mismatch                                     | Done               |
-| EventService `get_branches()` + `get_events_for_branch()` + `compare_branches()` | Done               |
-| Timeline router extensions (branches, branch events, compare, SSE stream)        | Done               |
-| BranchList.tsx (sidebar with event counts + active indicator)                    | Done               |
-| BranchComparison.tsx (two-column diff: additions/removals/changes)               | Done               |
-| Spatial Brainstorming Canvas (`/brainstorm` page with ReactFlow)                 | Done               |
-| IdeaCardNode.tsx (editable cards with color coding + auto-save)                  | Done               |
-| SuggestionPanel.tsx (AI-suggested connections + new ideas)                       | Done               |
-| Brainstorm backend endpoints (suggest-connections, save/get/delete cards)        | Done               |
-| Voice-to-Scene pipeline (`POST /storyboard/voice-to-scene`)                      | Done               |
-| VoiceToSceneButton.tsx (Web Speech API + fallback textarea + panel generation)   | Done               |
-| Brainstorm nav link in Canvas.tsx                                                | Done               |
-| **Intelligence Layer (Phase H)**                                                 |                    |
-| ContinuityService (KG validation via `continuity_analyst` agent)                 | Done               |
-| Continuity endpoints (`POST /continuity-check`, scene check, issues list)        | Done               |
-| ContinuityPanel.tsx (severity-coded issue cards in Zen sidebar)                  | Done               |
-| StyleService (prose evaluation via `style_enforcer` agent)                       | Done               |
-| Style endpoint (`POST /style-check`)                                             | Done               |
-| StyleScorecard.tsx (score gauge + categorized issues in Zen sidebar)             | Done               |
-| Style tab in PromptReviewModal (pipeline approval style check)                   | Done               |
-| `/check-style` slash command in Zen Mode                                         | Done               |
-| ContextSidebar 4-tab system (Context / Continuity / Style / Translation)         | Done               |
-| TranslationService (cultural adaptation via `translator_agent`)                  | Done               |
-| Translation router (`POST /translate`, glossary CRUD)                            | Done               |
-| TranslationPanel.tsx + `/translation` page (Translation Studio)                  | Done               |
-| InlineTranslation.tsx (compact Zen Mode translation widget)                      | Done               |
-| `/translate` slash command + Translation tab in ContextSidebar                   | Done               |
-| NLPipelineWizard.tsx (describe workflow → auto-generate DAG)                     | Done               |
-| "Create from Description" button on Pipelines page                               | Done               |
-| Semantic @mentions in Zen Mode (ChromaDB vector search)                          | Done               |
-| `GET /writing/semantic-search` endpoint                                          | Done               |
-| Translation nav link in Canvas.tsx                                               | Done               |
-| **Polish Layer (Phase I)**                                                       |                    |
-| Persistent Navbar (`Navbar.tsx` — 9 page tabs, active state, Cmd+K trigger)      | Not started        |
-| Command Palette (`CommandPalette.tsx` — cmdk library, page nav, actions, search) | Not started        |
-| Error Boundary (`ErrorBoundary.tsx` — crash recovery fallback UI)                | Not started        |
-| Canvas.tsx cross-page nav cleanup (keep Graph/Timeline toggle only)              | Not started        |
-| Export UI Modal (`ExportModal.tsx` — 4 formats, preview, download, print-to-PDF) | Not started        |
-| HTML export endpoint (`POST /export/html` + `POST /export/preview`)              | Not started        |
-| Export trigger in ProgressOverview + `open:export` custom event                  | Not started        |
-| Zen Mode word count + character count + reading time in toolbar                  | Not started        |
-| Focus mode (Cmd+Shift+F — paragraph dimming, toolbar hide, floating status)      | Not started        |
-| Session writing stats (+N words this session)                                    | Not started        |
-| Keyboard shortcuts overlay (Cmd+/)                                               | Not started        |
-| Backend word_count tracking on fragment saves                                    | Not started        |
-| Zen page header simplification (remove redundant nav)                            | Not started        |
-| **IDE Integration & Story Versioning (Phase L)**                                 |                    |
-| FileWatcherService (YAML → KG sync → SSE broadcast)                              | Done (uncommitted) |
-| CascadeUpdateService (scene change → entity update via LLM)                      | Done (uncommitted) |
-| Git CLI commands (stage-story, commit-message, history, diff)                    | Done (uncommitted) |
-| Git REST API router (log, diff, stage, commit, status)                           | Done (uncommitted) |
-| Search router (full-text entity search)                                          | Done (uncommitted) |
-| Cloud sync service (Google Drive backup)                                         | Done (uncommitted) |
-| IDE Guide documentation (docs/IDE_GUIDE.md)                                      | Done (uncommitted) |
-| Agent skills formalization (SKILL.md frontmatter + new skills)                   | Not started        |
-| Workflow files (.agents/workflows/)                                              | Not started        |
-| Frontend ChatSlice wiring (connect stubs to API)                                 | Not started        |
-| Frontend Git panel component                                                     | Not started        |
-| Frontend SSE-driven store refresh on GRAPH_UPDATED                               | Not started        |
-| Cascade update trigger in Zen Mode toolbar                                       | Not started        |
-| Story-project .gitignore strategy (separate from tool repo)                      | Not started        |
-| `writing_agent.md` skill (most-referenced, currently missing)                    | Not started        |
-| **Not Yet Started**                                                              |                    |
-| Scene editing in canvas                                                          | Not started        |
+| Feature                                                                          | Status         |
+| -------------------------------------------------------------------------------- | -------------- |
+| **Dashboard / Workbench**                                                        |                |
+| 3-pane layout (sidebar + canvas + inspector)                                     | Done           |
+| Asset sidebar with 3 tabs                                                        | Done           |
+| Collapsible sidebar                                                              | Done           |
+| Character inspector (DNA, personality, arc)                                      | Done           |
+| Scene inspector (tension bar, linked characters)                                 | Done           |
+| World inspector (locations, rules, factions)                                     | Done           |
+| Workflow progress bar                                                            | Done           |
+| Director act button + result display                                             | Done           |
+| Character → scene drag-drop linking                                              | Done           |
+| Chapter navigation                                                               | Done           |
+| DragOverlay ghost card                                                           | Done           |
+| Toast notifications (sonner)                                                     | Done           |
+| Loading skeletons (all views)                                                    | Done           |
+| Confirmation dialogs (destructive actions)                                       | Done           |
+| Context Inspector / Glass Box UI                                                 | Done           |
+| **Zen Mode (/zen)**                                                              |                |
+| TipTap rich text editor                                                          | Done           |
+| @-mention entity detection                                                       | Done           |
+| /slash command palette                                                           | Done           |
+| Slash commands wired to agent dispatch                                           | Done           |
+| Context sidebar with Glass Box                                                   | Done           |
+| Auto-save with debounce                                                          | Done           |
+| **Pipeline Builder (/pipelines)**                                                |                |
+| Visual DAG editor (ReactFlow)                                                    | Done           |
+| Step library with categories                                                     | Done           |
+| Step config panels                                                               | Done           |
+| Template gallery (hardcoded stubs)                                               | Done           |
+| Pipeline SSE streaming                                                           | Done           |
+| PromptReviewModal (Edit/Refine/Paste/Skip)                                       | Done           |
+| Model selector per pipeline run                                                  | Done           |
+| **Storyboard (/storyboard)**                                                     |                |
+| Scene strip view with drag-reorder                                               | Done           |
+| Semantic canvas view (ReactFlow)                                                 | Done           |
+| Panel generation via AI                                                          | Done           |
+| Panel CRUD + editor                                                              | Done           |
+| **Timeline (/timeline)**                                                         |                |
+| Real-time SSE event stream                                                       | Done           |
+| Event type visual differentiation                                                | Done           |
+| Branch creation modal                                                            | Done           |
+| Story structure tree (basic)                                                     | Done           |
+| **Schema Builder (/schemas)**                                                    |                |
+| NL-to-schema wizard                                                              | Done           |
+| Field editor with type selector                                                  | Done           |
+| Schema preview                                                                   | Done           |
+| **Command Center (/dashboard)**                                                  |                |
+| Project switcher                                                                 | Done           |
+| Progress overview                                                                | Done           |
+| Model config panel                                                               | Done           |
+| **Agent System**                                                                 |                |
+| Agent dispatcher with keyword routing                                            | Done           |
+| ReAct loop execution                                                             | Done           |
+| 6 agent skill files                                                              | Done           |
+| Agent dispatch API + Glass Box metadata                                          | Done           |
+| **Backend Infrastructure**                                                       |                |
+| Knowledge Graph (SQLite + ReactFlow)                                             | Done           |
+| ChromaDB vector embeddings (RAG)                                                 | Done           |
+| Event sourcing (append-only + branching)                                         | Done           |
+| File watcher (watchdog + SSE)                                                    | Done           |
+| Context Engine (token budgeting)                                                 | Done           |
+| Model cascade resolution                                                         | Done           |
+| 3-format export (MD, JSON, Fountain)                                             | Done           |
+| **Analysis / Intelligence (Phase Next-B)**                                       |                |
+| Emotional Arc Dashboard (recharts)                                               | Done           |
+| Character Voice Scorecard (stylometric)                                          | Done           |
+| Story Ribbons visualization (SVG)                                                | Done           |
+| AnalysisService (3 analysis methods)                                             | Done           |
+| Analysis API router (3 endpoints)                                                | Done           |
+| **Panel Intelligence (Phase Next-C)**                                            |                |
+| Panel Layout Intelligence (beat analysis → layout suggestion)                    | Done           |
+| LayoutSuggestionPanel.tsx (visual preview + Apply & Generate)                    | Done           |
+| Character Progressions (DNA timeline with deep-merge)                            | Done           |
+| CharacterProgressionTimeline.tsx (horizontal timeline in Inspector)              | Done           |
+| Reader Scroll Simulation (heuristic pacing analysis)                             | Done           |
+| ReaderSimService + preview.py router (2 endpoints)                               | Done           |
+| `/preview` page (vertical scroll + pacing sidebar + auto-scroll)                 | Done           |
+| **Workflow Power (Phase Next-D)**                                                |                |
+| Workflow Templates Library (5 wired end-to-end templates)                        | Done           |
+| TemplateGallery fetches from API (not hardcoded)                                 | Done           |
+| Enhanced Approval Gate (temperature slider, context pinning, regenerate)         | Done           |
+| Pipeline resume supports temperature_override + pinned_context_ids               | Done           |
+| Research Agent UI Surface (`/research` page)                                     | Done           |
+| ResearchDetailPanel.tsx + ResearchTopicCard.tsx                                  | Done           |
+| **Spatial & Structural (Phase Next-E)**                                          |                |
+| Containers CRUD router (`containers.py` — create/get/update/delete/reorder)      | Done           |
+| ContainerRepository `get_by_id()` + `delete_by_id()`                             | Done           |
+| StoryStructureTree.tsx (add child/delete/open-in-Zen/reorder fix/status colors)  | Done           |
+| Fix `getProjectStructure()` API URL mismatch                                     | Done           |
+| EventService `get_branches()` + `get_events_for_branch()` + `compare_branches()` | Done           |
+| Timeline router extensions (branches, branch events, compare, SSE stream)        | Done           |
+| BranchList.tsx (sidebar with event counts + active indicator)                    | Done           |
+| BranchComparison.tsx (two-column diff: additions/removals/changes)               | Done           |
+| Spatial Brainstorming Canvas (`/brainstorm` page with ReactFlow)                 | Done           |
+| IdeaCardNode.tsx (editable cards with color coding + auto-save)                  | Done           |
+| SuggestionPanel.tsx (AI-suggested connections + new ideas)                       | Done           |
+| Brainstorm backend endpoints (suggest-connections, save/get/delete cards)        | Done           |
+| Voice-to-Scene pipeline (`POST /storyboard/voice-to-scene`)                      | Done           |
+| VoiceToSceneButton.tsx (Web Speech API + fallback textarea + panel generation)   | Done           |
+| Brainstorm nav link in Canvas.tsx                                                | Done           |
+| **Intelligence Layer (Phase H)**                                                 |                |
+| ContinuityService (KG validation via `continuity_analyst` agent)                 | Done           |
+| Continuity endpoints (`POST /continuity-check`, scene check, issues list)        | Done           |
+| ContinuityPanel.tsx (severity-coded issue cards in Zen sidebar)                  | Done           |
+| StyleService (prose evaluation via `style_enforcer` agent)                       | Done           |
+| Style endpoint (`POST /style-check`)                                             | Done           |
+| StyleScorecard.tsx (score gauge + categorized issues in Zen sidebar)             | Done           |
+| Style tab in PromptReviewModal (pipeline approval style check)                   | Done           |
+| `/check-style` slash command in Zen Mode                                         | Done           |
+| ContextSidebar 4-tab system (Context / Continuity / Style / Translation)         | Done           |
+| TranslationService (cultural adaptation via `translator_agent`)                  | Done           |
+| Translation router (`POST /translate`, glossary CRUD)                            | Done           |
+| TranslationPanel.tsx + `/translation` page (Translation Studio)                  | Done           |
+| InlineTranslation.tsx (compact Zen Mode translation widget)                      | Done           |
+| `/translate` slash command + Translation tab in ContextSidebar                   | Done           |
+| NLPipelineWizard.tsx (describe workflow → auto-generate DAG)                     | Done           |
+| "Create from Description" button on Pipelines page                               | Done           |
+| Semantic @mentions in Zen Mode (ChromaDB vector search)                          | Done           |
+| `GET /writing/semantic-search` endpoint                                          | Done           |
+| Translation nav link in Canvas.tsx                                               | Done           |
+| **Polish Layer (Phase I)**                                                       |                |
+| Persistent Navbar (`Navbar.tsx` — 9 page tabs, active state, Cmd+K trigger)      | Done           |
+| Command Palette (`CommandPalette.tsx` — cmdk library, page nav, actions, search) | Done           |
+| Error Boundary (`ErrorBoundary.tsx` — crash recovery fallback UI)                | Done           |
+| Canvas.tsx cross-page nav cleanup (keep Graph/Timeline toggle only)              | Not started    |
+| Export UI Modal (`ExportModal.tsx` — 4 formats, preview, download, print-to-PDF) | Done           |
+| HTML export endpoint (`POST /export/html` + `POST /export/preview`)              | Done           |
+| Export trigger in ProgressOverview + `open:export` custom event                  | Not started    |
+| Zen Mode word count + character count + reading time in toolbar                  | Done           |
+| Focus mode (Cmd+Shift+F — paragraph dimming, toolbar hide, floating status)      | Partial (stub) |
+| Session writing stats (+N words this session)                                    | Done           |
+| Keyboard shortcuts overlay (Cmd+/)                                               | Done           |
+| Backend word_count tracking on fragment saves                                    | Not started    |
+| Zen page header simplification (remove redundant nav)                            | Not started    |
+| **IDE Integration & Story Versioning (Phase L)**                                 |                |
+| FileWatcherService (YAML → KG sync → SSE broadcast)                              | Done           |
+| CascadeUpdateService (scene change → entity update via LLM)                      | Done           |
+| Git CLI commands (stage-story, commit-message, history, diff)                    | Done           |
+| Git REST API router (log, diff, stage, commit, status)                           | Done           |
+| Search router (full-text entity search)                                          | Done           |
+| Cloud sync service (Google Drive backup)                                         | Done           |
+| IDE Guide documentation (docs/IDE_GUIDE.md)                                      | Done           |
+| Agent skills formalization (SKILL.md frontmatter + new skills)                   | Done           |
+| Workflow files (.agents/workflows/)                                              | Done           |
+| Frontend ChatSlice wiring (connect stubs to API)                                 | Done           |
+| Frontend Git panel component                                                     | Done           |
+| Frontend SSE-driven store refresh on GRAPH_UPDATED                               | Done           |
+| Cascade update trigger in Zen Mode toolbar                                       | Done           |
+| Story-project .gitignore strategy (separate from tool repo)                      | Done           |
+| `writing_agent.md` skill (most-referenced, currently missing)                    | Done           |
+| **Not Yet Started**                                                              |                |
+| Scene editing in canvas                                                          | Not started    |

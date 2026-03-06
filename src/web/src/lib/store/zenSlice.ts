@@ -117,5 +117,5 @@ export const useZenStore = create<ExtendedZenState>((set, get) => ({
     setSessionStartWordCount: () => { },
     sessionStartTime: null,
     startSession: () => set({ sessionStartTime: Date.now(), sessionWordsWritten: 0 }),
-    setFocusMode: () => { },
+    setFocusMode: (v: any) => set({ focusMode: !!v }),
 }));

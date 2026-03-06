@@ -168,17 +168,22 @@ async def lifespan(app: FastAPI):
     )
 
     # ── Phase L: Cloud Sync System ──────────────────
-    from showrunner_tool.services.google_drive_adapter import GoogleDriveAdapter
-    from showrunner_tool.services.cloud_sync_service import CloudSyncService
-    
-    token_path = proj.path / ".showrunner" / "token.json"
-    drive_adapter = GoogleDriveAdapter(
-        credentials_path=str(proj.path / "credentials.json"),
-        token_path=str(token_path)
-    )
-    cloud_sync_service = CloudSyncService(drive_adapter, indexer)
-    cloud_sync_service.start_worker()
-    logger.info("Cloud Sync system initialized.")
+    cloud_sync_service = None
+    creds_path = proj.path / "credentials.json"
+    if creds_path.exists():
+        from showrunner_tool.services.google_drive_adapter import GoogleDriveAdapter
+        from showrunner_tool.services.cloud_sync_service import CloudSyncService
+
+        token_path = proj.path / ".showrunner" / "token.json"
+        drive_adapter = GoogleDriveAdapter(
+            credentials_path=str(creds_path),
+            token_path=str(token_path)
+        )
+        cloud_sync_service = CloudSyncService(drive_adapter, indexer)
+        cloud_sync_service.start_worker()
+        logger.info("Cloud Sync system initialized.")
+    else:
+        logger.info("Cloud Sync skipped — no credentials.json found (optional)")
 
     chat_orchestrator = ChatOrchestrator(
         session_service=chat_session_service,

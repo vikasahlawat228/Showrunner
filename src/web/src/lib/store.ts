@@ -152,21 +152,16 @@ const createChatSlice = (set: any): ChatSlice => ({
 export interface GraphDataSlice {
   nodes: any[];
   edges: any[];
-  setNodes: (nodes: any[]) => void;
-  setEdges: (edges: any[]) => void;
-  onNodesChange: (changes: any) => void;
-  onEdgesChange: (changes: any) => void;
-  onConnect: (connection: any) => void;
-  buildGraph: () => void;
-  fetchAll: () => void;
   characters: any[];
   scenes: any[];
-  world: any;
+  worldData: any;
   workflow: any;
+  setNodes: (nodes: any[]) => void;
+  setEdges: (edges: any[]) => void;
+  fetchAll: () => void;
   fetchCharacters: () => void;
-  fetchScenes: (chapter: number) => void;
+  fetchScenes: (chapter?: number) => void;
   fetchWorld: () => void;
-  linkCharacterToScene: (characterId: string, sceneId: string) => void;
 }
 
 const createGraphDataSlice = (set: any): GraphDataSlice => ({
@@ -174,14 +169,10 @@ const createGraphDataSlice = (set: any): GraphDataSlice => ({
   edges: [],
   characters: [],
   scenes: [],
-  world: null,
+  worldData: null,
   workflow: null,
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
-  onNodesChange: (changes) => { },
-  onEdgesChange: (changes) => { },
-  onConnect: (connection) => { },
-  buildGraph: () => { },
   fetchAll: async () => {
     try {
       const data = await api.getGraph();
@@ -192,15 +183,15 @@ const createGraphDataSlice = (set: any): GraphDataSlice => ({
   },
   fetchCharacters: async () => {
     try {
-      const characters = await api.getCharacters();
-      set({ characters });
+      const chars = await api.getCharacters();
+      set({ characters: chars });
     } catch (err) {
       console.error("Failed to fetch characters:", err);
     }
   },
   fetchScenes: async (chapter) => {
     try {
-      const scenes = await api.getScenes(chapter);
+      const scenes = await api.getScenes(chapter ?? 1);
       set({ scenes });
     } catch (err) {
       console.error("Failed to fetch scenes:", err);
@@ -208,14 +199,11 @@ const createGraphDataSlice = (set: any): GraphDataSlice => ({
   },
   fetchWorld: async () => {
     try {
-      const world = await api.getWorld();
-      set({ world });
+      const worldData = await api.getWorld();
+      set({ worldData });
     } catch (err) {
       console.error("Failed to fetch world:", err);
     }
-  },
-  linkCharacterToScene: async (characterId: string, sceneId: string) => {
-    console.log("Linking", characterId, "to", sceneId);
   },
 });
 

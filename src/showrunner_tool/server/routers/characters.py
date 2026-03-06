@@ -21,14 +21,38 @@ router = APIRouter(prefix="/api/v1/characters", tags=["characters"])
 
 @router.get("/", response_model=list[CharacterSummary])
 async def list_characters(svc: CharacterService = Depends(get_character_service)):
-    chars = svc.list_all(filter_secrets=False)
+    import logging
+    _log = logging.getLogger(__name__)
+    try:
+        chars = svc.list_all(filter_secrets=False)
+    except Exception as exc:
+        _log.warning("Error loading characters (some files may have invalid schemas): %s", exc)
+        # Try to return partial results — re-load with graceful fallback
+        chars = []
+        try:
+            from showrunner_tool.models.character import Character
+            from showrunner_tool.utils.io import read_yaml
+            import glob, os
+            project_path = svc._repo._base if hasattr(svc, '_repo') and hasattr(svc._repo, '_base') else None
+            if project_path:
+                for f in glob.glob(str(project_path / "characters" / "*.yaml")):
+                    if os.path.basename(f).startswith("_"):
+                        continue
+                    try:
+                        data = read_yaml(f)
+                        c = Character(**data)
+                        chars.append(c)
+                    except Exception:
+                        _log.debug("Skipping invalid character file: %s", f)
+        except Exception:
+            pass
     return [
         CharacterSummary(
             id=c.id,
             name=c.name,
-            role=c.role.value,
+            role=c.role.value if hasattr(c.role, 'value') else str(c.role),
             one_line=c.one_line,
-            has_dna=bool(c.dna.face.face_shape),
+            has_dna=bool(c.dna.face.face_shape) if c.dna and c.dna.face else False,
         )
         for c in chars
     ]
