@@ -1,3 +1,10 @@
+# ─── Showrunner Tool Repository ────────────────────────
+# This .gitignore is for the TOOL SOURCE CODE repository.
+# Story project directories are excluded here because they
+# are user content, not tool code.  
+# When you create a story project with `showrunner init`,
+# it generates its own .gitignore that TRACKS story files.
+
 # ==================================
 # Python
 # ==================================

@@ -40,18 +40,69 @@ const createChatSlice = (set: any): ChatSlice => ({
   chatError: null,
   pendingApproval: null,
   backgroundStatus: null,
-  fetchChatSessions: () => { },
-  createChatSession: async () => "dummy-session-id",
+  fetchChatSessions: async () => {
+    try {
+      const sessions = await api.getChatSessions();
+      set({ chatSessions: sessions, chatError: null });
+    } catch (err) {
+      set({ chatError: (err as Error).message });
+    }
+  },
+  createChatSession: async () => {
+    try {
+      const session = await api.createChatSession({});
+      set((state: any) => ({
+        chatSessions: [session, ...state.chatSessions],
+        activeSessionId: session.id
+      }));
+      return session.id;
+    } catch (err) {
+      set({ chatError: (err as Error).message });
+      return "";
+    }
+  },
   setActiveSession: (id) => set({ activeSessionId: id }),
-  loadMessages: () => { },
-  appendToken: () => { },
-  addActionTrace: () => { },
-  addArtifact: () => { },
-  completeMessage: () => { },
+  loadMessages: async (id: string) => {
+    try {
+      const messages = await api.getChatMessages(id);
+      set({ chatMessages: messages, activeSessionId: id, chatError: null });
+    } catch (err) {
+      set({ chatError: (err as Error).message });
+    }
+  },
+  appendToken: (token: string) => {
+    set((state: any) => ({ streamingContent: state.streamingContent + token }));
+  },
+  addActionTrace: (trace: any) => {
+    set((state: any) => ({ streamingTraces: [...state.streamingTraces, trace] }));
+  },
+  addArtifact: (artifact: any) => {
+    set((state: any) => ({ streamingArtifacts: [...state.streamingArtifacts, artifact] }));
+  },
+  completeMessage: (message: any) => {
+    set((state: any) => ({
+      chatMessages: [...state.chatMessages, message],
+      streamingContent: "",
+      streamingTraces: [],
+      streamingArtifacts: [],
+      isStreaming: false,
+    }));
+  },
   setStreaming: (isStreaming) => set({ isStreaming }),
   clearStreamingContent: () => set({ streamingContent: "" }),
   setChatError: (error) => set({ chatError: error }),
-  deleteSession: () => { },
+  deleteSession: async (id: string) => {
+    try {
+      await api.deleteChatSession(id);
+      set((state: any) => ({
+        chatSessions: state.chatSessions.filter((s: any) => s.id !== id),
+        activeSessionId: state.activeSessionId === id ? null : state.activeSessionId,
+        chatMessages: state.activeSessionId === id ? [] : state.chatMessages,
+      }));
+    } catch (err) {
+      set({ chatError: (err as Error).message });
+    }
+  },
   setPendingApproval: (approval) => set({ pendingApproval: approval }),
   setBackgroundStatus: (status) => set({ backgroundStatus: status }),
 });
@@ -64,11 +115,22 @@ export interface GraphDataSlice {
   setNodes: (nodes: any[]) => void;
   setEdges: (edges: any[]) => void;
   fetchAll: () => void;
+  characters: any[];
+  scenes: any[];
+  world: any;
+  workflow: any;
+  fetchCharacters: () => void;
+  fetchScenes: (chapter: number) => void;
+  fetchWorld: () => void;
 }
 
 const createGraphDataSlice = (set: any): GraphDataSlice => ({
   nodes: [],
   edges: [],
+  characters: [],
+  scenes: [],
+  world: null,
+  workflow: null,
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
   fetchAll: async () => {
@@ -77,6 +139,30 @@ const createGraphDataSlice = (set: any): GraphDataSlice => ({
       set({ nodes: data.nodes || [], edges: data.edges || [] });
     } catch (err) {
       console.error("Failed to fetch graph:", err);
+    }
+  },
+  fetchCharacters: async () => {
+    try {
+      const characters = await api.getCharacters();
+      set({ characters });
+    } catch (err) {
+      console.error("Failed to fetch characters:", err);
+    }
+  },
+  fetchScenes: async (chapter) => {
+    try {
+      const scenes = await api.getScenes(chapter);
+      set({ scenes });
+    } catch (err) {
+      console.error("Failed to fetch scenes:", err);
+    }
+  },
+  fetchWorld: async () => {
+    try {
+      const world = await api.getWorld();
+      set({ world });
+    } catch (err) {
+      console.error("Failed to fetch world:", err);
     }
   },
 });

@@ -1,4 +1,10 @@
-# Style Enforcer
+---
+name: style_enforcer
+description: You are the Style Enforcer Agent for Showrunner, a node-based, transparent AI co-writer.
+version: "1.0"
+triggers: ["style", "voice", "tone"]
+output_format: json
+---\n# Style Enforcer
 
 **Role:** You are the Style Enforcer Agent for Showrunner, a node-based, transparent AI co-writer.
 

@@ -217,6 +217,9 @@ def init_project(
     # Write CLAUDE.md for agentic workflow integration
     _write_claude_md(project_dir, name, template, structure, is_vertical)
 
+    # Write project-level .gitignore
+    _write_gitignore(project_dir)
+
     # Print success
     console.print()
     print_success(f"Project '{name}' created at {project_dir}")
@@ -497,3 +500,33 @@ showrunner world build
 <!-- DYNAMIC:END -->
 """
     (project_dir / "CLAUDE.md").write_text(content)
+
+
+def _write_gitignore(project_dir: Path) -> None:
+    content = """# Showrunner Story Project
+# Story YAML files are tracked (they ARE the content)
+
+# System databases (auto-rebuilt from YAML on startup)
+*.db
+*.db-journal
+*.db-wal
+
+# Vector store (rebuilt from YAML)
+.chroma/
+
+# Python/Node artifacts
+__pycache__/
+node_modules/
+.next/
+*.pyc
+
+# IDE/OS artifacts
+.DS_Store
+.idea/
+.vscode/
+
+# Showrunner temp files
+.showrunner/chat.db
+.showrunner/sessions/*.tmp
+"""
+    (project_dir / ".gitignore").write_text(content)

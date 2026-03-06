@@ -761,6 +761,14 @@ export const api = {
     request<Job[]>(`/api/v1/jobs/?active_only=${activeOnly}`),
   getJob: (jobId: string) =>
     request<Job>(`/api/v1/jobs/${encodeURIComponent(jobId)}`),
+
+  // Git Operations
+  gitStatus: () => request<any>("/api/v1/git/status"),
+  gitLog: (limit = 10) => request<any[]>(`/api/v1/git/log?limit=${limit}`),
+  gitDiff: () => request<any>("/api/v1/git/diff"),
+  gitStage: (paths?: string[]) => post<any>("/api/v1/git/stage", { paths }),
+  gitCommit: (body: { message?: string; auto_message?: boolean }) =>
+    post<any>("/api/v1/git/commit", body),
 };
 
 // ── Job Interface ──────────────────────────────────────────
