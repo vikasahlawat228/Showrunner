@@ -18,7 +18,9 @@ import {
   MessageSquare,
   Circle,
   Square,
-  Loader2
+  Loader2,
+  Download,
+  Inbox
 } from "lucide-react";
 import { useStudioStore } from "@/lib/store";
 import { useRecorderStore } from "@/lib/store/recorderSlice";
@@ -42,7 +44,7 @@ const navItems = [
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { isChatSidebarOpen, setChatSidebarOpen } = useStudioStore();
+  const { isChatSidebarOpen, setChatSidebarOpen, isInboxPanelOpen, setInboxPanelOpen } = useStudioStore();
   const {
     isRecording,
     startRecording,
@@ -163,6 +165,14 @@ export function Navbar() {
           </button>
 
           <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open:export'))}
+            className="flex items-center justify-center p-1.5 border border-gray-700 hover:border-gray-600 rounded-md bg-gray-900 text-gray-400 transition-colors"
+            title="Export Project"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+
+          <button
             onClick={() => setChatSidebarOpen(!isChatSidebarOpen)}
             className={`flex items-center justify-center p-1.5 border hover:border-gray-600 rounded-md transition-colors ${isChatSidebarOpen
               ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/30"
@@ -171,6 +181,17 @@ export function Navbar() {
             title="Toggle Agentic Chat (Cmd+Shift+C)"
           >
             <MessageSquare className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => setInboxPanelOpen(!isInboxPanelOpen)}
+            className={`flex items-center justify-center p-1.5 border hover:border-gray-600 rounded-md transition-colors ${isInboxPanelOpen
+              ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/30"
+              : "bg-gray-900 border-gray-700 text-gray-400"
+              }`}
+            title="Toggle Brain Dump Inbox"
+          >
+            <Inbox className="w-4 h-4" />
           </button>
 
           <button

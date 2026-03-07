@@ -11,6 +11,9 @@ import { GlobalActivityBar } from "@/components/ui/GlobalActivityBar";
 import { BackgroundJobsWidget } from "@/components/ui/BackgroundJobsWidget";
 import { ChatSidebarWrapper } from "@/components/chat/ChatSidebarWrapper";
 import { ArtifactPreviewOverlay } from "@/components/chat/ArtifactPreviewOverlay";
+import { GlobalExportModal } from "@/components/ui/GlobalExportModal";
+import { OnboardingWizard } from "@/components/ui/OnboardingWizard";
+import { InboxPanelWrapper } from "@/components/ui/InboxPanelWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -55,6 +58,9 @@ export default function RootLayout({
         <ForkEraModal />
         <GlobalActivityBar />
         <BackgroundJobsWidget />
+        <GlobalExportModal />
+        <OnboardingWizard />
+        <InboxPanelWrapper />
         <Toaster
           theme="dark"
           position="bottom-right"

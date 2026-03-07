@@ -31,6 +31,7 @@ from showrunner_tool.server.routers import (
     writing,
     storyboard,
     git_router,
+    inbox_router,
 )
 from showrunner_tool.server.routers import projects as projects_router
 from showrunner_tool.server.routers import containers as containers_router
@@ -289,6 +290,9 @@ app.include_router(git_router.router)
 
 # Phase L (Cascade Update)
 app.include_router(cascade_router.router)
+
+# Phase L (Inbox Management)
+app.include_router(inbox_router.router)
 
 if __name__ == "__main__":
     import uvicorn

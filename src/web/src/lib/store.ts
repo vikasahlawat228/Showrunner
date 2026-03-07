@@ -318,6 +318,18 @@ const createModelConfigSlice = (set: any): ModelConfigSlice => ({
   },
 });
 
+// ── Inbox Slice ─────────────────────────────────────────────
+
+export interface InboxSlice {
+  isInboxPanelOpen: boolean;
+  setInboxPanelOpen: (isOpen: boolean) => void;
+}
+
+const createInboxSlice = (set: any): InboxSlice => ({
+  isInboxPanelOpen: false,
+  setInboxPanelOpen: (isOpen) => set({ isInboxPanelOpen: isOpen }),
+});
+
 // ── Selection & UI ──────────────────────────────────────────
 
 export type SidebarTab = "characters" | "scenes" | "world";
@@ -330,7 +342,7 @@ export interface Selection {
 
 // ── Main Store Definition ───────────────────────────────────
 
-export type StudioState = GraphDataSlice & CanvasUISlice & ReactFlowSlice & ProjectSlice & ModelConfigSlice & ChatSlice & Record<string, any>;
+export type StudioState = GraphDataSlice & CanvasUISlice & ReactFlowSlice & ProjectSlice & ModelConfigSlice & ChatSlice & InboxSlice & Record<string, any>;
 
 export const useStudioStore = create<StudioState>()((set) => ({
   ...createGraphDataSlice(set),
@@ -339,4 +351,5 @@ export const useStudioStore = create<StudioState>()((set) => ({
   ...createProjectSlice(set),
   ...createModelConfigSlice(set),
   ...createChatSlice(set),
+  ...createInboxSlice(set),
 }));

@@ -72,3 +72,41 @@ class WorldRepository:
                     context={"path": str(f)},
                 )
         return factions
+
+    def get_locations(self) -> list[Location]:
+        """Load all location files from world/locations/."""
+        locations_dir = self.world_dir / "locations"
+        if not locations_dir.exists():
+            return []
+        locations = []
+        for f in sorted(locations_dir.glob("*.yaml")):
+            if f.name.startswith("_"):
+                continue
+            try:
+                locations.append(Location(**read_yaml(f)))
+            except Exception as e:
+                raise PersistenceError(
+                    f"Failed to load location {f}: {e}",
+                    context={"path": str(f)},
+                )
+        return locations
+
+    def save_location(self, location: Location) -> Path:
+        """Save a location file to world/locations/."""
+        locations_dir = self.world_dir / "locations"
+        locations_dir.mkdir(parents=True, exist_ok=True)
+        # Use location name as filename, slugified
+        filename = location.name.lower().replace(" ", "_").replace("/", "_") + ".yaml"
+        path = locations_dir / filename
+        write_yaml(path, location.model_dump(mode="json"))
+        return path
+
+    def delete_location(self, location_name: str) -> None:
+        """Delete a location file by name."""
+        locations_dir = self.world_dir / "locations"
+        if not locations_dir.exists():
+            return
+        filename = location_name.lower().replace(" ", "_").replace("/", "_") + ".yaml"
+        path = locations_dir / filename
+        if path.exists():
+            path.unlink()

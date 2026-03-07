@@ -55,9 +55,9 @@ class WorldSettings(ShowrunnerBase):
     tone: str = ""
     one_line: str = ""
     description: str = ""
-    locations: list[Location] = Field(default_factory=list)
     rules: list[WorldRule] = Field(default_factory=list)
     factions: list[Faction] = Field(default_factory=list)
     history: list[HistoricalEvent] = Field(default_factory=list)
     technology_level: str = ""
     cultural_notes: list[str] = Field(default_factory=list)
+    # Note: locations now stored as individual files in world/locations/
