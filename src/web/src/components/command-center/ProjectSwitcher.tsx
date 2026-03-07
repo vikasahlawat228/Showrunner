@@ -46,7 +46,13 @@ export function ProjectSwitcher() {
                 {projects.length === 0 ? (
                     <div className="px-4 py-6 text-center">
                         <FolderOpen className="w-8 h-8 mx-auto text-gray-700 mb-2" />
-                        <p className="text-gray-500 text-sm">No projects found</p>
+                        <p className="text-gray-500 text-sm mb-4">No projects found</p>
+                        <button
+                            onClick={() => window.dispatchEvent(new CustomEvent('open:onboarding'))}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm w-full font-medium transition-colors"
+                        >
+                            Create New Story
+                        </button>
                     </div>
                 ) : (
                     projects.map((project) => {
@@ -56,14 +62,14 @@ export function ProjectSwitcher() {
                                 key={project.id}
                                 onClick={() => setActiveProject(project.id)}
                                 className={`w-full px-4 py-3 flex items-center gap-3 transition-all duration-150 text-left group ${isActive
-                                        ? "bg-blue-500/10 border-l-2 border-blue-400"
-                                        : "hover:bg-gray-800/50 border-l-2 border-transparent"
+                                    ? "bg-blue-500/10 border-l-2 border-blue-400"
+                                    : "hover:bg-gray-800/50 border-l-2 border-transparent"
                                     }`}
                             >
                                 <div
                                     className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${isActive
-                                            ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/20"
-                                            : "bg-gray-800 text-gray-400 group-hover:bg-gray-700"
+                                        ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/20"
+                                        : "bg-gray-800 text-gray-400 group-hover:bg-gray-700"
                                         }`}
                                 >
                                     {project.name.charAt(0).toUpperCase()}

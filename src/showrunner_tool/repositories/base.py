@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Generic, TypeVar, Type, Callable, List, Dict, Any, Optional
 
@@ -126,21 +127,59 @@ class YAMLRepository(Generic[T]):
                 context={"path": str(path), "model": self.model_class.__name__},
             )
             
+    def _soft_delete_file(self, path: Path, identifier: str = "") -> Path:
+        """Move a YAML file to trash instead of permanently deleting it.
+
+        Returns the trash path. If identifier is not provided, uses path.stem.
+        """
+        if not identifier:
+            identifier = path.stem
+
+        # Create trash directory at project root
+        trash_dir = self._find_trash_dir()
+        trash_dir.mkdir(parents=True, exist_ok=True)
+
+        # Preserve directory structure relative to base_dir
+        try:
+            relative_path = path.relative_to(self.base_dir)
+        except ValueError:
+            # If path is not relative to base_dir, just use the filename
+            relative_path = Path(path.name)
+
+        trash_subdir = trash_dir / relative_path.parent
+        trash_subdir.mkdir(parents=True, exist_ok=True)
+
+        # Add timestamp suffix to avoid collisions
+        timestamp = int(time.time() * 1000)  # milliseconds for uniqueness
+        trash_name = f"{relative_path.stem}-{timestamp}{relative_path.suffix}"
+        trash_path = trash_subdir / trash_name
+
+        # Move file to trash
+        path.rename(trash_path)
+
+        return trash_path
+
     def delete(self, identifier: str) -> None:
-        """Delete a YAML file by its identifier (filename stem)."""
+        """Delete a YAML file by moving it to trash.
+
+        Files are moved to .showrunner/trash/{original_path} with timestamp suffix
+        to prevent collisions when the same file is deleted multiple times.
+        """
         path = self.base_dir / f"{identifier}.yaml"
         if not path.exists():
             return
 
         try:
-            path.unlink()
+            trash_path = self._soft_delete_file(path, identifier)
+
             # Invalidate cache entry for deleted file
             if self._cache is not None:
                 self._cache.invalidate(path)
-            # Trigger callbacks
+
+            # Trigger callbacks (pass trash_path instead of original path)
             for cb in self._delete_callbacks:
                 try:
-                    cb(path, identifier)
+                    cb(trash_path, identifier)
                 except Exception:
                     pass
         except Exception as e:
@@ -148,6 +187,25 @@ class YAMLRepository(Generic[T]):
                 f"Failed to delete {path}: {e}",
                 context={"path": str(path), "model": self.model_class.__name__},
             )
+
+    def _find_trash_dir(self) -> Path:
+        """Find or infer the .showrunner/trash directory location.
+
+        Walks up from base_dir to find a .showrunner directory, then returns
+        its trash subdirectory. Falls back to base_dir/.showrunner/trash if not found.
+        """
+        current = self.base_dir.absolute()
+        for _ in range(10):  # Limit search depth to prevent infinite loops
+            showrunner_dir = current / ".showrunner"
+            if showrunner_dir.exists() and showrunner_dir.is_dir():
+                return showrunner_dir / "trash"
+            parent = current.parent
+            if parent == current:
+                # Reached filesystem root
+                break
+            current = parent
+        # Fallback: assume .showrunner is at base_dir's parent
+        return self.base_dir.parent / ".showrunner" / "trash"
 
     def _list_files(self, pattern: str = "*.yaml") -> list[Path]:
         """List YAML files in the base directory, excluding _ prefixed files."""

@@ -277,6 +277,21 @@ class SQLiteIndexer:
         except sqlite3.Error as e:
             raise PersistenceError(f"Database error during get_roots: {e}")
 
+    def get_path_by_id(self, container_id: str) -> Optional[str]:
+        """Get the YAML file path for a container by its ID (O(1) lookup).
+
+        Much faster than scanning all files. Returns the yaml_path or None if not found.
+        """
+        try:
+            cursor = self.conn.execute(
+                "SELECT yaml_path FROM containers WHERE id = ? LIMIT 1",
+                (container_id,),
+            )
+            row = cursor.fetchone()
+            return row['yaml_path'] if row else None
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during get_path_by_id: {e}")
+
     def add_relationship(self, source_id: str, target_id: str, rel_type: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Link two containers in the Knowledge Graph."""
         try:

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { StoryStructureTree } from "@/components/timeline/StoryStructureTree";
 import { TimelineView } from "@/components/timeline/TimelineView";
 import { EmotionalArcChart } from "@/components/timeline/EmotionalArcChart";
+import { StoryRibbonsVisualization } from "@/components/timeline/StoryRibbonsVisualization";
 import { BranchList } from "@/components/timeline/BranchList";
 import { BranchComparison } from "@/components/timeline/BranchComparison";
 import { GitBranchPlus, X, Loader2, Minimize2 } from "lucide-react";
@@ -135,13 +136,14 @@ export default function TimelinePage() {
                         className={`absolute inset-0 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col ${zoomLevel === "zen" ? "scale-110 opacity-0 pointer-events-none blur-sm translate-z-[100px]" : "scale-100 opacity-100 translate-z-0"
                             } ${zoomLevel === "arc" ? "bg-slate-50 dark:bg-slate-950" : ""}`}
                     >
-                        <div className={`transition-all duration-500 transform ${zoomLevel === "arc" ? "flex-1 overflow-hidden translate-z-0" : zoomLevel === "chapter" ? "opacity-30 blur-sm scale-95 pointer-events-none -translate-z-[100px]" : "hidden"}`}>
-                            <div className="p-8 h-full">
+                        <div className={`transition-all duration-500 transform ${zoomLevel === "arc" ? "flex-1 overflow-y-auto translate-z-0" : zoomLevel === "chapter" ? "opacity-30 blur-sm scale-95 pointer-events-none -translate-z-[100px]" : "hidden"}`}>
+                            <div className="p-8 h-full max-w-6xl mx-auto">
                                 <EmotionalArcChart />
+                                <StoryRibbonsVisualization />
                                 <div className="mt-8 grid grid-cols-3 gap-6 opacity-60">
-                                    <div className="h-40 bg-gray-800/20 rounded-xl border border-white/5" />
-                                    <div className="h-40 bg-gray-800/20 rounded-xl border border-white/5" />
-                                    <div className="h-40 bg-gray-800/20 rounded-xl border border-white/5" />
+                                    <div className="h-40 bg-slate-200/50 dark:bg-gray-800/20 rounded-xl border border-slate-300 dark:border-white/5" />
+                                    <div className="h-40 bg-slate-200/50 dark:bg-gray-800/20 rounded-xl border border-slate-300 dark:border-white/5" />
+                                    <div className="h-40 bg-slate-200/50 dark:bg-gray-800/20 rounded-xl border border-slate-300 dark:border-white/5" />
                                 </div>
                             </div>
                         </div>

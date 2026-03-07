@@ -11,6 +11,7 @@ import { useChatStream } from "../../hooks/useChatStream";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useZenStore } from "@/lib/store/zenSlice";
+import { Sparkles } from "lucide-react";
 
 import { PlanViewer } from "./PlanViewer";
 
@@ -199,6 +200,19 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
         [activeSessionId, createChatSession, completeMessage, setStreaming, clearStreamingContent, sendMessage]
     );
 
+    // Listen for custom external chat injections (e.g., from OnboardingWizard)
+    useEffect(() => {
+        const handleInject = (e: CustomEvent<{ message: string }>) => {
+            useStudioStore.getState().setChatSidebarOpen(true);
+            // Delay slightly to allow sidebar transition
+            setTimeout(() => {
+                handleSend(e.detail.message, []);
+            }, 300);
+        };
+        window.addEventListener('chat:inject', handleInject as EventListener);
+        return () => window.removeEventListener('chat:inject', handleInject as EventListener);
+    }, [handleSend]);
+
     if (!isOpen) return null;
 
     return (
@@ -277,10 +291,30 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
                         )}
 
                         {chatMessages.length === 0 && !isStreaming && !welcomeBack && (
-                            <div className="text-center text-gray-500 text-sm mt-8">
-                                Start a conversation about your project.
-                                <br />
-                                Use @mentions to reference entities.
+                            <div className="flex flex-col items-center justify-center mt-12 mb-8 px-4 w-full">
+                                <div className="w-12 h-12 bg-indigo-500/10 rounded-full flex items-center justify-center mb-4 border border-indigo-500/20">
+                                    <Sparkles className="w-6 h-6 text-indigo-400" />
+                                </div>
+                                <h3 className="text-gray-200 font-medium mb-2">How can I help?</h3>
+                                <p className="text-center text-gray-500 text-sm mb-6">
+                                    Start a conversation or use one of these quick actions.
+                                </p>
+                                <div className="flex flex-col gap-2 w-full max-w-[280px]">
+                                    {[
+                                        { label: "Create a new Character", prompt: "/plan Create a new character" },
+                                        { label: "Outline act 1", prompt: "/plan Outline act 1" },
+                                        { label: "Review continuity", prompt: "/review Check recent scenes for continuity" }
+                                    ].map((action, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => handleSend(action.prompt, [])}
+                                            className="px-4 py-2.5 bg-gray-800/50 hover:bg-gray-700/80 text-gray-300 text-sm rounded-lg transition-all border border-gray-700/50 hover:border-indigo-500/30 flex items-center justify-between group shadow-sm bg-gradient-to-br from-gray-800/50 to-gray-900/50 hover:from-gray-700/50 hover:to-gray-800/50"
+                                        >
+                                            <span>{action.label}</span>
+                                            <span className="opacity-0 group-hover:opacity-100 text-indigo-400 transition-opacity text-lg leading-none transform group-hover:translate-x-1 duration-200">→</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         )}
 

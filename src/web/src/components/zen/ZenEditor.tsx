@@ -24,7 +24,7 @@ import { useStudioStore } from "@/lib/store";
 import { useRecorderStore } from "@/lib/store/recorderSlice";
 import { api } from "@/lib/api";
 import { type AIOperationContext } from "@/components/ui/ContextInspector";
-import { Save, Clock, Loader2, Focus, GitBranch, CopyPlus, Zap } from "lucide-react";
+import { Save, Clock, Loader2, Focus, GitBranch, CopyPlus, Zap, Download } from "lucide-react";
 
 // ── Suggestion utilities ────────────────────────────────────
 
@@ -716,6 +716,14 @@ export function ZenEditor() {
                             <span>|</span>
                             <span>~{readingTime} min read</span>
                         </div>
+
+                        <button
+                            onClick={() => window.dispatchEvent(new CustomEvent('open:export'))}
+                            className="p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                            title="Export Title"
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                        </button>
 
                         <button
                             onClick={() => setFocusMode(!focusMode)}

@@ -58,6 +58,8 @@ class CharacterInPanel(BaseModel):
     pose: str = ""
     position_in_frame: str = ""
     action: Optional[str] = None
+    facing: str = "forward"  # forward, profile, back, three-quarter
+    expression_detail: Optional[str] = None  # sad, angry, shocked, happy, neutral, etc.
 
 
 class DialogueBubble(BaseModel):
@@ -84,6 +86,8 @@ class Panel(ShowrunnerBase):
     # Webtoon-specific
     scroll_gap_before: int = 100
     aspect_ratio: str = "9:16"
+    scroll_beat_type: str = "none"  # none, pause, impact, reveal — controls scroll pacing
+    scroll_beat_height: int = 0  # px of white space (0 = normal, >0 = pause beat)
 
     # Content
     characters: list[CharacterInPanel] = Field(default_factory=list)
@@ -92,6 +96,7 @@ class Panel(ShowrunnerBase):
     effects: list[str] = Field(default_factory=list)
     lighting: str = ""
     mood: str = ""
+    mood_tokens: list[str] = Field(default_factory=list)  # e.g., ["tense", "dark", "claustrophobic", "intimate"]
 
     # Text
     dialogue_bubbles: list[DialogueBubble] = Field(default_factory=list)

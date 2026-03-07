@@ -169,6 +169,32 @@ class SessionLog:
                 results.append(SessionEntry(**data))
         return results
 
+    def load_recent(self, limit: int = 20, offset: int = 0) -> list[SessionEntry]:
+        """Load recent sessions with pagination (most recent first).
+
+        Args:
+            limit: Maximum number of sessions to load (default 20)
+            offset: Number of sessions to skip from the beginning (default 0)
+
+        Returns:
+            List of SessionEntry objects in reverse chronological order
+        """
+        if not self.sessions_dir.exists():
+            return []
+
+        limit = max(1, limit)
+        offset = max(0, offset)
+
+        files = sorted(self.sessions_dir.glob("session-*.yaml"), reverse=True)
+        results = []
+
+        for f in files[offset : offset + limit]:
+            data = read_yaml(f)
+            if data:
+                results.append(SessionEntry(**data))
+
+        return results
+
     def load_all(self) -> list[SessionEntry]:
         """Load all session logs chronologically."""
         if not self.sessions_dir.exists():

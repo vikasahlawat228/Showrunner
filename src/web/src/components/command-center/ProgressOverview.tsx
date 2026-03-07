@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Layers, BookOpen, Film, BarChart3, Download, MessageSquare, Clock } from "lucide-react";
 import { useStudioStore } from "@/lib/store";
-import { ExportModal } from "@/components/ui/ExportModal";
 import type { StructureNode } from "@/lib/api";
 
 function countByType(nodes: StructureNode[]): Record<string, number> {
@@ -54,7 +53,6 @@ export function ProgressOverview() {
     const chatSessions = useStudioStore((s) => s.chatSessions);
     const fetchChatSessions = useStudioStore((s) => s.fetchChatSessions);
     const setActiveSession = useStudioStore((s) => s.setActiveSession);
-    const [exportOpen, setExportOpen] = useState(false);
 
     useEffect(() => {
         if (activeProjectId) {
@@ -62,12 +60,6 @@ export function ProgressOverview() {
         }
         fetchChatSessions();
     }, [activeProjectId, fetchStructure, fetchChatSessions]);
-
-    useEffect(() => {
-        const handler = () => setExportOpen(true);
-        window.addEventListener('open:export', handler);
-        return () => window.removeEventListener('open:export', handler);
-    }, []);
 
     const counts = useMemo(() => countByType(structureTree), [structureTree]);
 
@@ -101,7 +93,7 @@ export function ProgressOverview() {
                     Story Progress
                 </span>
                 <button
-                    onClick={() => setExportOpen(true)}
+                    onClick={() => window.dispatchEvent(new CustomEvent('open:export'))}
                     className="ml-auto p-1.5 rounded-lg text-gray-500 hover:text-emerald-400 hover:bg-gray-800/50 transition-colors"
                     title="Export project"
                 >
@@ -164,8 +156,6 @@ export function ProgressOverview() {
                     </div>
                 );
             })()}
-
-            <ExportModal isOpen={exportOpen} onClose={() => setExportOpen(false)} />
         </div>
     );
 }

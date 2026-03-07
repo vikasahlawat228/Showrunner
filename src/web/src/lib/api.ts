@@ -662,8 +662,10 @@ export const api = {
   updateModelConfig: (body: ProjectModelConfig) =>
     put<ProjectModelConfig>("/api/v1/models/config", body),
 
-  // Projects (multi-project)
+  // Projects (multi-project & settings)
   listProjects: () => request<ProjectSummary[]>("/api/v1/projects/"),
+  getProjectSettings: () => request<any>("/api/v1/projects/settings"),
+  updateProjectSettings: (body: any) => put<any>("/api/v1/projects/settings", body),
   getProjectStructure: async () => {
     const res = await request<{ roots: StructureNode[] }>("/api/v1/projects/structure");
     return res.roots;

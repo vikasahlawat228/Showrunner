@@ -4,6 +4,74 @@
 
 This guide explains how to use Claude Code to work directly with your story files, bypassing the web UI entirely. It's a completely zero-token workflow: Claude Code reads/writes YAML files, and the FileWatcher in the backend automatically syncs everything to the web UI.
 
+---
+
+## ⚡ CRITICAL: The Two-Step Mechanic
+
+**This is the most important concept to understand.**
+
+Showrunner CLI commands don't create files directly. They **print prompts** that Claude Code reads and acts on.
+
+### How It Works
+
+```
+You → showrunner character create "Zara"
+      ↓
+CLI → Prints a formatted prompt with character schema + all needed context
+      ↓
+You (Claude Code) → Read that prompt carefully
+      ↓
+Claude Code → Generate the YAML content following the prompt's schema
+      ↓
+You → Write the YAML to characters/zara.yaml
+```
+
+### Why This Design?
+
+- **Free**: Claude Code generates content (no API tokens)
+- **Transparent**: You see exactly what context is being used
+- **Flexible**: You can customize or reject the generated content
+- **Reliable**: The prompt guides you to write valid YAML
+
+### Every showrunner Command Follows This Pattern
+
+```bash
+showrunner scene write --chapter 1 --scene 1
+# Prints: A prompt with scene schema, character context, previous scene, pacing guide, etc.
+# You (Claude Code) read this prompt, understand what to write, generate the scene YAML
+# You write it to: fragment/ch1-sc1.yaml
+
+showrunner character create "Miko"
+# Prints: A prompt with character template, world context, genre guidance, etc.
+# You read it, generate character YAML, write to: characters/miko.yaml
+
+showrunner research "Feudal Japanese armor"
+# Prints: A prompt asking for research structure, sources, confidence scoring
+# You read it, research and write result to: containers/research_topic/...
+```
+
+---
+
+## 🗺️ Path Concordance Table
+
+When you read the guide or skill files, you'll see references to story files. Here's where they actually live:
+
+| When You See... | The File Actually Lives At | Use Case |
+|---|---|---|
+| "Save to `fragment/`" | `fragment/ch4-sc3.yaml` | Scene prose (what you write) |
+| "Save to `containers/`" | `containers/<type>/<name>.yaml` | Research, notes, custom data |
+| "Save to `idea_card/`" | `idea_card/<idea>.yaml` | Brainstorm ideas, plot twists |
+| "A character" | `characters/<name>.yaml` | Character profiles (or `containers/character/`) |
+| "A location" | `world/locations/<name>.yaml` | World locations |
+| "A scene" | `fragment/<id>.yaml` OR `chapters/s1/chapter-01/scenes/` | Story prose |
+| "A panel" | `chapters/s1/chapter-01/panels/<id>.yaml` | Storyboard panels |
+| "A screenplay" | `chapters/s1/chapter-01/screenplay/<id>.yaml` | Scene breakdowns |
+| "A decision" | `.showrunner/decisions.yaml` | Persistent author preferences |
+| "Brain dump inbox" | `.showrunner/inbox.yaml` | Captured ideas (before processing) |
+| "Research" | `containers/research_topic/<topic>.yaml` | Fact-checked information |
+
+---
+
 ## Quick Start
 
 ### 1. Load Your Project Context

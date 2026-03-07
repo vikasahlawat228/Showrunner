@@ -36,6 +36,8 @@ from showrunner_tool.commands import (
     db,
     cascade,
     git_cmd,
+    capture,
+    backup,
 )
 from showrunner_tool.core.project import Project, ProjectError
 from showrunner_tool.core.workflow import WorkflowState, STEP_LABELS
@@ -79,6 +81,13 @@ app.add_typer(server.app, name="server")
 app.add_typer(db.app, name="db")
 app.add_typer(cascade.app, name="cascade")
 app.add_typer(git_cmd.app, name="git")
+
+# Register capture/inbox commands (P0.5 - frictionless brain dump)
+app.command("capture")(capture.capture)
+capture.register_capture_commands(app)
+
+# Register backup commands (P3.1)
+app.add_typer(backup.app, name="backup")
 
 
 @app.command("status")

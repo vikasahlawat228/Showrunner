@@ -53,10 +53,24 @@ class EventService:
                 )
             """)
             
-            # Indexes for querying event history
+            # Snapshots table for performance (avoid replaying entire event chain)
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS snapshots (
+                    id TEXT PRIMARY KEY,
+                    branch_id TEXT NOT NULL,
+                    base_event_id TEXT NOT NULL,
+                    state_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+                    FOREIGN KEY (base_event_id) REFERENCES events(id) ON DELETE CASCADE
+                )
+            """)
+
+            # Indexes for querying event history and snapshots
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_events_branch ON events(branch_id)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_events_container ON events(container_id)")
-            
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_branch ON snapshots(branch_id)")
+
             # Bootstrapping the default main branch
             self.conn.execute("""
                 INSERT OR IGNORE INTO branches (id, head_event_id)
@@ -169,15 +183,126 @@ class EventService:
             
         except sqlite3.Error as e:
             raise PersistenceError(f"Database error during state projection: {e}")
-            
-    def get_all_events(self) -> List[Dict[str, Any]]:
-        """Retrieve all events sorted by timestamp for rendering the timeline."""
+
+    def create_snapshot(self, branch_id: str) -> str:
+        """Create a checkpoint snapshot of the current state at the branch head.
+
+        This avoids replaying the entire event chain on the next project_state() call.
+        Returns the snapshot ID.
+        """
+        try:
+            cursor = self.conn.execute("SELECT head_event_id FROM branches WHERE id = ?", (branch_id,))
+            row = cursor.fetchone()
+            if not row or not row['head_event_id']:
+                raise ValueError(f"Branch '{branch_id}' has no events to snapshot")
+
+            head_event_id = row['head_event_id']
+
+            # Compute current state
+            state = self.project_state(branch_id)
+
+            # Store snapshot
+            snapshot_id = str(uuid.uuid4())
+            timestamp = datetime.now(timezone.utc).isoformat()
+
+            with self.conn:
+                self.conn.execute("""
+                    INSERT INTO snapshots (id, branch_id, base_event_id, state_json, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (snapshot_id, branch_id, head_event_id, json.dumps(state), timestamp))
+
+            return snapshot_id
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during snapshot creation: {e}")
+
+    def project_state_with_snapshot(self, branch_id: str) -> Dict[str, dict]:
+        """Reconstruct project state, using the latest snapshot as a base if available.
+
+        Much faster than project_state() for branches with many events.
+        """
+        try:
+            # Get latest snapshot for this branch
+            cursor = self.conn.execute("""
+                SELECT base_event_id, state_json FROM snapshots
+                WHERE branch_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (branch_id,))
+            snapshot_row = cursor.fetchone()
+
+            if snapshot_row:
+                # Start from snapshot state
+                state = json.loads(snapshot_row['state_json'])
+                base_event_id = snapshot_row['base_event_id']
+
+                # Apply events since snapshot to head
+                cursor = self.conn.execute("SELECT head_event_id FROM branches WHERE id = ?", (branch_id,))
+                branch_row = cursor.fetchone()
+                if not branch_row or not branch_row['head_event_id']:
+                    return state
+
+                head_event_id = branch_row['head_event_id']
+
+                # Build chain from base_event to head
+                query = """
+                    WITH RECURSIVE EventChain AS (
+                        SELECT id, parent_event_id, event_type, container_id, payload_json, 0 as depth
+                        FROM events WHERE id = ?
+
+                        UNION ALL
+
+                        SELECT e.id, e.parent_event_id, e.event_type, e.container_id, e.payload_json, ec.depth + 1
+                        FROM events e
+                        JOIN EventChain ec ON e.id = ec.parent_event_id
+                        WHERE e.id != ?  -- Stop before the base snapshot event
+                    )
+                    SELECT * FROM EventChain ORDER BY depth DESC;
+                """
+
+                cursor = self.conn.execute(query, (head_event_id, base_event_id))
+                rows = cursor.fetchall()
+
+                # Apply delta events
+                for r in rows:
+                    event_type = r['event_type']
+                    container_id = r['container_id']
+                    payload = json.loads(r['payload_json'])
+
+                    if event_type in ('CREATE', 'UPDATE'):
+                        if container_id not in state:
+                            state[container_id] = {}
+                        state[container_id].update(payload)
+                    elif event_type == 'DELETE':
+                        if container_id in state:
+                            del state[container_id]
+
+                return state
+            else:
+                # No snapshot, use regular project_state
+                return self.project_state(branch_id)
+
+        except sqlite3.Error as e:
+            raise PersistenceError(f"Database error during snapshot-based projection: {e}")
+
+    def get_all_events(self, limit: int = 1000, offset: int = 0) -> List[Dict[str, Any]]:
+        """Retrieve events sorted by timestamp for rendering the timeline.
+
+        Args:
+            limit: Maximum number of events to retrieve (default 1000). Prevents
+                   unbounded result sets on SSE streams.
+            offset: Number of events to skip from the beginning (default 0).
+                   Use for pagination: offset = page * limit.
+
+        Returns:
+            List of events with payload JSON decoded to dict.
+        """
         try:
             cursor = self.conn.execute("""
                 SELECT id, parent_event_id, branch_id, timestamp, event_type, container_id, payload_json
                 FROM events
                 ORDER BY timestamp ASC
-            """)
+                LIMIT ? OFFSET ?
+            """, (limit, offset))
             events = []
             for row in cursor.fetchall():
                 evt = dict(row)

@@ -41,20 +41,43 @@ def init_project(
 
     # Create directory structure
     ensure_dir(project_dir)
+
+    # IDE-friendly flat structure (writers use these directly)
+    ensure_dir(project_dir / "fragment")          # Scene prose
+    ensure_dir(project_dir / "containers")        # Research, notes, generic data
+    ensure_dir(project_dir / "idea_card")         # Brainstorm ideas
+    ensure_dir(project_dir / "pipeline_def")      # Workflow definitions
+
+    # Web UI structure (chapters/panels/screenplay for visual editing)
+    ensure_dir(project_dir / "chapters" / "s1" / "chapter-01" / "scenes")
+    ensure_dir(project_dir / "chapters" / "s1" / "chapter-01" / "screenplay")
+    ensure_dir(project_dir / "chapters" / "s1" / "chapter-01" / "panels")
+    ensure_dir(project_dir / "chapters" / "s1" / "chapter-01" / "character_states")
+
+    # World building (locations as per-file YAMLs for scaling)
+    ensure_dir(project_dir / "world" / "locations")
     ensure_dir(project_dir / "world" / "factions")
+
+    # Character & style guides
     ensure_dir(project_dir / "characters")
     ensure_dir(project_dir / "style_guide")
+
+    # Story planning
     ensure_dir(project_dir / "story" / "arcs")
-    ensure_dir(project_dir / "chapters" / "chapter-01" / "scenes")
-    ensure_dir(project_dir / "chapters" / "chapter-01" / "screenplay")
-    ensure_dir(project_dir / "chapters" / "chapter-01" / "panels")
-    ensure_dir(project_dir / "chapters" / "chapter-01" / "character_states")
+
+    # Creative room (author-only secrets, never leak to story)
     ensure_dir(project_dir / "creative_room" / "reader_knowledge")
+
+    # Assets & exports
     ensure_dir(project_dir / "assets" / "references")
     ensure_dir(project_dir / "prompts")
     ensure_dir(project_dir / "exports")
+
+    # Internal state (databases, caches, sessions)
     ensure_dir(project_dir / ".showrunner" / "context_cache")
     ensure_dir(project_dir / ".showrunner" / "sessions")
+    ensure_dir(project_dir / ".showrunner" / "trash")
+    ensure_dir(project_dir / ".showrunner" / "inbox")
 
     # Write manifest
     is_vertical = template in ("manhwa", "webtoon")
@@ -116,7 +139,8 @@ def init_project(
     write_yaml(project_dir / "world" / "settings.yaml", {
         "name": "", "genre": "", "time_period": "", "tone": "",
         "one_line": "", "description": "", "technology_level": "",
-        "locations": [], "rules": [], "factions": [], "history": [],
+        "location_refs": [],  # Per-file locations in world/locations/ (avoid monolith)
+        "rules": [], "factions": [], "history": [],
         "cultural_notes": [],
     })
     write_yaml(project_dir / "world" / "rules.yaml", [])
@@ -164,6 +188,9 @@ def init_project(
     write_yaml(project_dir / "creative_room" / "ending_plans.yaml", {
         "ending_plans": "",
     })
+
+    # Write directory guide READMEs for IDE users
+    _write_directory_guides(project_dir)
 
     # Write character template
     write_yaml(project_dir / "characters" / "_template.yaml", {
@@ -219,6 +246,20 @@ def init_project(
 
     # Write project-level .gitignore
     _write_gitignore(project_dir)
+
+    # Auto-populate CLAUDE.md with initial briefing (P0.2)
+    # This ensures the DYNAMIC section has useful state from day 1
+    try:
+        from showrunner_tool.core.briefing import BriefingGenerator
+        from showrunner_tool.core.project import Project
+
+        project = Project(project_dir)
+        briefing_gen = BriefingGenerator(project)
+        briefing_gen.update_claude_md()
+        print_info("✅ Auto-populated CLAUDE.md with initial project state")
+    except Exception as e:
+        print_info(f"⚠️  Could not auto-populate briefing: {e}")
+        print_info("   Run 'showrunner brief update' manually if needed")
 
     # Print success
     console.print()
@@ -313,9 +354,9 @@ At the **end of each session**:
 1. showrunner world build           → world/settings.yaml
 2. showrunner character create      → characters/*.yaml
 3. showrunner story outline         → story/structure.yaml
-4. showrunner scene write           → chapters/chapter-NN/scenes/
-5. showrunner screenplay generate   → chapters/chapter-NN/screenplay/
-6. showrunner panel divide          → chapters/chapter-NN/panels/
+4. showrunner scene write           → fragment/*.yaml OR chapters/s1/chapter-NN/scenes/
+5. showrunner screenplay generate   → chapters/s1/chapter-NN/screenplay/
+6. showrunner panel divide          → chapters/s1/chapter-NN/panels/
 7. showrunner prompt generate       → image prompts (Gemini API for images)
 ```
 
@@ -404,25 +445,60 @@ Check decisions before generating: `showrunner decide list`
 {slug}/
 ├── showrunner.yaml          # Project manifest
 ├── CLAUDE.md                 # This file (agent instructions + dynamic state)
-├── world/                    # World settings, locations, rules
+│
+├── 📝 WRITING (IDE-friendly, use these directly)
+├── fragment/                 # Scene prose — your main writing goes here
+├── containers/               # Research, notes, character profiles
+│   ├── research_topic/
+│   └── ...
+├── idea_card/                # Brainstorm ideas, plot twists, "what ifs"
+├── pipeline_def/             # Custom workflow definitions
+│
+├── 🎨 WORLD BUILDING
+├── world/
+│   ├── settings.yaml         # Genre, tone, era, tech level
+│   ├── locations/            # Per-file location YAMLs (scales well)
+│   ├── factions/             # Factions and political structure
+│   ├── rules.yaml            # Magic/tech/world rules
+│   └── history.yaml          # Historical timeline
 ├── characters/               # Character profiles with DNA blocks
 ├── style_guide/              # Visual + narrative style guides
-├── story/                    # Story structure, arcs, themes
+│
+├── 📊 PLANNING & STRUCTURE
+├── story/                    # Story arcs, beats, themes, timeline
 ├── chapters/
-│   └── chapter-NN/
-│       ├── meta.yaml         # Chapter metadata
-│       ├── scenes/           # Written scene prose (YAML)
-│       ├── screenplay/       # Screenplay beat breakdowns
-│       └── panels/           # Panel specs + image prompts
-├── creative_room/            # AUTHOR-ONLY (never leak to story prompts)
-│   ├── .showrunner-secret   # Isolation marker
-│   └── reader_knowledge/     # What the reader knows per-scene
+│   ├── s1/                   # Season 1
+│   │   ├── chapter-01/
+│   │   │   ├── meta.yaml     # Chapter metadata
+│   │   │   ├── scenes/       # Scene breakdowns (alt: use fragment/)
+│   │   │   ├── screenplay/   # Screenplay beat structures
+│   │   │   └── panels/       # Panel specs + image prompts
+│   │   └── ...
+│   └── s2/                   # Season 2 (no collision with s1)
+│
+├── 🤫 AUTHOR-ONLY SECRETS (never leak to story!)
+├── creative_room/
+│   ├── .showrunner-secret    # Isolation marker
+│   ├── plot_twists.yaml      # Surprises the reader hasn't learned
+│   ├── character_secrets.yaml
+│   ├── foreshadowing_map.yaml
+│   ├── reader_knowledge/     # What reader knows per-scene
+│   └── ending_plans.yaml
+│
+├── 🎬 ASSETS & EXPORTS
+├── assets/
+│   └── references/           # Reference images for consistency
 ├── prompts/                  # Custom prompt template overrides
-├── exports/                  # Exported story bibles, outlines
-└── .showrunner/             # Internal state
-    ├── workflow_state.yaml   # Pipeline progress
+├── exports/                  # Exported story bibles, outlines, EPUBs
+│
+├── 🛠️  INTERNAL STATE (auto-managed, usually git-ignored)
+└── .showrunner/
+    ├── workflow_state.yaml   # Pipeline progress tracking
     ├── decisions.yaml        # Persistent author decisions
-    └── sessions/             # Session history logs
+    ├── inbox.yaml            # Brain dump capture inbox
+    ├── sessions/             # Session history logs
+    ├── trash/                # Soft-deleted files (recovery)
+    └── context_cache/        # Pre-compiled context snapshots
 ```
 
 ## Character DNA Blocks
@@ -500,6 +576,101 @@ showrunner world build
 <!-- DYNAMIC:END -->
 """
     (project_dir / "CLAUDE.md").write_text(content)
+
+
+def _write_directory_guides(project_dir: Path) -> None:
+    """Write README files explaining what goes in each IDE directory."""
+    guides = {
+        "fragment": """# Fragment (Story Prose)
+
+This directory contains your written story scenes. Each file is a complete scene or chapter fragment.
+
+**Files**: `*.yaml` (one file per scene)
+**Example**: `ch4-sc3.yaml` — Chapter 4, Scene 3
+
+Each fragment should follow this structure:
+```yaml
+id: "<ULID>"
+container_type: "fragment"
+name: "Zara Enters the Forge"
+attributes:
+  prose: |
+    The forge doors swung open. Zara could see the glow of molten metal...
+  word_count: 850
+  mood: "tense, dangerous"
+  pov_character: "Zara"
+  setting: "The Forge District"
+timeline_positions:
+  - "s1.arc1.ch4.sc3"
+relationships: []
+```
+
+**To create**: Tell Claude Code to "write a scene" following the fragment schema.
+**To cascade**: Run `showrunner cascade update fragment/ch4-sc3.yaml` after writing to auto-update character states.
+""",
+        "containers": """# Containers (Research, Notes, Ideas)
+
+This directory holds structured research, notes, and reference material.
+
+**Subdirectories**:
+- `research_topic/` — Research results (feudal armor, physics, culture, etc.)
+- `note/` — General notes and observations
+- `character/` — Character profiles (created via CLI)
+- `idea_card/` — Brainstorm ideas and plot concepts
+- Other types as needed
+
+**Files**: `*.yaml` (each container is a YAML file)
+**Example**: `research_topic/feudal-armor.yaml` — Research on historical armor
+
+**To create**: Either:
+1. `showrunner capture "Research topic"` → IDE processes into a container
+2. Tell Claude Code: "Research feudal armor. Save to containers/research_topic/..."
+
+**To use**: Read containers and reference them when writing scenes. They're auto-included in context.
+""",
+        "idea_card": """# Idea Card (Brainstorm Storage)
+
+This directory holds brainstorm ideas, plot twists, and "what if" scenarios.
+
+**Files**: `*.yaml` (one file per idea)
+**Example**: `what-if-zara-is-miko-sister.yaml`
+
+Each idea card structure:
+```yaml
+id: "<ULID>"
+container_type: "idea_card"
+name: "What if Zara is Miko's long-lost sister?"
+attributes:
+  concept: "Zara discovers a birthmark matching Miko's..."
+  novelty_score: 8
+  feasibility_score: 7
+  categories: ["plot-twist", "character-relationship", "season-2"]
+  potential_impact: "High — completely reframes their dynamic"
+relationships: []
+```
+
+**To create**: Either:
+1. `showrunner capture "Zara discovers the pendant was her mother's"` → gets inbox, then process to idea_card
+2. Tell Claude Code: "Brainstorm 5 plot twists for Chapter 6. Save as idea_card/..."
+
+**To use**: Read these for brainstorm context. Mark favorites to develop further.
+""",
+        "pipeline_def": """# Pipeline Definitions (Workflow Automation)
+
+This directory defines custom workflows that combine multiple steps.
+
+**Files**: `*.yaml` (one file per pipeline)
+**Example**: `research-then-write.yaml` — Pipeline that researches first, then writes a scene
+
+**To create**: Tell Claude Code to create a custom pipeline using the schema (or `showrunner pipeline create ...`).
+
+**To execute**: `showrunner pipeline run pipeline_def/research-then-write.yaml`
+""",
+    }
+
+    for dirname, content in guides.items():
+        readme_path = project_dir / dirname / "README.md"
+        readme_path.write_text(content)
 
 
 def _write_gitignore(project_dir: Path) -> None:

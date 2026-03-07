@@ -16,10 +16,44 @@ class CheckoutRequest(BaseModel):
 
 @router.get("/events")
 async def get_all_events(
+    limit: int = 1000,
+    offset: int = 0,
     svc: EventService = Depends(get_event_service),
-) -> List[Dict[str, Any]]:
-    """Get all events for rendering the visual timeline."""
-    return svc.get_all_events()
+) -> Dict[str, Any]:
+    """Get paginated events for rendering the visual timeline.
+
+    Query Parameters:
+        limit: Maximum number of events to return (default 1000, max 5000)
+        offset: Number of events to skip (for pagination)
+
+    Returns:
+        {
+            "events": List[Dict],
+            "count": int (total events in database),
+            "limit": int,
+            "offset": int
+        }
+    """
+    # Clamp limit to reasonable bounds
+    limit = max(1, min(limit, 5000))
+    offset = max(0, offset)
+
+    events = svc.get_all_events(limit=limit, offset=offset)
+
+    # Get total count for pagination info
+    try:
+        cursor = svc.conn.execute("SELECT COUNT(*) as count FROM events")
+        row = cursor.fetchone()
+        total_count = row['count'] if row else 0
+    except Exception:
+        total_count = len(events)
+
+    return {
+        "events": events,
+        "count": total_count,
+        "limit": limit,
+        "offset": offset,
+    }
 
 @router.post("/checkout")
 async def checkout_event(

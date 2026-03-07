@@ -11,6 +11,7 @@ import {
     ConnectionMode,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { Sparkles } from "lucide-react";
 
 import { useStudioStore } from "@/lib/store";
 import GenericNode from "./nodes/GenericNode";
@@ -83,9 +84,16 @@ const InfiniteCanvas = () => {
                     <Panel position="top-center" className="mt-[30vh]">
                         <div className="text-center bg-slate-900/60 backdrop-blur-sm border border-slate-800/50 rounded-xl px-8 py-6 max-w-md">
                             <p className="text-lg font-semibold text-slate-300 mb-2">Your story canvas is empty</p>
-                            <p className="text-sm text-slate-500 leading-relaxed">
+                            <p className="text-sm text-slate-500 leading-relaxed mb-5">
                                 Create Characters, Scenes, or World entries from the Assets panel, then they will appear here as interactive nodes you can connect.
                             </p>
+                            <button
+                                onClick={() => window.dispatchEvent(new CustomEvent('open:onboarding'))}
+                                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 w-full"
+                            >
+                                <Sparkles className="w-4 h-4" />
+                                Run Setup Wizard
+                            </button>
                         </div>
                     </Panel>
                 )}
