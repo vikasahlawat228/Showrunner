@@ -7,6 +7,7 @@ a backward-compatible public API.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -54,14 +55,33 @@ class Project:
 
     @classmethod
     def find(cls, start: Path | None = None) -> Project:
-        """Walk up from `start` (default cwd) to find the nearest showrunner.yaml."""
+        """Walk up from `start` (default cwd) to find the nearest showrunner.yaml.
+
+        Priority:
+        1. SHOWRUNNER_PROJECT environment variable
+        2. Walk up from start directory (or cwd)
+        """
+        # Check environment variable first
+        env_project = os.getenv("SHOWRUNNER_PROJECT")
+        if env_project:
+            proj_path = Path(env_project).resolve()
+            if (proj_path / MANIFEST_FILE).exists():
+                return cls(proj_path)
+            else:
+                raise ProjectError(
+                    f"SHOWRUNNER_PROJECT points to invalid project: {env_project} "
+                    f"({MANIFEST_FILE} not found)"
+                )
+
+        # Then walk up from start directory
         current = (start or Path.cwd()).resolve()
         while current != current.parent:
             if (current / MANIFEST_FILE).exists():
                 return cls(current)
             current = current.parent
         raise ProjectError(
-            f"No {MANIFEST_FILE} found. Run 'showrunner init' to create a project."
+            f"No {MANIFEST_FILE} found. Run 'showrunner init' to create a project "
+            f"or set SHOWRUNNER_PROJECT environment variable."
         )
 
     @property

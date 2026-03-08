@@ -45,6 +45,7 @@ from showrunner_tool.server.routers import translation as translation_router
 from showrunner_tool.server.routers import chat as chat_router
 from showrunner_tool.server.routers import db as db_router
 from showrunner_tool.server.routers import cascade as cascade_router
+from showrunner_tool.server.routers import projects_registry as projects_registry_router
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +259,9 @@ app.include_router(jobs_router.router, prefix="/api/v1")
 # Phase F additions
 app.include_router(projects_router.router)
 app.include_router(models_router.router)
+
+# Multi-project support
+app.include_router(projects_registry_router.router)
 
 # Phase G Track 2
 app.include_router(research_router.router)

@@ -552,7 +552,10 @@ export const api = {
     del(`/api/v1/pipeline/definitions/${encodeURIComponent(id)}`),
 
   // Timeline & Event Sourcing
-  getTimelineEvents: () => request<TimelineEvent[]>("/api/v1/timeline/events"),
+  getTimelineEvents: async () => {
+    const res = await request<{ events: TimelineEvent[] }>("/api/v1/timeline/events");
+    return res.events || [];
+  },
   checkoutEvent: (eventId: string, branchName?: string) =>
     post<{ status: string; event_id: string; branch?: string }>("/api/v1/timeline/checkout", { event_id: eventId, branch_name: branchName }),
   getBranches: () =>

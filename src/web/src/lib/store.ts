@@ -53,6 +53,8 @@ export interface ChatSlice {
   chatError: string | null;
   pendingApproval: any | null;
   backgroundStatus: string | null;
+  isChatSidebarOpen: boolean;
+  chatSidebarCollapsed: boolean;
   fetchChatSessions: () => void;
   createChatSession: () => Promise<string>;
   setActiveSession: (id: string) => void;
@@ -67,9 +69,18 @@ export interface ChatSlice {
   deleteSession: (id: string) => void;
   setPendingApproval: (approval: any) => void;
   setBackgroundStatus: (status: string | null) => void;
+  setChatSidebarOpen: (open: boolean) => void;
+  setChatSidebarCollapsed: (collapsed: boolean) => void;
 }
 
-const createChatSlice = (set: any): ChatSlice => ({
+const createChatSlice = (set: any): ChatSlice => {
+  // Restore chat sidebar state from localStorage on init
+  const savedSidebarOpen = typeof window !== 'undefined'
+    ? localStorage.getItem('showrunner-chat-sidebar-open')
+    : null;
+  const initialOpen = savedSidebarOpen !== null ? JSON.parse(savedSidebarOpen) : true;
+
+  return {
   chatSessions: [],
   activeSessionId: null,
   chatMessages: [],
@@ -80,6 +91,8 @@ const createChatSlice = (set: any): ChatSlice => ({
   chatError: null,
   pendingApproval: null,
   backgroundStatus: null,
+  isChatSidebarOpen: initialOpen,
+  chatSidebarCollapsed: false,
   fetchChatSessions: async () => {
     try {
       const sessions = await api.getChatSessions();
@@ -145,7 +158,10 @@ const createChatSlice = (set: any): ChatSlice => ({
   },
   setPendingApproval: (approval) => set({ pendingApproval: approval }),
   setBackgroundStatus: (status) => set({ backgroundStatus: status }),
-});
+  setChatSidebarOpen: (open) => set({ isChatSidebarOpen: open }),
+  setChatSidebarCollapsed: (collapsed) => set({ chatSidebarCollapsed: collapsed }),
+  };
+};
 
 // ── Dummy Slices ─────────────────────────────────────────
 

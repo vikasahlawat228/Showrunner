@@ -38,6 +38,7 @@ from showrunner_tool.commands import (
     git_cmd,
     capture,
     backup,
+    project_registry_cmd,
 )
 from showrunner_tool.core.project import Project, ProjectError
 from showrunner_tool.core.workflow import WorkflowState, STEP_LABELS
@@ -88,6 +89,9 @@ capture.register_capture_commands(app)
 
 # Register backup commands (P3.1)
 app.add_typer(backup.app, name="backup")
+
+# Register project registry commands (Multi-project support)
+app.add_typer(project_registry_cmd.app, name="project")
 
 
 @app.command("status")

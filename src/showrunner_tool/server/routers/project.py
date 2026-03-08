@@ -58,7 +58,7 @@ def broadcast_event(data: Dict[str, Any]) -> None:
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/", response_model=ProjectResponse)
+@router.get("", response_model=ProjectResponse)
 async def get_project_info(project: Project = Depends(get_project)):
     wf = WorkflowState(project.path)
     return ProjectResponse(
