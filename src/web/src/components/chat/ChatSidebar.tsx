@@ -12,6 +12,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useZenStore } from "@/lib/store/zenSlice";
 import { Sparkles } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import { PlanViewer } from "./PlanViewer";
 
@@ -22,6 +23,7 @@ interface ChatSidebarProps {
 
 export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const pathname = usePathname();
 
     const {
         chatSessions,
@@ -139,7 +141,7 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
         async (content: string, mentionedEntityIds: string[]) => {
             // Build context payload if in Zen Mode
             const { editorContent, activeSceneId, activeChapterId, detectedEntities } = useZenStore.getState();
-            const isZen = window.location.pathname.startsWith('/zen');
+            const isZen = pathname?.startsWith('/zen');
 
             const contextPayload = isZen
                 ? {
@@ -408,7 +410,7 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
                     )}
 
                     {/* Ambient AI Settings (Zen Mode Only Context) */}
-                    {window.location.pathname.startsWith('/zen') && (
+                    {pathname?.startsWith('/zen') && (
                         <div className="px-3 pb-2 flex-shrink-0">
                             <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3">
                                 <h3 className="text-xs font-semibold text-gray-300 mb-2 flex items-center justify-between">
