@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Clock, Activity, AlertTriangle, Play, Pause, FastForward } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, BookOpen, Clock, Activity, AlertTriangle, Play, Pause, FastForward, PenTool } from "lucide-react";
 import { api, ReadingSimResult, PanelReadingMetrics } from "@/lib/api";
 
 export default function PreviewSimulatorPage() {
@@ -15,6 +16,7 @@ export default function PreviewSimulatorPage() {
     const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const animationRef = useRef<number>(0);
+    const router = useRouter();
 
     useEffect(() => {
         const fetchSim = async () => {
@@ -178,9 +180,16 @@ export default function PreviewSimulatorPage() {
                     ) : (
                         simData.map((scene) => (
                             <div key={scene.scene_id} className="mb-24">
-                                <div className="flex items-center justify-center gap-4 mb-16 opacity-50">
+                                <div className="flex items-center justify-center gap-4 mb-16 opacity-50 group/scene">
                                     <div className="h-px bg-gray-700 flex-1"></div>
                                     <span className="text-xs uppercase tracking-widest text-gray-400">{scene.scene_name}</span>
+                                    <button
+                                        onClick={() => router.push(`/zen?scene=${scene.scene_id}`)}
+                                        className="opacity-0 group-hover/scene:opacity-100 flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-all"
+                                        title="Edit this scene in Zen Mode"
+                                    >
+                                        <PenTool className="w-3 h-3" /> Edit
+                                    </button>
                                     <div className="h-px bg-gray-700 flex-1"></div>
                                 </div>
                                 {scene.panels.map(p => renderPanelCard(p))}
@@ -236,9 +245,14 @@ export default function PreviewSimulatorPage() {
                                             <AlertTriangle className="w-3 h-3" /> Dead Zones Detected
                                         </div>
                                         {scene.pacing_dead_zones.map((w, i) => (
-                                            <div key={i} className="text-[10px] text-gray-500 ml-4">
-                                                panels {w.start_panel}-{w.end_panel}: {w.reason}
-                                            </div>
+                                            <button
+                                                key={i}
+                                                onClick={() => router.push(`/zen?scene=${scene.scene_id}`)}
+                                                className="text-[10px] text-gray-500 ml-4 hover:text-indigo-400 transition-colors cursor-pointer text-left"
+                                                title="Click to fix in Zen Mode"
+                                            >
+                                                panels {w.start_panel}-{w.end_panel}: {w.reason} →
+                                            </button>
                                         ))}
                                     </div>
                                 )}

@@ -20,31 +20,49 @@ import {
   Square,
   Loader2,
   Download,
-  Inbox
+  Inbox,
+  Library
 } from "lucide-react";
 import { useStudioStore } from "@/lib/store";
 import { useRecorderStore } from "@/lib/store/recorderSlice";
+import { useStoryContextStore } from "@/lib/store/storyContextSlice";
 import { CloudSyncIndicator } from "@/components/shared/CloudSyncIndicator";
 import { toast } from "sonner";
 import { RecordingReviewPanel } from "@/components/workflow/RecordingReviewPanel";
 import { BackgroundJobsWidget } from "@/components/ui/BackgroundJobsWidget";
 
-const navItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Zen", href: "/zen", icon: PenTool },
-  { name: "Pipelines", href: "/pipelines", icon: Workflow },
-  { name: "Storyboard", href: "/storyboard", icon: Film },
-  { name: "Timeline", href: "/timeline", icon: Clock },
-  { name: "Brainstorm", href: "/brainstorm", icon: Lightbulb },
-  { name: "Research", href: "/research", icon: BookOpen },
-  { name: "Translation", href: "/translation", icon: Globe },
-  { name: "Preview", href: "/preview", icon: Smartphone },
+const navGroups = [
+  {
+    label: "Write",
+    items: [
+      { name: "Zen", href: "/zen", icon: PenTool },
+      { name: "Brainstorm", href: "/brainstorm", icon: Lightbulb },
+    ],
+  },
+  {
+    label: "Visualize",
+    items: [
+      { name: "Storyboard", href: "/storyboard", icon: Film },
+      { name: "Timeline", href: "/timeline", icon: Clock },
+      { name: "Preview", href: "/preview", icon: Smartphone },
+    ],
+  },
+  {
+    label: "Manage",
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { name: "Pipelines", href: "/pipelines", icon: Workflow },
+      { name: "Research", href: "/research", icon: BookOpen },
+      { name: "Translation", href: "/translation", icon: Globe },
+    ],
+  },
 ];
 
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { isChatSidebarOpen, setChatSidebarOpen, isInboxPanelOpen, setInboxPanelOpen } = useStudioStore();
+  const { isChatSidebarOpen, setChatSidebarOpen, isInboxPanelOpen, setInboxPanelOpen, pendingApproval } = useStudioStore();
+  const { isStoryContextOpen, setStoryContextOpen } = useStoryContextStore();
   const {
     isRecording,
     startRecording,
@@ -104,26 +122,30 @@ export function Navbar() {
           <CloudSyncIndicator />
         </div>
 
-        {/* Center: Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[60%] lg:max-w-[70%]">
-          {navItems.map((item) => {
-            const isActive = pathname?.startsWith(item.href);
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${isActive
-                  ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
-                  : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 border border-transparent"
-                  }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? "text-indigo-400" : "text-gray-500"}`} />
-                <span className="hidden sm:inline">{item.name}</span>
-              </Link>
-            );
-          })}
+        {/* Center: Grouped Tabs */}
+        <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar max-w-[60%] lg:max-w-[70%]">
+          {navGroups.map((group, gi) => (
+            <React.Fragment key={group.label}>
+              {gi > 0 && <div className="w-px h-4 bg-gray-800 mx-1 shrink-0" />}
+              {group.items.map((item) => {
+                const isActive = pathname?.startsWith(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${isActive
+                      ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
+                      : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 border border-transparent"
+                      }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? "text-indigo-400" : "text-gray-500"}`} />
+                    <span className="hidden sm:inline">{item.name}</span>
+                  </Link>
+                );
+              })}
+            </React.Fragment>
+          ))}
         </div>
 
         {/* Right: Actions */}
@@ -173,14 +195,28 @@ export function Navbar() {
           </button>
 
           <button
+            onClick={() => setStoryContextOpen(!isStoryContextOpen)}
+            className={`flex items-center justify-center p-1.5 border hover:border-gray-600 rounded-md transition-colors ${isStoryContextOpen
+              ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/30"
+              : "bg-gray-900 border-gray-700 text-gray-400"
+              }`}
+            title="Toggle Story Context"
+          >
+            <Library className="w-4 h-4" />
+          </button>
+
+          <button
             onClick={() => setChatSidebarOpen(!isChatSidebarOpen)}
-            className={`flex items-center justify-center p-1.5 border hover:border-gray-600 rounded-md transition-colors ${isChatSidebarOpen
+            className={`relative flex items-center justify-center p-1.5 border hover:border-gray-600 rounded-md transition-colors ${isChatSidebarOpen
               ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/30"
               : "bg-gray-900 border-gray-700 text-gray-400"
               }`}
             title="Toggle Agentic Chat (Cmd+Shift+C)"
           >
             <MessageSquare className="w-4 h-4" />
+            {pendingApproval && !isChatSidebarOpen && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+            )}
           </button>
 
           <button

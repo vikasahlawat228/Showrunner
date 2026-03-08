@@ -180,6 +180,21 @@ const createGraphDataSlice = (set: any): GraphDataSlice => ({
     } catch (err) {
       console.error("Failed to fetch graph:", err);
     }
+    // Also fetch characters, scenes, and world for dashboard
+    try {
+      const [chars, scenes, world] = await Promise.allSettled([
+        api.getCharacters(),
+        api.getScenes(1),
+        api.getWorld(),
+      ]);
+      set({
+        characters: chars.status === "fulfilled" ? chars.value : [],
+        scenes: scenes.status === "fulfilled" ? scenes.value : [],
+        worldData: world.status === "fulfilled" ? world.value : null,
+      });
+    } catch (err) {
+      console.error("Failed to fetch supplemental data:", err);
+    }
   },
   fetchCharacters: async () => {
     try {

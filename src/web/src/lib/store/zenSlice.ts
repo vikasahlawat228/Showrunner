@@ -65,6 +65,9 @@ export const useZenStore = create<ExtendedZenState>((set, get) => ({
             });
             set({ currentFragmentId: data.id, detectedEntities: data.detected_entities });
 
+            // Mark that user has written (for onboarding checklist)
+            try { localStorage.setItem("showrunner:hasWritten", "true"); } catch { }
+
             toast("Scene saved", {
                 description: "Run cascade update to sync related entities?",
                 action: {
@@ -112,10 +115,40 @@ export const useZenStore = create<ExtendedZenState>((set, get) => ({
     setLastAIOperation: () => { },
     ghostTextTemperament: "Default",
     setGhostTextTemperament: (temperament) => set({ ghostTextTemperament: temperament }),
-    sessionWordsWritten: 0,
-    updateSessionWords: (count) => set((state) => ({ sessionWordsWritten: state.sessionWordsWritten + count })),
+    // Session words — hydrate from localStorage
+    sessionWordsWritten: (() => {
+        try {
+            return parseInt(localStorage.getItem("showrunner:sessionWords") || "0", 10);
+        } catch { return 0; }
+    })(),
+    updateSessionWords: (count) => set((state) => {
+        const newTotal = state.sessionWordsWritten + count;
+        try { localStorage.setItem("showrunner:sessionWords", String(newTotal)); } catch { }
+        return { sessionWordsWritten: newTotal };
+    }),
     setSessionStartWordCount: () => { },
-    sessionStartTime: null,
-    startSession: () => set({ sessionStartTime: Date.now(), sessionWordsWritten: 0 }),
+    sessionStartTime: (() => {
+        try {
+            const v = localStorage.getItem("showrunner:sessionStartTime");
+            return v ? parseInt(v, 10) : null;
+        } catch { return null; }
+    })(),
+    startSession: () => {
+        const now = Date.now();
+        const prev = get();
+        // Persist previous session to history before resetting
+        if (prev.sessionWordsWritten > 0) {
+            try {
+                const history = JSON.parse(localStorage.getItem("showrunner:wordHistory") || "[]");
+                history.push({ date: new Date().toISOString(), words: prev.sessionWordsWritten });
+                // Keep last 30 entries
+                localStorage.setItem("showrunner:wordHistory", JSON.stringify(history.slice(-30)));
+            } catch { }
+        }
+        try { localStorage.setItem("showrunner:sessionStartTime", String(now)); } catch { }
+        try { localStorage.setItem("showrunner:sessionWords", "0"); } catch { }
+        set({ sessionStartTime: now, sessionWordsWritten: 0 });
+    },
     setFocusMode: (v: any) => set({ focusMode: !!v }),
 }));
+

@@ -100,7 +100,7 @@ class AgentInvocation(BaseModel):
 
 class ChatArtifact(BaseModel):
     """Generated content that can be previewed in the Artifact Preview panel."""
-    artifact_type: Literal["prose", "outline", "schema", "panel", "diff", "table", "yaml", "pipeline_run"]
+    artifact_type: Literal["prose", "outline", "schema", "panel", "diff", "table", "yaml", "pipeline_run", "research"]
     title: str
     content: str
     container_id: Optional[str] = None

@@ -12,15 +12,23 @@ import { ModelConfigPanel } from "@/components/command-center/ModelConfigPanel";
 import { DatabaseStats } from "@/components/command-center/DatabaseStats";
 import { GitPanel } from "@/components/command-center/GitPanel";
 
+// Writer Dashboard
+import { WriterDashboard } from "@/components/dashboard/WriterDashboard";
+
 // Canvas & Layout Components
 import { Canvas } from "@/components/workbench/Canvas";
 import { Sidebar } from "@/components/workbench/Sidebar";
 import { Inspector } from "@/components/workbench/Inspector";
 
+import { useState } from "react";
+import { ChevronDown, ChevronUp, Wrench } from "lucide-react";
+
 export default function DashboardPage() {
   const fetchAll = useStudioStore((s) => s.fetchAll);
   const linkCharacterToScene = useStudioStore((s) => s.linkCharacterToScene);
   const selectedItem = useStudioStore((s) => s.selectedItem);
+
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     fetchAll();
@@ -43,17 +51,35 @@ export default function DashboardPage() {
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
-      <div className="flex h-screen w-full bg-gray-950 text-white overflow-hidden font-sans">
+      <div className="flex h-full w-full bg-gray-950 text-white overflow-hidden font-sans">
 
-        {/* Left Column: Command Center (Scrollable) */}
-        <div className="w-80 shrink-0 border-r border-gray-800/80 bg-gray-950/50 flex flex-col overflow-y-auto">
-          <div className="p-4 space-y-4">
-            <ProjectSwitcher />
-            <ProgressOverview />
-            <PendingApprovals />
-            <ModelConfigPanel />
-            <GitPanel />
-            <DatabaseStats />
+        {/* Left Column: Writer Dashboard */}
+        <div className="w-96 shrink-0 border-r border-gray-800/80 bg-gray-950/50 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <WriterDashboard />
+          </div>
+
+          {/* Advanced Tools (collapsed by default) */}
+          <div className="border-t border-gray-800">
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+            >
+              <span className="flex items-center gap-1.5 font-medium uppercase tracking-wider">
+                <Wrench className="w-3 h-3" /> Advanced Tools
+              </span>
+              {showAdvanced ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            </button>
+            {showAdvanced && (
+              <div className="p-3 space-y-3 max-h-80 overflow-y-auto border-t border-gray-800/50">
+                <ProjectSwitcher />
+                <ProgressOverview />
+                <PendingApprovals />
+                <ModelConfigPanel />
+                <GitPanel />
+                <DatabaseStats />
+              </div>
+            )}
           </div>
         </div>
 

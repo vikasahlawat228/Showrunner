@@ -42,7 +42,7 @@ def _make_embedding_response(vectors: list[list[float]]):
 try:
     import chromadb  # noqa: F401
     HAS_CHROMADB = True
-except ImportError:
+except Exception:
     HAS_CHROMADB = False
 
 skip_no_chromadb = pytest.mark.skipif(

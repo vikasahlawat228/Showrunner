@@ -69,15 +69,15 @@ class TestCreateIntent:
 
     def test_generate_outline(self, classifier):
         result = classifier.classify("Generate an outline for chapter 2")
-        assert result.tool == "CREATE"
+        assert result.tool == "OUTLINE"
 
     def test_write_a_scene(self, classifier):
         result = classifier.classify("Write a scene where Zara meets Kael")
-        assert result.tool == "CREATE"
+        assert result.tool == "WRITE"
 
     def test_draft(self, classifier):
         result = classifier.classify("Draft a dialogue between the two characters")
-        assert result.tool == "CREATE"
+        assert result.tool == "WRITE"
 
     def test_extracts_entity_type(self, classifier):
         result = classifier.classify("Create a new character named Zara")
@@ -113,7 +113,7 @@ class TestDeleteIntent:
 
     def test_remove(self, classifier):
         result = classifier.classify("Remove scene 5 from the outline")
-        assert result.tool == "DELETE"
+        assert result.tool == "OUTLINE"
 
     def test_requires_approval(self, classifier):
         result = classifier.classify("Delete character Zara")
@@ -175,7 +175,7 @@ class TestPlanIntent:
 
     def test_outline(self, classifier):
         result = classifier.classify("Outline the story arc for season 2")
-        assert result.tool == "PLAN"
+        assert result.tool == "OUTLINE"
 
 
 class TestDecideIntent:

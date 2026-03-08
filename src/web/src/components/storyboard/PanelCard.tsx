@@ -2,6 +2,7 @@
 "use client";
 
 import React, { memo } from "react";
+import { useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useStoryboardStore, type PanelData } from "@/lib/store/storyboardSlice";
@@ -12,6 +13,7 @@ import {
     GripVertical,
     Trash2,
     Sparkles,
+    PenTool,
 } from "lucide-react";
 
 const PANEL_TYPE_COLORS: Record<string, string> = {
@@ -37,6 +39,7 @@ const CAMERA_ICONS: Record<string, string> = {
 
 function PanelCardComponent({ panel }: { panel: PanelData }) {
     const { selectPanel, deletePanel } = useStoryboardStore();
+    const router = useRouter();
 
     const {
         attributes,
@@ -130,9 +133,20 @@ function PanelCardComponent({ panel }: { panel: PanelData }) {
                     </div>
                 )}
 
-                {/* Duration */}
-                <div className="text-[9px] text-gray-600 text-right">
-                    {panel.duration_seconds}s
+                {/* Duration + Deep Link */}
+                <div className="flex items-center justify-between text-[9px] text-gray-600">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/zen?scene=${panel.scene_id}`);
+                        }}
+                        className="flex items-center gap-0.5 text-indigo-400/60 hover:text-indigo-300 transition-colors"
+                        title="Edit scene in Zen Mode"
+                    >
+                        <PenTool className="w-2.5 h-2.5" />
+                        <span>Edit</span>
+                    </button>
+                    <span>{panel.duration_seconds}s</span>
                 </div>
             </div>
         </div>

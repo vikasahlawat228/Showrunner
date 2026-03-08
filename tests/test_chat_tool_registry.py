@@ -52,13 +52,25 @@ def mock_memory_service():
 
 
 @pytest.fixture
-def full_registry(mock_kg_service, mock_container_repo, mock_pipeline_service, mock_memory_service):
+def mock_agent_dispatcher():
+    return MagicMock()
+
+
+@pytest.fixture
+def mock_continuity_service():
+    return MagicMock()
+
+
+@pytest.fixture
+def full_registry(mock_kg_service, mock_container_repo, mock_pipeline_service, mock_memory_service, mock_agent_dispatcher, mock_continuity_service):
     return build_tool_registry(
         kg_service=mock_kg_service,
         container_repo=mock_container_repo,
         project_memory_service=mock_memory_service,
         pipeline_service=mock_pipeline_service,
         project_path=Path("/tmp/test_project"),
+        agent_dispatcher=mock_agent_dispatcher,
+        continuity_service=mock_continuity_service,
     )
 
 
@@ -67,21 +79,21 @@ def full_registry(mock_kg_service, mock_container_repo, mock_pipeline_service, m
 
 class TestRegistryBuilding:
     def test_full_registry_has_all_tools(self, full_registry):
-        expected = {"search", "create", "update", "delete", "navigate", "evaluate", "research", "relationship", "world_summary", "pipeline", "decide", "unresolved_threads", "plausibility_check", "save_to_memory"}
+        expected = {"search", "create", "update", "delete", "navigate", "evaluate", "research", "relationship", "world_summary", "pipeline", "decide", "unresolved_threads", "plausibility_check", "save_to_memory", "write", "brainstorm", "outline"}
         assert set(full_registry.keys()) == expected
 
     def test_empty_registry_has_navigate_only(self):
         registry = build_tool_registry()
         assert set(registry.keys()) == {"navigate"}
 
-    def test_partial_registry_only_search(self, mock_kg_service):
-        registry = build_tool_registry(kg_service=mock_kg_service)
+    def test_partial_registry_only_search(self, mock_kg_service, mock_continuity_service):
+        registry = build_tool_registry(kg_service=mock_kg_service, continuity_service=mock_continuity_service)
         assert "search" in registry
         assert "update" in registry
         assert "delete" in registry
         assert "evaluate" in registry
-        assert "research" in registry
         assert "navigate" in registry
+        assert "research" not in registry  # Needs agent_dispatcher and container_repo
         assert "create" not in registry  # needs container_repo + project_path
         assert "pipeline" not in registry  # needs pipeline_service
         assert "decide" not in registry  # needs memory_service
@@ -197,8 +209,14 @@ class TestNavigateTool:
 
 
 class TestEvaluateTool:
-    def test_evaluate_lists_checks(self, full_registry):
-        result = full_registry["evaluate"]("Evaluate this scene", [])
+    @pytest.mark.asyncio
+    async def test_evaluate_lists_checks(self, full_registry):
+        result_gen = full_registry["evaluate"]("Evaluate this scene", [])
+        chunks = []
+        async for chunk in result_gen:
+            if chunk.event_type == "token":
+                chunks.append(chunk.data.get("text", ""))
+        result = "".join(chunks)
         assert "Scene quality" in result
         assert "Character consistency" in result
         assert "Continuity" in result
@@ -208,8 +226,25 @@ class TestEvaluateTool:
 
 
 class TestResearchTool:
-    def test_research_echoes_content(self, full_registry):
-        result = full_registry["research"]("Research feudal Japan warfare", [])
+    @pytest.mark.asyncio
+    async def test_research_echoes_content(self, full_registry, mock_agent_dispatcher):
+        mock_skill = MagicMock()
+        mock_agent_dispatcher.skills.get.return_value = mock_skill
+        
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.response = '{"summary": "feudal Japan warfare"}'
+        import asyncio
+        f = asyncio.Future()
+        f.set_result(mock_result)
+        mock_agent_dispatcher.execute.return_value = f
+
+        result_gen = full_registry["research"]("Research feudal Japan warfare", [])
+        chunks = []
+        async for chunk in result_gen:
+            if chunk.event_type == "token":
+                chunks.append(chunk.data.get("text", ""))
+        result = "".join(chunks)
         assert "feudal Japan warfare" in result
 
 

@@ -14,6 +14,7 @@ import { ArtifactPreviewOverlay } from "@/components/chat/ArtifactPreviewOverlay
 import { GlobalExportModal } from "@/components/ui/GlobalExportModal";
 import { OnboardingWizard } from "@/components/ui/OnboardingWizard";
 import { InboxPanelWrapper } from "@/components/ui/InboxPanelWrapper";
+import { StoryContextSidebarWrapper } from "@/components/shared/StoryContextSidebarWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,6 +44,7 @@ export default function RootLayout({
       >
         <Navbar />
         <div className="flex flex-1 overflow-hidden pt-12">
+          <StoryContextSidebarWrapper />
           <main className="flex-1 overflow-hidden relative border-r border-gray-800">
             <ErrorBoundary>
               {children}
